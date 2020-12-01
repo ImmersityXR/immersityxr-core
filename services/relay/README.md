@@ -19,15 +19,14 @@ You will need [Node.js](https://nodejs.org/en/download/) installed on your machi
 3. Run the relay server
     * `node serve.js`
 
-Primary dependencies:
-
-| dependency                                         | use |
-|:---------------------------------------------------|:----|
+| dependencies | usage |
+|:---------------------------------------------------|:------|
 | [socket.io](https://github.com/socketio/socket.io) | create session namespaces, join clients to sessions, listen for and emit custom events (such as position updates) |
 | [peer.js](https://github.com/peers/peerjs)         | WebRTC signaling |
 | [Microsoft Speech SDK](https://docs.microsoft.com/en-us/javascript/api/microsoft-cognitiveservices-speech-sdk/?view=azure-node-latest) | Processing client audio for speech-to-text |
 | [bson](https://github.com/mongodb/js-bson) | binary encoding of client audio for recorded sessions | 
-
+| [wavefile](https://github.com/rochars/wavefile) | resampling client audio for speech-to-text | 
+| [winston](https://github.com/winstonjs/winston) | logging | 
 ______________
 <a name="deployment"></a>
 ### Deployment
