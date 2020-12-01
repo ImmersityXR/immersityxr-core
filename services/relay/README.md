@@ -6,5 +6,9 @@ The relay server facilitates client communication during multiplayer sessions. I
 ## Installing and Configuring the relay server
 
 ### Development
+Primary dependencies:
+* socket.io
+* peerjs
+
 
 ### Deployment
