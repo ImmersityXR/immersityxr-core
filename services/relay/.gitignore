@@ -1,0 +1,5 @@
+.vscode/
+captures/
+node_modules/
+config.js
+*.log

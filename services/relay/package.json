@@ -1,0 +1,24 @@
+{
+  "name": "komodo_relay",
+  "version": "0.1.2",
+  "description": "Relay server for Komodo VR client application",
+  "main": "serve.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Grainger IDEA Lab",
+  "license": "NCSA",
+  "dependencies": {
+    "async": "^3.1.1",
+    "bson": "^4.0.3",
+    "express": "^4.17.1",
+    "graceful-fs": "^4.2.3",
+    "https": "^1.0.0",
+    "microsoft-cognitiveservices-speech-sdk": "^1.10.1",
+    "mysql": "^2.18.1",
+    "peer": "^0.5.3",
+    "socket.io": "^2.3.0",
+    "wavefile": "^11.0.0",
+    "winston": "^3.3.3"
+  }
+}
