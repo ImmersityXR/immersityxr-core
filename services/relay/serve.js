@@ -198,40 +198,42 @@ io.on('connection', function(socket) {
 
     socket.on('state', function(data) {
         logger.info(`State: ${data}`)
-        let session_id = data.session_id;
-        let client_id = data.client_id;
-        if (session_id && client_id) {
-            let version = data.version;
-            let session = sessions.get(session_id);
-            if (session) {
-                let state = {};
-                // check requested api version
-                if (version === 2) {
-                    state = {
-                        clients: session.clients,
-                        entities: session.entities,
-                        scene: session.scene,
-                        isRecording: session.isRecording
-                    }
-                } else { // version 1 or no api version indicated
-                    let entities = [];
-                    let locked = [];
-                    for (let i = 0; i < session.entities.length; i++) {
-                        entities.push(session.entities[i].id);
-                        if (session.entities[i].locked) {
-                            locked.push(session.entities[i].id);
+        if (data) {
+            let session_id = data.session_id;
+            let client_id = data.client_id;
+            if (session_id && client_id) {
+                let version = data.version;
+                let session = sessions.get(session_id);
+                if (session) {
+                    let state = {};
+                    // check requested api version
+                    if (version === 2) {
+                        state = {
+                            clients: session.clients,
+                            entities: session.entities,
+                            scene: session.scene,
+                            isRecording: session.isRecording
+                        }
+                    } else { // version 1 or no api version indicated
+                        let entities = [];
+                        let locked = [];
+                        for (let i = 0; i < session.entities.length; i++) {
+                            entities.push(session.entities[i].id);
+                            if (session.entities[i].locked) {
+                                locked.push(session.entities[i].id);
+                            }
+                        }
+                        state = {
+                            clients: session.clients,
+                            entities: entities,
+                            locked: locked,
+                            scene: session.scene,
+                            isRecording: session.isRecording
                         }
                     }
-                    state = {
-                        clients: session.clients,
-                        entities: entities,
-                        locked: locked,
-                        scene: session.scene,
-                        isRecording: session.isRecording
-                    }
+                    // emit versioned state data
+                    io.to(session_id).emit('state', state);
                 }
-                // emit versioned state data
-                io.to(session_id).emit('state', state);
             }
         }
     });

@@ -43,7 +43,7 @@ client1.on('joined', (id) => {
     joinedClients.push(id);
     if (joinedClients.length == 2) {
         let pass = (joinedClients[0] === 1 && joinedClients[1] === 2);
-        console.log('[TEST] Joined event test passe:', true);
+        console.log('[TEST] Joined event test passed:', true);
     }
 });
 // test join session
@@ -76,7 +76,7 @@ client2.on('relayUpdate', (data) => {
             break;
         }
     }
-    console.log('[TEST] Relay update pass:', true);
+    console.log('[TEST] Relay update passed:', true);
 
 })
 client1.emit('update', updatePacket);
@@ -91,20 +91,78 @@ let interactionPacket = [
     1, // targe entity ID
     INTERACTION_LOOK, // interaction type
     1, // dirty bit
-
 ]
 
-client2.on('interactionUpdate', (data) => {
+client2.once('interactionUpdate', (data) => {
     for(let i = 0; i < data.length; i++) {
-        assert(interactionPacket[i] === data[i])
+        if(interactionPacket[i] !== data[i]) {
+            console.log('[TEST] Interaction update test passed:', false);
+        }
     }
+    console.log('[TEST] Interaction update test passed:', true);
 });
 client1.emit('interact', interactionPacket);
 
-// client1.emit('state', { session_id: sessionID, client_id: client1ID });
 
-// client1.on('state', function(data) {
-//     console.log(data);
-//     client1.close();
-//     process.exit(1);
-// });
+// test state events
+// unregister interaction event handler for previous test
+
+let stateUpdatePacket1 = [
+    0, // sequence number
+    1, // session ID
+    1, // client ID
+    0, // source entity ID
+    1, // targe entity ID
+    INTERACTION_RENDER, // interaction type
+    1, // dirty bit
+]
+let stateUpdatePacket2 = [
+    0, // sequence number
+    1, // session ID
+    1, // client ID
+    0, // source entity ID
+    2, // targe entity ID
+    INTERACTION_SCENE_CHANGE, // interaction type
+    1, // dirty bit
+]
+// client 1 updates the session state
+client1.emit('interact', stateUpdatePacket1);
+client1.emit('interact', stateUpdatePacket2);
+
+// client 2 state update handler
+client2.once('state', (data) => {
+    if (data.clients[0] === 1 &&
+        data.clients[1] === 2 &&
+        data.entities[0].id === 1 &&
+        data.entities[0].render === true &&
+        data.scene === 2 &&
+        data.isRecording === false
+    ) {
+        console.log('[TEST] State event test passed:', true);
+    } else {
+        console.log('[TEST] State event test passed:', false);
+    }
+})
+
+// client 2 requests session state
+client2.emit('state', {
+    session_id: 1,
+    client_id: 2,
+    version: 2
+})
+
+
+setTimeout(function() {
+    // test start and end recording
+    client2.once('state', (data) => {
+        let pass = data.isRecording === true;
+        console.log('[TEST] Start recording test passed:', pass);
+    })
+    client1.emit('start_recording', 1);
+    client2.emit('state', {
+        session_id: 1,
+        client_id: 2,
+        version: 2
+    });
+    client1.emit('end_recording', 1);
+}, 1000);
