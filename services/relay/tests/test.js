@@ -43,7 +43,7 @@ client1.on('joined', (id) => {
     joinedClients.push(id);
     if (joinedClients.length == 2) {
         let pass = (joinedClients[0] === 1 && joinedClients[1] === 2);
-        console.log('[TEST] Joined event test passed:', true);
+        console.log('[TEST] Joined event test passed:', pass);
     }
 });
 // test join session
