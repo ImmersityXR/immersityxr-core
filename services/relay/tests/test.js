@@ -70,13 +70,16 @@ let updatePacket = [
 ]
 
 client2.on('relayUpdate', (data) => {
+    let pass = false;
     for(let i = 0; i < data.length; i++) {
         if (updatePacket[i] !== data[i]) {
-            console.log('[TEST] Relay update passed:', false);
+            pass = false;
             break;
+        } else {
+            pass = true;
         }
     }
-    console.log('[TEST] Relay update passed:', true);
+    console.log('[TEST] Relay update passed:', pass);
 
 })
 client1.emit('update', updatePacket);
@@ -94,12 +97,16 @@ let interactionPacket = [
 ]
 
 client2.once('interactionUpdate', (data) => {
+    let pass = false;
     for(let i = 0; i < data.length; i++) {
         if(interactionPacket[i] !== data[i]) {
-            console.log('[TEST] Interaction update test passed:', false);
+            pass = false;
+            break
+        } else {
+            pass = true;
         }
     }
-    console.log('[TEST] Interaction update test passed:', true);
+    console.log('[TEST] Interaction update test passed:', pass);
 });
 client1.emit('interact', interactionPacket);
 
@@ -165,4 +172,4 @@ setTimeout(function() {
         version: 2
     });
     client1.emit('end_recording', 1);
-}, 1000);
+}, 500);
