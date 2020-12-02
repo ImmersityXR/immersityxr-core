@@ -1,5 +1,7 @@
 # Komodo Relay Server
 
+[Learn more about the Komodo Platform](https://github.com/gelic-idealab/komodo-docs)
+
 ## What is it?
 The relay server facilitates client communication during multiplayer sessions. It allows clients to join session namespaces or 'rooms', propagates client updates (including positions within the VR scene and interactions with entities or other clients), coordinates chat sessions (including text and voice/video/screen), maintains session state (including active clients, entity and scene state, session properties), and captures data during session recording. 
 
