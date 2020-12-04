@@ -15,6 +15,13 @@ const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unuse
 const INTERACTION_LOCK          = 8;
 const INTERACTION_LOCK_END      = 9;
 
+function logResult(status, name) {
+    let result = status ? 'PASS' : 'FAIL'
+    let color = status ? '\x1b[32m' : '\x1b[31m' 
+    console.log(`[ ${color}${result}\x1b[0m ] ... ${name}`);
+}
+
+
 // parse command line args
 let args = process.argv;
 let relayHost = args[2] || DEFAULT_LOCAL_RELAY;
@@ -25,6 +32,7 @@ if (relaySecure === "true") {
     relaySecure = false;
 }
 console.log(`Using local relay: ${relayHost}`)
+console.log('======= Running tests =======\n')
 
 // test connections
 const client1 = io.connect(relayHost, { secure: relaySecure, reconnection: false, rejectUnauthorized : false } );
@@ -42,8 +50,8 @@ let joinedClients = [];
 client1.on('joined', (id) => {
     joinedClients.push(id);
     if (joinedClients.length == 2) {
-        let pass = (joinedClients[0] === 1 && joinedClients[1] === 2);
-        console.log('[TEST] Joined event test passed:', pass);
+        let stat = (joinedClients[0] === 1 && joinedClients[1] === 2);
+        logResult(stat, '"joined" event');
     }
 });
 // test join session
@@ -79,7 +87,7 @@ client2.on('relayUpdate', (data) => {
             pass = true;
         }
     }
-    console.log('[TEST] Relay update passed:', pass);
+    logResult(pass, '"update" event');
 
 })
 client1.emit('update', updatePacket);
@@ -106,7 +114,7 @@ client2.once('interactionUpdate', (data) => {
             pass = true;
         }
     }
-    console.log('[TEST] Interaction update test passed:', pass);
+    logResult(pass, '"interaction" event');
 });
 client1.emit('interact', interactionPacket);
 
@@ -138,6 +146,7 @@ client1.emit('interact', stateUpdatePacket2);
 
 // client 2 state update handler
 client2.once('state', (data) => {
+    let pass = false;
     if (data.clients[0] === 1 &&
         data.clients[1] === 2 &&
         data.entities[0].id === 1 &&
@@ -145,10 +154,10 @@ client2.once('state', (data) => {
         data.scene === 2 &&
         data.isRecording === false
     ) {
-        console.log('[TEST] State event test passed:', true);
-    } else {
-        console.log('[TEST] State event test passed:', false);
+        pass = true;    
     }
+    logResult(pass, '"state" event');
+
 })
 
 // client 2 requests session state
@@ -156,15 +165,15 @@ client2.emit('state', {
     session_id: 1,
     client_id: 2,
     version: 2
-})
+});
 
 
-setTimeout(function() {
-    // test start and end recording
+// test start and end recording
+setTimeout(() => { // delay a bit to wait for previous test to finish
     client2.once('state', (data) => {
         let pass = data.isRecording === true;
-        console.log('[TEST] Start recording test passed:', pass);
-    })
+        logResult(pass, '"start_recording" event');
+    });
     client1.emit('start_recording', 1);
     client2.emit('state', {
         session_id: 1,
@@ -172,4 +181,12 @@ setTimeout(function() {
         version: 2
     });
     client1.emit('end_recording', 1);
-}, 500);
+}, 50)
+
+setTimeout(() => {
+    console.log('\n=========== Done. ===========')
+    client1.close();
+    client2.close();
+    process.exit();
+}, 1000)
+
