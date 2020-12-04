@@ -1,0 +1,20 @@
+version: "3"
+services:
+  komodo_buildserver:
+    build: .
+    image: komodo_buildserver:latest
+    container_name: komodo_buildserver
+    restart: "always"
+    labels:
+      - "traefik.frontend.rule=Host:< URL FOR VR CLIENT ENDPOINT >"
+      - "traefik.backend=komodo_buildserver"
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+    networks: 
+      - proxy
+    volumes: 
+      - ./builds:/usr/share/nginx/html
+
+networks: 
+  proxy:
+    external: true
