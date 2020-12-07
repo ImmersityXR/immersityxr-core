@@ -293,16 +293,16 @@ io.on('connection', function(socket) {
                 // Trigger the data pipeline:
                 // TODO(rob): rewrite with local data process
                 // run rsync script to sychronize session files on data server
-                const sync = spawn('sh', ['sync_session_files.sh']);
-                sync.stdout.on('data', (data) => {
-                    logger.info(`sync process stdout: ${data}`);
-                });
-                sync.stderr.on('data', (data) => {
-                    logger.error(`sync process stderr: ${data}`);
-                });
-                sync.on('close', (code) => {
-                    logger.info(`sync process exited with code ${code}`);
-                });
+                // const sync = spawn('sh', ['sync_session_files.sh']);
+                // sync.stdout.on('data', (data) => {
+                //     logger.info(`sync process stdout: ${data}`);
+                // });
+                // sync.stderr.on('data', (data) => {
+                //     logger.error(`sync process stderr: ${data}`);
+                // });
+                // sync.on('close', (code) => {
+                //     logger.info(`sync process exited with code ${code}`);
+                // });
             } else {
                 logger.warn(`Requested to end session capture, but session does not exist: ${session_id}`)
             }
