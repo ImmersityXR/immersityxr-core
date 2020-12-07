@@ -45,5 +45,6 @@ rclone copy komodo-dev:/home/komodo/komodo_buildserver/builds ./builds --progres
 ```
 rclone sync ./builds komodo-dev:/home/komodo/komodo_buildserver/builds --progress
 ```
+*You can also use the included `sync.sh` script which simply executes the above command. 
 
 Read more about [`rclone` commands](https://rclone.org/commands/)
