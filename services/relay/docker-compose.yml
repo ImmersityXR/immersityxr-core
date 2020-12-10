@@ -2,13 +2,13 @@ version: "3.7"
 services:
   komodo_relay:
     build: .
-    image: komodo_relay:latest
-    container_name: komodo_relay
+    image: komodo-relay:latest
+    container_name: komodo-relay
     restart: "always"
     volumes: 
-        - ./captures:/komodo/captures
+        - ../captures:/komodo/captures
     labels:
-      - "traefik.frontend.rule=Host:< CHANGE ME >"
+      - "traefik.frontend.rule=Host:relay.komodo-dev.library.illinois.edu"
       - "traefik.backend=komodo_relay"
       - "traefik.port=3000"
       - "traefik.enable=true"

@@ -290,19 +290,8 @@ io.on('connection', function(socket) {
                     mic_writer.cursor = 0;
                 }
                 
-                // Trigger the data pipeline:
-                // TODO(rob): rewrite with local data process
-                // run rsync script to sychronize session files on data server
-                // const sync = spawn('sh', ['sync_session_files.sh']);
-                // sync.stdout.on('data', (data) => {
-                //     logger.info(`sync process stdout: ${data}`);
-                // });
-                // sync.stderr.on('data', (data) => {
-                //     logger.error(`sync process stderr: ${data}`);
-                // });
-                // sync.on('close', (code) => {
-                //     logger.info(`sync process exited with code ${code}`);
-                // });
+                // trigger the data pipeline
+
             } else {
                 logger.warn(`Requested to end session capture, but session does not exist: ${session_id}`)
             }
@@ -498,7 +487,7 @@ io.on('connection', function(socket) {
                 session.clients.splice(index, 1);
                 logger.info(`Disconnection: ${client_id}`);
 
-                // log disconnect event with timestamp to ml db
+                // log disconnect event with timestamp to db
                 if (pool) {
                     let event = `"disconnect"`;
                     pool.query(
