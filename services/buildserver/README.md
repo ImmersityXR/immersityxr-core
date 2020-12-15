@@ -41,9 +41,9 @@ rclone copy komodo-dev:/home/komodo/komodo_buildserver/builds ./builds --progres
 #### Sync local build to remote host
 * Make a build
 * Move the new build to the appropriate scope in your local `builds` directory
-* Run `rclone sync`
+* Run `rclone copy`
 ```
-rclone sync ./builds komodo-dev:/home/komodo/komodo_buildserver/builds --progress
+rclone copy ./builds komodo-dev:/home/komodo/komodo_buildserver/builds --progress
 ```
 *You can also use the included `sync.sh` script which simply executes the above command. 
 
