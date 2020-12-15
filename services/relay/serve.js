@@ -181,7 +181,7 @@ io.on('connection', function(socket) {
 
                     // write join event to database
                     if (pool) {
-                        let event = `"join"`;
+                        let event = `"connect"`;
                         pool.query(
                             "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
                             (err, res) => {
