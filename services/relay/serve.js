@@ -517,9 +517,11 @@ io.on('connection', function(socket) {
         // TODO(rob): need to use playback object to track seq and group by playback_id, 
         // so users can request to pause playback, maybe rewind?
         logger.info(`Playback request: ${data}`);
-        let client_id = data[0];
-        let session_id = data[1];
-        let playback_id = data[2]; // id schema is session_id+'_'+session_start to differentiate between multiple session recordings
+        let client_id = data.client_id;
+        let session_id = data.session_id;
+        let playback_id = data.playback_id; // id schema is session_id+'_'+session_start to differentiate between multiple session recordings
+
+        // TODO(rob): check that this client has permission to playback this session
 
         let seq_init = 0;
         let current_seq = 0;
@@ -694,34 +696,16 @@ chat.on('connection', function(socket) {
         }
     });
 
-    // speech-to-text
+    // client audio processing
     socket.on('mic', function(data) {
         let session_id = data.session_id;
         let client_id = data.client_id;
 
         if (session_id && client_id) {
-            let buff = Buffer.from(data.buffer);
-            let farr = new Float32Array(buff.buffer);
-            let idata = convertFloat32ToInt16(farr);
-            
-            let wav = new wavefile.WaveFile();
-            let samples =  new Int16Array(idata.buffer);
-            wav.fromScratch(1, data.sampleRate, '16', samples);
-            if (data.sampleRate != 16000) {
-                wav.toSampleRate(16000)
-            }
-            let resampledBuffer = wav.toBuffer()
-            try {
-                processSpeech(resampledBuffer, session_id, client_id, data.client_name);
-            } catch (error) {
-                logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
-            }
-            
             // write to disk if recording
             let session = sessions.get(session_id);
             if (session) {
                 if (session.isRecording) {
-                    console.log(data) // debug
                     let writer = session.writers.mic;
                     data.seq = session.seq; 
                     let bdata = BSON.serialize(data)
@@ -734,6 +718,24 @@ chat.on('connection', function(socket) {
                     }
                     writer.buffer.writeUInt8(bdata, writer.cursor);
                     writer.cursor += bdata.byteLength;
+                }
+
+                // speech-to-text
+                let buff = Buffer.from(data.buffer);
+                let farr = new Float32Array(buff.buffer);
+                let idata = convertFloat32ToInt16(farr);
+                
+                let wav = new wavefile.WaveFile();
+                let samples =  new Int16Array(idata.buffer);
+                wav.fromScratch(1, data.sampleRate, '16', samples);
+                if (data.sampleRate != 16000) {
+                    wav.toSampleRate(16000)
+                }
+                let resampledBuffer = wav.toBuffer()
+                try {
+                    processSpeech(resampledBuffer, session_id, client_id, data.client_name);
+                } catch (error) {
+                    logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
                 }
             }
         }
