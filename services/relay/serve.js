@@ -84,7 +84,7 @@ var chats = new Map();
 // write buffers are multiples of corresponding chunks
 const POS_WRITE_BUFFER_SIZE = 1024 * POS_CHUNK_SIZE;
 const INT_WRITE_BUFFER_SIZE = 128 * INT_CHUNK_SIZE;
-const MIC_WRITE_BUFFER_SIZE = 1024 * 128; // TODO(rob): best size? 
+const MIC_WRITE_BUFFER_SIZE = 350000; // TODO(rob): best size? 
 
 // interaction event values
  const INTERACTION_LOOK          = 0;
@@ -284,7 +284,8 @@ io.on('connection', function(socket) {
                 }
                 let mic_writer = session.writers.mic;
                 if (mic_writer.cursor > 0) {
-                    let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic', { flags: 'a' });
+                    let path = CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic';
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
                     wstream.write(mic_writer.buffer.slice(0, mic_writer.cursor));
                     wstream.close();
                     mic_writer.cursor = 0;
@@ -705,37 +706,18 @@ chat.on('connection', function(socket) {
             // write to disk if recording
             let session = sessions.get(session_id);
             if (session) {
-                if (session.isRecording) {
-                    let writer = session.writers.mic;
-                    data.seq = session.seq; 
-                    let bdata = BSON.serialize(data)
-                    if (bdata.byteLength + writer.cursor > writer.buffer.byteLength - 1) {
-                        // if buffer is full, dump to disk and reset the cursor
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic', { flags: 'a' })
-                        wstream.write(writer.buffer.slice(0, writer.cursor));
-                        wstream.close();
-                        writer.cursor = 0;
-                    }
-                    writer.buffer.writeUInt8(bdata, writer.cursor);
-                    writer.cursor += bdata.byteLength;
-                }
-
                 // speech-to-text
-                let buff = Buffer.from(data.buffer);
-                let farr = new Float32Array(buff.buffer);
-                let idata = convertFloat32ToInt16(farr);
-                
-                let wav = new wavefile.WaveFile();
-                let samples =  new Int16Array(idata.buffer);
-                wav.fromScratch(1, data.sampleRate, '16', samples);
-                if (data.sampleRate != 16000) {
-                    wav.toSampleRate(16000)
-                }
-                let resampledBuffer = wav.toBuffer()
                 try {
-                    processSpeech(resampledBuffer, session_id, client_id, data.client_name);
+                    processSpeech(data.blob, session_id, client_id, data.client_name);
                 } catch (error) {
                     logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
+                }
+
+                if (session.isRecording) {
+                    let path = CAPTURE_PATH+session_id+'_'+session.recordingStart+'_'+client_id+'_'+session.seq+'.wav'
+                    fs.writeFile(path, data.blob, (err) => {
+                        if (err) console.log('error writing audio file:', err)
+                    });
                 }
             }
         }
