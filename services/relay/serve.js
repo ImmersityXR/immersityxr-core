@@ -268,6 +268,9 @@ io.on('connection', function(socket) {
                 session.isRecording = false;
                 logger.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
+
+                // TODO(rob): factor out path generation into own function, takes session id, recording start, and extension params
+
                 let pos_writer = session.writers.pos;
                 if (pos_writer.cursor > 0) {
                     let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
