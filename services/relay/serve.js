@@ -64,7 +64,7 @@ const logger = createLogger({
     ),
     transports: [
         new transports.Console(),
-        new transports.File({ filename: 'serve.log' })
+        new transports.File({ filename: 'log.txt' })
     ],
     exitOnError: false
 });
@@ -112,6 +112,11 @@ function convertFloat32ToInt16(buffer) {
       buf[l] = Math.min(1, buffer[l])*0x7FFF;
     }
     return buf;
+}
+
+// generate formatted path for session capture files
+function getCapturePath(session_id, start, type) {
+    return `${CAPTURE_PATH}/${session_id}/${start}/${type}`;
 }
 
 // main relay handler
@@ -253,6 +258,10 @@ io.on('connection', function(socket) {
             if (session) {
                 session.isRecording = true;
                 session.recordingStart = Date.now();
+                let path = getCapturePath(session_id, session.recordingStart, '');
+                fs.mkdir(path, { recursive: true }, (err) => {
+                    if(err) logger.warn(`Error creating capture path: ${err}`);
+                });
                 logger.info(`Capture started: ${session_id}`);
             } else {
                 logger.warn(`Requested session capture, but session does not exist: ${session_id}`)
@@ -269,32 +278,32 @@ io.on('connection', function(socket) {
                 logger.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
 
-                // TODO(rob): factor out path generation into own function, takes session id, recording start, and extension params
-
                 let pos_writer = session.writers.pos;
                 if (pos_writer.cursor > 0) {
-                    let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
+                    let path = getCapturePath(session_id, session.recordingStart, 'pos');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
                     wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
                     wstream.close();
                     pos_writer.cursor = 0;
                 }
                 let int_writer = session.writers.int;
                 if (int_writer.cursor > 0) {
-                    let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.int', { flags: 'a' });
+                    let path = getCapturePath(session_id, session.recordingStart, 'int');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
                     wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
                     wstream.close();
                     int_writer.cursor = 0;
                 }
-                let mic_writer = session.writers.mic;
-                if (mic_writer.cursor > 0) {
-                    let path = CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic';
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(mic_writer.buffer.slice(0, mic_writer.cursor));
-                    wstream.close();
-                    mic_writer.cursor = 0;
-                }
+                // let mic_writer = session.writers.mic;
+                // if (mic_writer.cursor > 0) {
+                //     let path = CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic';
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(mic_writer.buffer.slice(0, mic_writer.cursor));
+                //     wstream.close();
+                //     mic_writer.cursor = 0;
+                // }
                 
-                // trigger the data pipeline
+                // TODO(rob): trigger the data pipeline
 
             } else {
                 logger.warn(`Requested to end session capture, but session does not exist: ${session_id}`)
@@ -350,7 +359,8 @@ io.on('connection', function(socket) {
 
                     if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
                         // if buffer is full, dump to disk and reset the cursor
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
+                        let path = getCapturePath(session_id, session.recordingStart, 'pos');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' });
                         wstream.write(writer.buffer.slice(0, writer.cursor));
                         wstream.close();
                         writer.cursor = 0;
@@ -461,7 +471,8 @@ io.on('connection', function(socket) {
 
                     if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
                         // if buffer is full, dump to disk and reset the cursor
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
+                        let path = getCapturePath(session_id, session.recordingStart, 'pos');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' });
                         wstream.write(writer.buffer.slice(0, writer.cursor));
                         wstream.close();
                         writer.cursor = 0;
@@ -523,8 +534,8 @@ io.on('connection', function(socket) {
         logger.info(`Playback request: ${data}`);
         let client_id = data.client_id;
         let session_id = data.session_id;
-        let playback_id = data.playback_id; // id schema is session_id+'_'+session_start to differentiate between multiple session recordings
-
+        let playback_id = data.playback_id;
+        let start = data.start;
         // TODO(rob): check that this client has permission to playback this session
 
         let seq_init = 0;
@@ -535,7 +546,8 @@ io.on('connection', function(socket) {
 
         if (client_id && session_id && playback_id) {
             // position streaming
-            let stream = fs.createReadStream(CAPTURE_PATH+playback_id+'.pos', { highWaterMark: POS_CHUNK_SIZE });
+            let path = getCapturePath(playback_id, start, 'pos');
+            let stream = fs.createReadStream(path, { highWaterMark: POS_CHUNK_SIZE });
             stream.on('error', function(err) {
                 logger.error(`Error creating position playback stream for session ${session_id}: ${err}`);
                 io.to(session_id.toString()).emit('playbackEnd')
@@ -596,7 +608,8 @@ io.on('connection', function(socket) {
             })
 
             // interaction streaming
-            let istream = fs.createReadStream(CAPTURE_PATH+playback_id+'.int', { highWaterMark: INT_CHUNK_SIZE });
+            let ipath = getCapturePath(playback_id, start, 'int');
+            let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
             stream.on('error', function(err) {
                 logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
                 io.to(session_id.toString()).emit('interactionpPlaybackEnd')
@@ -717,7 +730,13 @@ chat.on('connection', function(socket) {
                 }
 
                 if (session.isRecording) {
-                    let path = CAPTURE_PATH+session_id+'_'+session.recordingStart+'_'+client_id+'_'+session.seq+'.wav'
+                    let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
+                    if (!fs.existsSync(dir)) {
+                        fs.mkdirSync(dir, { recursive: true }, (err) => {
+                            if(err) logger.warn(`Error creating capture audio directory: ${err}`);
+                        });
+                    }
+                    let path = `${dir}/${session.seq}.wav`
                     fs.writeFile(path, data.blob, (err) => {
                         if (err) console.log('error writing audio file:', err)
                     });
@@ -774,7 +793,8 @@ let processSpeech = function (audioBuffer, session_id, client_id, client_name) {
                             client_id: client_id,
                             text: result.privText
                         }
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.stt', { flags: 'a' })
+                        let path = getCapturePath(session_id, session.recordingStart, 'stt');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' })
                         wstream.write(JSON.stringify(sttObj)+'\n');
                         wstream.close();
                     }
