@@ -303,7 +303,18 @@ io.on('connection', function(socket) {
                 //     mic_writer.cursor = 0;
                 // }
                 
-                // TODO(rob): trigger the data pipeline
+                // write the capture event to database
+                if (pool) {
+                    let capture_id = session_id+'_'+session.recordingStart;
+                    pool.query(
+                        "INSERT INTO captures(capture_id, session_id, start, end) VALUES(?, ?, ?, ?)", [capture_id, session_id, session.recordingStart, Date.now()],
+                        (err, res) => {
+                            if (err != undefined) {
+                                logger.error(`Error writing disconnect event to database: ${err} ${res}`);
+                            }
+                        }
+                    );
+                }
 
             } else {
                 logger.warn(`Requested to end session capture, but session does not exist: ${session_id}`)
@@ -545,11 +556,14 @@ io.on('connection', function(socket) {
         let current_int_seq = 0;
 
         if (client_id && session_id && playback_id) {
+
+            // TODO(rob): build audio file manifest and start streaming blobs to connected clients
+
             // position streaming
             let path = getCapturePath(playback_id, start, 'pos');
             let stream = fs.createReadStream(path, { highWaterMark: POS_CHUNK_SIZE });
             stream.on('error', function(err) {
-                logger.error(`Error creating position playback stream for session ${session_id}: ${err}`);
+                logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
                 io.to(session_id.toString()).emit('playbackEnd')
             })
 
