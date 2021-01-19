@@ -542,11 +542,13 @@ io.on('connection', function(socket) {
     socket.on('playback', function(data) {
         // TODO(rob): need to use playback object to track seq and group by playback_id, 
         // so users can request to pause playback, maybe rewind?
-        logger.info(`Playback request: ${data}`);
+        logger.info(`Playback request: ${data.playback_id}`);
         let client_id = data.client_id;
         let session_id = data.session_id;
         let playback_id = data.playback_id;
-        let start = data.start;
+
+        let capture_id = playback_id.split('_')[0]
+        let start = playback_id.split('_')[1]
         // TODO(rob): check that this client has permission to playback this session
 
         let seq_init = 0;
@@ -555,12 +557,12 @@ io.on('connection', function(socket) {
         let int_update_group = [];
         let current_int_seq = 0;
 
-        if (client_id && session_id && playback_id) {
+        if (client_id && session_id && capture_id && start) {
 
             // TODO(rob): build audio file manifest and start streaming blobs to connected clients
 
             // position streaming
-            let path = getCapturePath(playback_id, start, 'pos');
+            let path = getCapturePath(capture_id, start, 'pos');
             let stream = fs.createReadStream(path, { highWaterMark: POS_CHUNK_SIZE });
             stream.on('error', function(err) {
                 logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
@@ -622,7 +624,7 @@ io.on('connection', function(socket) {
             })
 
             // interaction streaming
-            let ipath = getCapturePath(playback_id, start, 'int');
+            let ipath = getCapturePath(capture_id, start, 'int');
             let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
             stream.on('error', function(err) {
                 logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
