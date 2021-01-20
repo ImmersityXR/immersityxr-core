@@ -33,15 +33,13 @@
 
 
 const fs = require('fs');
-const wavefile = require('wavefile');
+const path = require('path');
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 const app = require('express')();
 const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-const BSON = require('bson');
+const io = require('socket.io')(server, { cookie: false });
 const mysql = require('mysql');
 const { ExpressPeerServer } = require('peer');
-const { spawn } = require('child_process');
 
 // configuration
 const config = require('./config');
@@ -116,7 +114,7 @@ function convertFloat32ToInt16(buffer) {
 
 // generate formatted path for session capture files
 function getCapturePath(session_id, start, type) {
-    return `${CAPTURE_PATH}/${session_id}/${start}/${type}`;
+    return path.join(__dirname, CAPTURE_PATH, session_id, start, type);
 }
 
 // main relay handler
@@ -559,17 +557,47 @@ io.on('connection', function(socket) {
 
         if (client_id && session_id && capture_id && start) {
 
-            // TODO(rob): build audio file manifest and start streaming blobs to connected clients
+            // build audio file manifest
+            logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+            let audioManifest = {};
+            let baseAudioPath = getCapturePath(capture_id, start, 'audio');
+            if(fs.existsSync(baseAudioPath)) {
+                let items = fs.readdirSync(baseAudioPath)
+                items.forEach(clientDir => {
+                    let clientPath = path.join(baseAudioPath, clientDir)
+                    let files = fs.readdirSync(clientPath)
+                    files.forEach(file => {
+                        let client_id = clientDir;
+                        let seq = file.split('.')[0];
+                        let audioFilePath = path.join(clientPath, file);
+                        let item = {
+                            client_id: client_id,
+                            path: audioFilePath
+                        }
+                        audioManifest[seq] = item;
+                    });
+                });
+            }
+
 
             // position streaming
-            let path = getCapturePath(capture_id, start, 'pos');
-            let stream = fs.createReadStream(path, { highWaterMark: POS_CHUNK_SIZE });
+            let capturePath = getCapturePath(capture_id, start, 'pos');
+            let stream = fs.createReadStream(capturePath, { highWaterMark: POS_CHUNK_SIZE });
             stream.on('error', function(err) {
                 logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
                 io.to(session_id.toString()).emit('playbackEnd')
             })
 
             stream.on('data', function(chunk) {
+
+                // check for seq-indexed client audio files and emit if exists
+                if (audioManifest[current_seq]) {
+                    console.log('emitting audio packet:', current_seq, audioManifest[current_seq]);
+                    io.of('chat').to(session_id.toString()).emit('audioReplay', audioManifest[current_seq]);
+                }
+
+
+                // start data buffer loop
                 let buff = Buffer.from(chunk);
                 let farr = new Float32Array(chunk.byteLength / 4);
                 for (var i = 0; i < farr.length; i++) {
