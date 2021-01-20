@@ -599,7 +599,7 @@ io.on('connection', function(socket) {
                     let drain_now = 0;
                     let now = Date.now()
                     while (update_group.length) {
-                        if (Date.now() - now >= 10) {
+                        if (Date.now() - now >= 20) {
                             drain_now = 1;
                         }
                         if (drain_now) {
@@ -652,7 +652,7 @@ io.on('connection', function(socket) {
                     let drain_now = 0;
                     let now = Date.now()
                     while (int_update_group.length) {
-                        if (Date.now() - now >= 10) {
+                        if (Date.now() - now >= 20) {
                             drain_now = 1;
                         }
                         if (drain_now) {
