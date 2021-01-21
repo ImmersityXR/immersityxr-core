@@ -592,8 +592,12 @@ io.on('connection', function(socket) {
 
                 // check for seq-indexed client audio files and emit if exists
                 if (audioManifest[current_seq]) {
+                    let filePath = audioManifest[current_seq].path;
                     console.log('emitting audio packet:', current_seq, audioManifest[current_seq]);
-                    io.of('chat').to(session_id.toString()).emit('audioReplay', audioManifest[current_seq]);
+                    fs.readFile(filePath, (err, data) => {
+                        if(err) logger.error(`Error reading audio file: ${filePath}`);
+                        io.of('chat').to(session_id.toString()).emit('audioReplay', data);
+                    })
                 }
 
 
