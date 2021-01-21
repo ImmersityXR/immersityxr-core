@@ -114,7 +114,7 @@ function convertFloat32ToInt16(buffer) {
 
 // generate formatted path for session capture files
 function getCapturePath(session_id, start, type) {
-    return path.join(__dirname, CAPTURE_PATH, session_id, start, type);
+    return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
 }
 
 // main relay handler
