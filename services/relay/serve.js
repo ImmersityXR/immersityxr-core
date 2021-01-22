@@ -559,10 +559,10 @@ io.on('connection', function(socket) {
 
             // build audio file manifest
             logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
-            let audioManifest = {};
+            let audioManifest = [];
             let baseAudioPath = getCapturePath(capture_id, start, 'audio');
             if(fs.existsSync(baseAudioPath)) {
-                let items = fs.readdirSync(baseAudioPath)
+                let items = fs.readdirSync(baseAudioPath);
                 items.forEach(clientDir => {
                     let clientPath = path.join(baseAudioPath, clientDir)
                     let files = fs.readdirSync(clientPath)
@@ -571,13 +571,27 @@ io.on('connection', function(socket) {
                         let seq = file.split('.')[0];
                         let audioFilePath = path.join(clientPath, file);
                         let item = {
+                            seq: seq,
                             client_id: client_id,
-                            path: audioFilePath
+                            path: audioFilePath,
+                            data: null
                         }
-                        audioManifest[seq] = item;
+                        audioManifest.push(item);
                     });
                 });
             }
+
+            // stream all audio files for caching and playback by client
+            audioManifest.forEach((file) => {
+                fs.readFile(file.path, (err, data) => {
+                    file.data = data;
+                    if(err) logger.error(`Error reading audio file: ${file.path}`);
+                    console.log('emitting audio packet:', file);
+                    io.of('chat').to(session_id.toString()).emit('audioReplay', file);
+                });
+            });
+            // let clients know that all files have been emitted
+            io.of('chat').to(session_id.toString()).emit('audioCacheEmitted');
 
 
             // position streaming
@@ -590,15 +604,15 @@ io.on('connection', function(socket) {
 
             stream.on('data', function(chunk) {
 
-                // check for seq-indexed client audio files and emit if exists
-                if (audioManifest[current_seq]) {
-                    let filePath = audioManifest[current_seq].path;
-                    console.log('emitting audio packet:', current_seq, audioManifest[current_seq]);
-                    fs.readFile(filePath, (err, data) => {
-                        if(err) logger.error(`Error reading audio file: ${filePath}`);
-                        io.of('chat').to(session_id.toString()).emit('audioReplay', data);
-                    })
-                }
+                // // check for seq-indexed client audio files and emit if exists
+                // if (audioManifest[current_seq]) {
+                //     let filePath = audioManifest[current_seq].path;
+                //     console.log('emitting audio packet:', current_seq, audioManifest[current_seq]);
+                //     fs.readFile(filePath, (err, data) => {
+                //         if(err) logger.error(`Error reading audio file: ${filePath}`);
+                //         io.of('chat').to(session_id.toString()).emit('audioReplay', data);
+                //     })
+                // }
 
 
                 // start data buffer loop
