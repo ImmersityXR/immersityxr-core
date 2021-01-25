@@ -549,6 +549,9 @@ io.on('connection', function(socket) {
         let start = playback_id.split('_')[1]
         // TODO(rob): check that this client has permission to playback this session
 
+
+        // TODO(rob): use session_id to get reference to session object and track the following metadata on the session object
+        // incrementing the current_seq on the object for reference by the emitting functions below? 
         let seq_init = 0;
         let current_seq = 0;
         let update_group = [];
