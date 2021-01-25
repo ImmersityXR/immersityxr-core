@@ -605,17 +605,6 @@ io.on('connection', function(socket) {
 
             stream.on('data', function(chunk) {
 
-                // // check for seq-indexed client audio files and emit if exists
-                // if (audioManifest[current_seq]) {
-                //     let filePath = audioManifest[current_seq].path;
-                //     console.log('emitting audio packet:', current_seq, audioManifest[current_seq]);
-                //     fs.readFile(filePath, (err, data) => {
-                //         if(err) logger.error(`Error reading audio file: ${filePath}`);
-                //         io.of('chat').to(session_id.toString()).emit('audioReplay', data);
-                //     })
-                // }
-
-
                 // start data buffer loop
                 let buff = Buffer.from(chunk);
                 let farr = new Float32Array(chunk.byteLength / 4);
@@ -643,10 +632,18 @@ io.on('connection', function(socket) {
                 } else {
                     // start drain process, wait for timing trigger
                     // console.log('draining pos update group', update_group.length);
+
+                    // this is how the global seq is generated
+                    // TODO(rob): need a better way to gen global seq -- why not just use 'diff' below and be done? 
+                    // let now = Date.now();
+                    // let diff = now - session.start;
+                    // session.seq = Math.floor(diff / 10);
+
+
                     let drain_now = 0;
                     let now = Date.now()
                     while (update_group.length) {
-                        if (Date.now() - now >= 20) {
+                        if (Date.now() - now >= 10) {
                             drain_now = 1;
                         }
                         if (drain_now) {
@@ -699,7 +696,7 @@ io.on('connection', function(socket) {
                     let drain_now = 0;
                     let now = Date.now()
                     while (int_update_group.length) {
-                        if (Date.now() - now >= 20) {
+                        if (Date.now() - now >= 10) {
                             drain_now = 1;
                         }
                         if (drain_now) {
