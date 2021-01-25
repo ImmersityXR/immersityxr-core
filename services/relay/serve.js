@@ -581,6 +581,9 @@ io.on('connection', function(socket) {
                 });
             }
 
+            // emit audio manifest to connected clients
+            io.of('chat').to(session_id.toString()).emit('audioManifest', audioManifest);
+
             // stream all audio files for caching and playback by client
             audioManifest.forEach((file) => {
                 fs.readFile(file.path, (err, data) => {
@@ -590,8 +593,6 @@ io.on('connection', function(socket) {
                     io.of('chat').to(session_id.toString()).emit('audioReplay', file);
                 });
             });
-            // let clients know that all files have been emitted
-            io.of('chat').to(session_id.toString()).emit('audioCacheEmitted');
 
 
             // position streaming
