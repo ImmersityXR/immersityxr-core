@@ -585,7 +585,7 @@ io.on('connection', function(socket) {
             }
 
             // emit audio manifest to connected clients
-            io.of('chat').to(session_id.toString()).emit('audioManifest', audioManifest);
+            io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
 
             // stream all audio files for caching and playback by client
             audioManifest.forEach((file) => {
@@ -593,7 +593,7 @@ io.on('connection', function(socket) {
                     file.data = data;
                     if(err) logger.error(`Error reading audio file: ${file.path}`);
                     console.log('emitting audio packet:', file);
-                    io.of('chat').to(session_id.toString()).emit('audioReplay', file);
+                    io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
                 });
             });
 
