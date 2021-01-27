@@ -253,16 +253,27 @@ io.on('connection', function(socket) {
     socket.on('start_recording', function(session_id) { // TODO(rob): require client id and token
         if (session_id) {
             let session = sessions.get(session_id);
-            if (session) {
+            if (session && !session.isRecording) {
                 session.isRecording = true;
                 session.recordingStart = Date.now();
                 let path = getCapturePath(session_id, session.recordingStart, '');
                 fs.mkdir(path, { recursive: true }, (err) => {
                     if(err) logger.warn(`Error creating capture path: ${err}`);
                 });
+                let capture_id = session_id+'_'+session.recordingStart;
+                pool.query(
+                    "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
+                    (err, res) => {
+                        if (err != undefined) {
+                            logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                        }
+                    }
+                );
                 logger.info(`Capture started: ${session_id}`);
+            } else if (session && session.isRecording) {
+                logger.warn(`Requested session capture, but session is already recording: ${session_id}`)
             } else {
-                logger.warn(`Requested session capture, but session does not exist: ${session_id}`)
+                logger.warn(`Error starting capture for session: ${session_id}`);
             }
         }
     });
@@ -271,7 +282,7 @@ io.on('connection', function(socket) {
     function end_recording(session_id) {
         if (session_id) {
             let session = sessions.get(session_id);
-            if (session) {
+            if (session && session.isRecording) {
                 session.isRecording = false;
                 logger.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
@@ -301,21 +312,23 @@ io.on('connection', function(socket) {
                 //     mic_writer.cursor = 0;
                 // }
                 
-                // write the capture event to database
+                // write the capture end event to database
                 if (pool) {
                     let capture_id = session_id+'_'+session.recordingStart;
                     pool.query(
-                        "INSERT INTO captures(capture_id, session_id, start, end) VALUES(?, ?, ?, ?)", [capture_id, session_id, session.recordingStart, Date.now()],
+                        "UPDATE captures SET end = ? WHERE capture_id = ?", [Date.now(), capture_id],
                         (err, res) => {
                             if (err != undefined) {
-                                logger.error(`Error writing disconnect event to database: ${err} ${res}`);
+                                logger.error(`Error writing recording end event to database: ${err} ${res}`);
                             }
                         }
                     );
                 }
 
+            } else if (session && !session.isRecording) {
+                logger.warn(`Requested to end session capture, but capture is already ended: ${session_id}`)
             } else {
-                logger.warn(`Requested to end session capture, but session does not exist: ${session_id}`)
+                logger.warn(`Error ending capture for session: ${session_id}`);
             }
         }
     }
