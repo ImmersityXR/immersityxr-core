@@ -371,7 +371,8 @@ io.on('connection', function(socket) {
                     // set update time and get diff -- calc seq number from diff / number of milliseconds per seq
                     let now = Date.now();
                     let diff = now - session.start;
-                    session.seq = Math.floor(diff / 10);
+                    // session.seq = Math.floor(diff / 10);
+                    session.seq = diff;
 
                     // overwrite last field (dirty bit) with session sequence number
                     data[POS_FIELDS-1] = session.seq;
@@ -483,7 +484,8 @@ io.on('connection', function(socket) {
                     // set update time and get diff -- calc seq number from diff / number of milliseconds per seq
                     let now = Date.now();
                     let diff = now - session.start;
-                    session.seq = Math.floor(diff / 10)
+                    // session.seq = Math.floor(diff / 10)
+                    session.seq = diff;
 
                     // overwrite last field (dirty bit) with session sequence number
                     data[INT_FIELDS-1] = session.seq;
@@ -562,16 +564,13 @@ io.on('connection', function(socket) {
         let start = playback_id.split('_')[1]
         // TODO(rob): check that this client has permission to playback this session
 
-
-        // TODO(rob): use session_id to get reference to session object and track the following metadata on the session object
-        // incrementing the current_seq on the object for reference by the emitting functions below? 
-        let seq_init = 0;
+        let session = sessions.get(session_id);
+    
+        // playback sequence counter
         let current_seq = 0;
-        let update_group = [];
-        let int_update_group = [];
-        let current_int_seq = 0;
 
-        if (client_id && session_id && capture_id && start) {
+        // check that all params are valid
+        if (client_id && session && capture_id && start) {
 
             // build audio file manifest
             logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
@@ -614,12 +613,14 @@ io.on('connection', function(socket) {
             // position streaming
             let capturePath = getCapturePath(capture_id, start, 'pos');
             let stream = fs.createReadStream(capturePath, { highWaterMark: POS_CHUNK_SIZE });
-            stream.on('error', function(err) {
-                logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
-                io.to(session_id.toString()).emit('playbackEnd')
-            })
 
+            // set actual playback start time
+            let playbackStart = Date.now();
+
+            // position data emit loop
             stream.on('data', function(chunk) {
+
+                stream.pause();
 
                 // start data buffer loop
                 let buff = Buffer.from(chunk);
@@ -629,53 +630,30 @@ io.on('connection', function(socket) {
                 }
                 var arr = Array.from(farr);
 
-                // get starting seq
-                if (seq_init == 0) {
-                    current_seq = arr[POS_FIELDS-1]
-                    seq_init = 1;
-                }
+                console.log(arr);
 
-                // alias client and entity id with prefix if entity type is not an asset
-                if (arr[4] != 3) {
-                    arr[2] = 90000 + arr[2];
-                    arr[3] = 90000 + arr[3];
-                }
+                let timer = setInterval( () => {
+                    let now = Date.now();
+                    current_seq = now - playbackStart;
 
-                // push updates if they are in the current sequence window
-                if (arr[POS_FIELDS-1] == current_seq) {
-                    update_group.push(arr);
-                    // console.log('pushing onto update group', update_group.length)
-                } else {
-                    // start drain process, wait for timing trigger
-                    // console.log('draining pos update group', update_group.length);
+                    console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
-                    // this is how the global seq is generated
-                    // TODO(rob): need a better way to gen global seq -- why not just use 'diff' below and be done? 
-                    // let now = Date.now();
-                    // let diff = now - session.start;
-                    // session.seq = Math.floor(diff / 10);
-
-
-                    let drain_now = 0;
-                    let now = Date.now()
-                    while (update_group.length) {
-                        if (Date.now() - now >= 10) {
-                            drain_now = 1;
+                    if (arr[POS_FIELDS-1] <= current_seq) {
+                        // alias client and entity id with prefix if entity type is not an asset
+                        if (arr[4] != 3) {
+                            arr[2] = 90000 + arr[2];
+                            arr[3] = 90000 + arr[3];
                         }
-                        if (drain_now) {
-                            io.to(session_id.toString()).emit('relayUpdate', update_group.shift());
-                        }
+                        io.to(session_id.toString()).emit('relayUpdate', arr);
+                        stream.resume();
+                        clearInterval(timer);
                     }
-                    drain_now = 0;
-                    // start new group with new seq from latest update
-                    update_group.push(arr);
-                    current_seq = arr[POS_FIELDS-1]
-                    if (current_seq >= current_int_seq) {
-                        if (istream.isPaused()) {
-                            istream.resume();
-                        }
-                    }
-                }
+                }, 1);
+            });
+
+            stream.on('error', function(err) {
+                logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
+                io.to(session_id.toString()).emit('playbackEnd')
             });
 
             stream.on('end', function() {
@@ -686,10 +664,7 @@ io.on('connection', function(socket) {
             // interaction streaming
             let ipath = getCapturePath(capture_id, start, 'int');
             let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
-            stream.on('error', function(err) {
-                logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-                io.to(session_id.toString()).emit('interactionpPlaybackEnd')
-            })
+
 
             istream.on('data', function(chunk) {
                 let buff = Buffer.from(chunk);
@@ -698,32 +673,26 @@ io.on('connection', function(socket) {
                     farr[i] = buff.readInt32LE(i * 4);
                 }
                 var arr = Array.from(farr);
-                
-                current_int_seq = arr[INT_FIELDS-1];
 
-                // console.log('current_int_seq', current_int_seq, 'current_seq', current_seq);
-                // push updates if they are in the current sequence window
-                if (current_int_seq < current_seq) {
-                    int_update_group.push(arr);
-                    // console.log('pushing onto interaction update group', int_update_group.length)
-                } else {
-                    istream.pause();
-                    // start drain process, wait for timing trigger
-                    let drain_now = 0;
-                    let now = Date.now()
-                    while (int_update_group.length) {
-                        if (Date.now() - now >= 10) {
-                            drain_now = 1;
-                        }
-                        if (drain_now) {
-                            // console.log('draining interaction update group', int_update_group.length);
-                            io.to(session_id.toString()).emit('interactionUpdate', int_update_group.shift());
-                        }
+                console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+
+                let timer = setInterval( () => {
+                    // current_seq = now - playbackStart; this is updated by the pos emit loop i think? 
+
+                    console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+
+                    if (arr[INT_FIELDS-1] <= current_seq) {
+                        io.to(session_id.toString()).emit('interactionUpdate', arr);
+                        istream.resume();
+                        clearInterval(timer);
                     }
-                    drain_now = 0;
-                    // start new group with new seq from latest update
-                    int_update_group.push(arr);
-                }
+                }, 1);
+
+            });
+
+            istream.on('error', function(err) {
+                logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
+                io.to(session_id.toString()).emit('interactionpPlaybackEnd')
             });
 
             istream.on('end', function() {
