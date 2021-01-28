@@ -368,15 +368,10 @@ io.on('connection', function(socket) {
 
                 // write data to disk if recording
                 if (session.isRecording) {
-                    // set update time and get diff -- calc seq number from diff / number of milliseconds per seq
-                    let now = Date.now();
-                    let diff = now - session.start;
-                    // session.seq = Math.floor(diff / 10);
-                    session.seq = diff;
 
                     // overwrite last field (dirty bit) with session sequence number
-                    data[POS_FIELDS-1] = session.seq;
-                    
+                    data[POS_FIELDS-1] = Date.now() - session.recordingStart;
+
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.pos;
 
@@ -481,21 +476,16 @@ io.on('connection', function(socket) {
 
                 // write to file as binary data
                 if (session.isRecording) {
-                    // set update time and get diff -- calc seq number from diff / number of milliseconds per seq
-                    let now = Date.now();
-                    let diff = now - session.start;
-                    // session.seq = Math.floor(diff / 10)
-                    session.seq = diff;
-
+                    
                     // overwrite last field (dirty bit) with session sequence number
-                    data[INT_FIELDS-1] = session.seq;
+                    data[INT_FIELDS-1] = Date.now() - session.recordingStart;
                     
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.int;
 
                     if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
                         // if buffer is full, dump to disk and reset the cursor
-                        let path = getCapturePath(session_id, session.recordingStart, 'pos');
+                        let path = getCapturePath(session_id, session.recordingStart, 'int');
                         let wstream = fs.createWriteStream(path, { flags: 'a' });
                         wstream.write(writer.buffer.slice(0, writer.cursor));
                         wstream.close();
@@ -568,6 +558,7 @@ io.on('connection', function(socket) {
     
         // playback sequence counter
         let current_seq = 0;
+        let audioStarted = false;
 
         // check that all params are valid
         if (client_id && session && capture_id && start) {
@@ -630,11 +621,8 @@ io.on('connection', function(socket) {
                 }
                 var arr = Array.from(farr);
 
-                console.log(arr);
-
                 let timer = setInterval( () => {
-                    let now = Date.now();
-                    current_seq = now - playbackStart;
+                    current_seq = Date.now() - playbackStart;
 
                     console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
@@ -643,6 +631,11 @@ io.on('connection', function(socket) {
                         if (arr[4] != 3) {
                             arr[2] = 90000 + arr[2];
                             arr[3] = 90000 + arr[3];
+                        }
+                        if (!audioStarted) {
+                            console.log('start playback audio event')
+                            audioStarted = true;
+                            io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
                         }
                         io.to(session_id.toString()).emit('relayUpdate', arr);
                         stream.resume();
@@ -665,8 +658,9 @@ io.on('connection', function(socket) {
             let ipath = getCapturePath(capture_id, start, 'int');
             let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
 
-
             istream.on('data', function(chunk) {
+                istream.pause();
+
                 let buff = Buffer.from(chunk);
                 let farr = new Int32Array(chunk.byteLength / 4);
                 for (var i = 0; i < farr.length; i++) {
@@ -674,10 +668,7 @@ io.on('connection', function(socket) {
                 }
                 var arr = Array.from(farr);
 
-                console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
-
                 let timer = setInterval( () => {
-                    // current_seq = now - playbackStart; this is updated by the pos emit loop i think? 
 
                     console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
@@ -781,7 +772,8 @@ chat.on('connection', function(socket) {
                             if(err) logger.warn(`Error creating capture audio directory: ${err}`);
                         });
                     }
-                    let path = `${dir}/${session.seq}.wav`
+                    let seq = Date.now() - session.recordingStart;
+                    let path = `${dir}/${seq}.wav`
                     fs.writeFile(path, data.blob, (err) => {
                         if (err) console.log('error writing audio file:', err)
                     });
