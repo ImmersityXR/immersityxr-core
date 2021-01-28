@@ -34,18 +34,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const mkdirp = require('mkdirp');
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 const app = require('express')();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server, { cookie: false });
+const io = require('socket.io')();
 const mysql = require('mysql');
 const { ExpressPeerServer } = require('peer');
-
-// configuration
-const config = require('./config');
-if (config.db.host && config.db.host != "") {
-    var pool = mysql.createPool(config.db);
-}
 
 // setup logging
 const { createLogger, format, transports } = require('winston');
@@ -67,6 +61,27 @@ const logger = createLogger({
     exitOnError: false
 });
 
+// relay server
+const PORT = 3000;
+io.listen(PORT, { upgradeTimeout: 1000 });
+logger.info(`Komodo relay is running on :${PORT}`);
+
+// peerjs server and handlers
+const server = app.listen(9000);
+const peerServer = ExpressPeerServer(server);
+peerServer.on('connection', (client) => {
+    logger.info(`PeerJS connection: ${client.id}`);
+});
+app.use('/call', peerServer);
+
+// configuration
+const config = require('./config');
+if (config.db.host && config.db.host != "") {
+    var pool = mysql.createPool(config.db);
+}
+
+
+// consts
 const CAPTURE_PATH = './captures/';
 const POS_FIELDS = 14;
 const POS_BYTES_PER_FIELD = 4;
@@ -80,9 +95,8 @@ var sessions = new Map();
 var chats = new Map();
 
 // write buffers are multiples of corresponding chunks
-const POS_WRITE_BUFFER_SIZE = 1024 * POS_CHUNK_SIZE;
+const POS_WRITE_BUFFER_SIZE = 10000 * POS_CHUNK_SIZE;
 const INT_WRITE_BUFFER_SIZE = 128 * INT_CHUNK_SIZE;
-const MIC_WRITE_BUFFER_SIZE = 350000; // TODO(rob): best size? 
 
 // interaction event values
  const INTERACTION_LOOK          = 0;
@@ -145,10 +159,6 @@ io.on('connection', function(socket) {
                         },
                         int: {
                             buffer: Buffer.alloc(INT_WRITE_BUFFER_SIZE),
-                            cursor: 0
-                        },
-                        mic: {
-                            buffer: Buffer.alloc(MIC_WRITE_BUFFER_SIZE),
                             cursor: 0
                         }
                     }
@@ -303,14 +313,6 @@ io.on('connection', function(socket) {
                     wstream.close();
                     int_writer.cursor = 0;
                 }
-                // let mic_writer = session.writers.mic;
-                // if (mic_writer.cursor > 0) {
-                //     let path = CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic';
-                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
-                //     wstream.write(mic_writer.buffer.slice(0, mic_writer.cursor));
-                //     wstream.close();
-                //     mic_writer.cursor = 0;
-                // }
                 
                 // write the capture end event to database
                 if (pool) {
@@ -349,22 +351,6 @@ io.on('connection', function(socket) {
             // cache entity states
             let session = sessions.get(session_id);
             if (session) {
-                let entity_type = data[4]
-                if (entity_type == 3) {
-                    let entity_id = data[3]
-                    let i = session.entities.findIndex(e => e.id == entity_id);
-                    if (i != -1) {
-                        session.entities[i].latest = data;
-                    } else {
-                        let entity = {
-                            id: entity_id,
-                            latest: data,
-                            render: true,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
 
                 // write data to disk if recording
                 if (session.isRecording) {
@@ -387,6 +373,24 @@ io.on('connection', function(socket) {
                         writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
                     }
                     writer.cursor += POS_CHUNK_SIZE;
+                }
+
+                // update session state with latest entity positions
+                let entity_type = data[4]
+                if (entity_type == 3) {
+                    let entity_id = data[3]
+                    let i = session.entities.findIndex(e => e.id == entity_id);
+                    if (i != -1) {
+                        session.entities[i].latest = data;
+                    } else {
+                        let entity = {
+                            id: entity_id,
+                            latest: data,
+                            render: true,
+                            locked: false
+                        }
+                        session.entities.push(entity);
+                    }
                 }
             }
         }
@@ -766,17 +770,16 @@ chat.on('connection', function(socket) {
                 }
 
                 if (session.isRecording) {
-                    let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
-                    if (!fs.existsSync(dir)) {
-                        fs.mkdirSync(dir, { recursive: true }, (err) => {
-                            if(err) logger.warn(`Error creating capture audio directory: ${err}`);
-                        });
-                    }
                     let seq = Date.now() - session.recordingStart;
+                    let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
                     let path = `${dir}/${seq}.wav`
-                    fs.writeFile(path, data.blob, (err) => {
-                        if (err) console.log('error writing audio file:', err)
-                    });
+
+                    mkdirp(dir).then(made => {
+                        if (made) console.log('Creating audio dir: ', made);
+                        fs.writeFile(path, data.blob, (err) => {
+                            if (err) console.log('error writing audio file:', err)
+                        });
+                    })
                 }
             }
         }
@@ -853,15 +856,3 @@ let processSpeech = function (audioBuffer, session_id, client_id, client_name) {
         }
     );
 }
-
-// start server
-const PORT = 3000;
-server.listen(PORT, hostname = '0.0.0.0', function(){});
-
-// peerjs server and handlers
-const peerServer = ExpressPeerServer(server);
-peerServer.on('connection', (client) => {
-    logger.info(`PeerJS connection: ${client.id}`);
-});
-app.use('/call', peerServer)
-logger.info(`Komodo relay is running on :${PORT}`);
