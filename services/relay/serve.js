@@ -63,7 +63,10 @@ const logger = createLogger({
 
 // relay server
 const PORT = 3000;
-io.listen(PORT, { upgradeTimeout: 1000 });
+io.listen(PORT, {
+    upgradeTimeout: 1000,
+    pingTimeout: 30000
+});
 logger.info(`Komodo relay is running on :${PORT}`);
 
 // peerjs server and handlers
