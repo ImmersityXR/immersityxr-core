@@ -270,6 +270,7 @@ io.on('connection', function(socket) {
         let session_id = data.session_id;
         let client_id = data.client_id;
         if (session_id && client_id) {
+            console.log('message event:', data);
             socket.to(session_id.toString()).emit('message', data);
         }
     });
