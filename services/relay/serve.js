@@ -261,6 +261,18 @@ io.on('connection', function(socket) {
             socket.to(session_id.toString()).emit('draw', data);
         }
     });
+
+    // general message relay
+    // TODO(rob): this is where all interaction will eventuall end up
+    // we will be doing compares on the data.type value for to-be-defined consts
+    // of the various interactions we care about, eg. grab, drop, start/end recording, etc. 
+    socket.on('message', function(data) {
+        let session_id = data.session_id;
+        let client_id = data.client_id;
+        if (session_id && client_id) {
+            socket.to(session_id.toString()).emit('message', data);
+        }
+    });
   
     // session capture handler
     socket.on('start_recording', function(session_id) { // TODO(rob): require client id and token
