@@ -15,7 +15,10 @@ services:
       - "traefik.docker.network=proxy"
     networks: 
       - proxy
+      - komodo_internal
 
 networks: 
   proxy:
+    external: true
+  komodo_internal:
     external: true
