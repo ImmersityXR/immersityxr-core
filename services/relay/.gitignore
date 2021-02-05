@@ -3,3 +3,4 @@ captures/
 node_modules/
 config.js
 *.log
+log.txt

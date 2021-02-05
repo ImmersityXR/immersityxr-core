@@ -33,21 +33,13 @@
 
 
 const fs = require('fs');
-const wavefile = require('wavefile');
+const path = require('path');
+const mkdirp = require('mkdirp');
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 const app = require('express')();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-const BSON = require('bson');
+const io = require('socket.io')();
 const mysql = require('mysql');
 const { ExpressPeerServer } = require('peer');
-const { spawn } = require('child_process');
-
-// configuration
-const config = require('./config');
-if (config.db.host && config.db.host != "") {
-    var pool = mysql.createPool(config.db);
-}
 
 // setup logging
 const { createLogger, format, transports } = require('winston');
@@ -64,11 +56,35 @@ const logger = createLogger({
     ),
     transports: [
         new transports.Console(),
-        new transports.File({ filename: 'serve.log' })
+        new transports.File({ filename: 'log.txt' })
     ],
     exitOnError: false
 });
 
+// relay server
+const PORT = 3000;
+io.listen(PORT, {
+    upgradeTimeout: 1000,
+    pingTimeout: 30000
+});
+logger.info(`Komodo relay is running on :${PORT}`);
+
+// peerjs server and handlers
+const server = app.listen(9000);
+const peerServer = ExpressPeerServer(server);
+peerServer.on('connection', (client) => {
+    logger.info(`PeerJS connection: ${client.id}`);
+});
+app.use('/call', peerServer);
+
+// configuration
+const config = require('./config');
+if (config.db.host && config.db.host != "") {
+    var pool = mysql.createPool(config.db);
+}
+
+
+// consts
 const CAPTURE_PATH = './captures/';
 const POS_FIELDS = 14;
 const POS_BYTES_PER_FIELD = 4;
@@ -82,9 +98,8 @@ var sessions = new Map();
 var chats = new Map();
 
 // write buffers are multiples of corresponding chunks
-const POS_WRITE_BUFFER_SIZE = 1024 * POS_CHUNK_SIZE;
+const POS_WRITE_BUFFER_SIZE = 10000 * POS_CHUNK_SIZE;
 const INT_WRITE_BUFFER_SIZE = 128 * INT_CHUNK_SIZE;
-const MIC_WRITE_BUFFER_SIZE = 1024 * 128; // TODO(rob): best size? 
 
 // interaction event values
  const INTERACTION_LOOK          = 0;
@@ -112,6 +127,11 @@ function convertFloat32ToInt16(buffer) {
       buf[l] = Math.min(1, buffer[l])*0x7FFF;
     }
     return buf;
+}
+
+// generate formatted path for session capture files
+function getCapturePath(session_id, start, type) {
+    return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
 }
 
 // main relay handler
@@ -142,10 +162,6 @@ io.on('connection', function(socket) {
                         },
                         int: {
                             buffer: Buffer.alloc(INT_WRITE_BUFFER_SIZE),
-                            cursor: 0
-                        },
-                        mic: {
-                            buffer: Buffer.alloc(MIC_WRITE_BUFFER_SIZE),
                             cursor: 0
                         }
                     }
@@ -245,17 +261,45 @@ io.on('connection', function(socket) {
             socket.to(session_id.toString()).emit('draw', data);
         }
     });
+
+    // general message relay
+    // TODO(rob): this is where all interaction will eventuall end up
+    // we will be doing compares on the data.type value for to-be-defined consts
+    // of the various interactions we care about, eg. grab, drop, start/end recording, etc. 
+    socket.on('message', function(data) {
+        let session_id = data.session_id;
+        let client_id = data.client_id;
+        if (session_id && client_id) {
+            console.log('message event:', data);
+            socket.to(session_id.toString()).emit('message', data);
+        }
+    });
   
     // session capture handler
     socket.on('start_recording', function(session_id) { // TODO(rob): require client id and token
         if (session_id) {
             let session = sessions.get(session_id);
-            if (session) {
+            if (session && !session.isRecording) {
                 session.isRecording = true;
                 session.recordingStart = Date.now();
+                let path = getCapturePath(session_id, session.recordingStart, '');
+                fs.mkdir(path, { recursive: true }, (err) => {
+                    if(err) logger.warn(`Error creating capture path: ${err}`);
+                });
+                let capture_id = session_id+'_'+session.recordingStart;
+                pool.query(
+                    "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
+                    (err, res) => {
+                        if (err != undefined) {
+                            logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                        }
+                    }
+                );
                 logger.info(`Capture started: ${session_id}`);
+            } else if (session && session.isRecording) {
+                logger.warn(`Requested session capture, but session is already recording: ${session_id}`)
             } else {
-                logger.warn(`Requested session capture, but session does not exist: ${session_id}`)
+                logger.warn(`Error starting capture for session: ${session_id}`);
             }
         }
     });
@@ -264,36 +308,45 @@ io.on('connection', function(socket) {
     function end_recording(session_id) {
         if (session_id) {
             let session = sessions.get(session_id);
-            if (session) {
+            if (session && session.isRecording) {
                 session.isRecording = false;
                 logger.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
+
                 let pos_writer = session.writers.pos;
                 if (pos_writer.cursor > 0) {
-                    let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
+                    let path = getCapturePath(session_id, session.recordingStart, 'pos');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
                     wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
                     wstream.close();
                     pos_writer.cursor = 0;
                 }
                 let int_writer = session.writers.int;
                 if (int_writer.cursor > 0) {
-                    let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.int', { flags: 'a' });
+                    let path = getCapturePath(session_id, session.recordingStart, 'int');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
                     wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
                     wstream.close();
                     int_writer.cursor = 0;
                 }
-                let mic_writer = session.writers.mic;
-                if (mic_writer.cursor > 0) {
-                    let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic', { flags: 'a' });
-                    wstream.write(mic_writer.buffer.slice(0, mic_writer.cursor));
-                    wstream.close();
-                    mic_writer.cursor = 0;
-                }
                 
-                // trigger the data pipeline
+                // write the capture end event to database
+                if (pool) {
+                    let capture_id = session_id+'_'+session.recordingStart;
+                    pool.query(
+                        "UPDATE captures SET end = ? WHERE capture_id = ?", [Date.now(), capture_id],
+                        (err, res) => {
+                            if (err != undefined) {
+                                logger.error(`Error writing recording end event to database: ${err} ${res}`);
+                            }
+                        }
+                    );
+                }
 
+            } else if (session && !session.isRecording) {
+                logger.warn(`Requested to end session capture, but capture is already ended: ${session_id}`)
             } else {
-                logger.warn(`Requested to end session capture, but session does not exist: ${session_id}`)
+                logger.warn(`Error ending capture for session: ${session_id}`);
             }
         }
     }
@@ -314,6 +367,31 @@ io.on('connection', function(socket) {
             // cache entity states
             let session = sessions.get(session_id);
             if (session) {
+
+                // write data to disk if recording
+                if (session.isRecording) {
+
+                    // overwrite last field (dirty bit) with session sequence number
+                    data[POS_FIELDS-1] = Date.now() - session.recordingStart;
+
+                    // get reference to session writer (buffer and cursor)
+                    let writer = session.writers.pos;
+
+                    if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+                        // if buffer is full, dump to disk and reset the cursor
+                        let path = getCapturePath(session_id, session.recordingStart, 'pos');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' });
+                        wstream.write(writer.buffer.slice(0, writer.cursor));
+                        wstream.close();
+                        writer.cursor = 0;
+                    }
+                    for (let i = 0; i < data.length; i++) {
+                        writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
+                    }
+                    writer.cursor += POS_CHUNK_SIZE;
+                }
+
+                // update session state with latest entity positions
                 let entity_type = data[4]
                 if (entity_type == 3) {
                     let entity_id = data[3]
@@ -329,32 +407,6 @@ io.on('connection', function(socket) {
                         }
                         session.entities.push(entity);
                     }
-                }
-
-                // write data to disk if recording
-                if (session.isRecording) {
-                    // set update time and get diff -- calc seq number from diff / number of milliseconds per seq
-                    let now = Date.now();
-                    let diff = now - session.start;
-                    session.seq = Math.floor(diff / 10);
-
-                    // overwrite last field (dirty bit) with session sequence number
-                    data[POS_FIELDS-1] = session.seq;
-                    
-                    // get reference to session writer (buffer and cursor)
-                    let writer = session.writers.pos;
-
-                    if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                        // if buffer is full, dump to disk and reset the cursor
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
-                        wstream.write(writer.buffer.slice(0, writer.cursor));
-                        wstream.close();
-                        writer.cursor = 0;
-                    }
-                    for (let i = 0; i < data.length; i++) {
-                        writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
-                    }
-                    writer.cursor += POS_CHUNK_SIZE;
                 }
             }
         }
@@ -444,20 +496,17 @@ io.on('connection', function(socket) {
 
                 // write to file as binary data
                 if (session.isRecording) {
-                    // set update time and get diff -- calc seq number from diff / number of milliseconds per seq
-                    let now = Date.now();
-                    let diff = now - session.start;
-                    session.seq = Math.floor(diff / 10)
-
+                    
                     // overwrite last field (dirty bit) with session sequence number
-                    data[INT_FIELDS-1] = session.seq;
+                    data[INT_FIELDS-1] = Date.now() - session.recordingStart;
                     
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.int;
 
                     if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
                         // if buffer is full, dump to disk and reset the cursor
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.pos', { flags: 'a' });
+                        let path = getCapturePath(session_id, session.recordingStart, 'int');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' });
                         wstream.write(writer.buffer.slice(0, writer.cursor));
                         wstream.close();
                         writer.cursor = 0;
@@ -516,26 +565,75 @@ io.on('connection', function(socket) {
     socket.on('playback', function(data) {
         // TODO(rob): need to use playback object to track seq and group by playback_id, 
         // so users can request to pause playback, maybe rewind?
-        logger.info(`Playback request: ${data}`);
-        let client_id = data[0];
-        let session_id = data[1];
-        let playback_id = data[2]; // id schema is session_id+'_'+session_start to differentiate between multiple session recordings
+        logger.info(`Playback request: ${data.playback_id}`);
+        let client_id = data.client_id;
+        let session_id = data.session_id;
+        let playback_id = data.playback_id;
 
-        let seq_init = 0;
+        let capture_id = playback_id.split('_')[0]
+        let start = playback_id.split('_')[1]
+        // TODO(rob): check that this client has permission to playback this session
+
+        let session = sessions.get(session_id);
+    
+        // playback sequence counter
         let current_seq = 0;
-        let update_group = [];
-        let int_update_group = [];
-        let current_int_seq = 0;
+        let audioStarted = false;
 
-        if (client_id && session_id && playback_id) {
+        // check that all params are valid
+        if (client_id && session && capture_id && start) {
+
+            // build audio file manifest
+            logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+            let audioManifest = [];
+            let baseAudioPath = getCapturePath(capture_id, start, 'audio');
+            if(fs.existsSync(baseAudioPath)) {
+                let items = fs.readdirSync(baseAudioPath);
+                items.forEach(clientDir => {
+                    let clientPath = path.join(baseAudioPath, clientDir)
+                    let files = fs.readdirSync(clientPath)
+                    files.forEach(file => {
+                        let client_id = clientDir;
+                        let seq = file.split('.')[0];
+                        let audioFilePath = path.join(clientPath, file);
+                        let item = {
+                            seq: seq,
+                            client_id: client_id,
+                            path: audioFilePath,
+                            data: null
+                        }
+                        audioManifest.push(item);
+                    });
+                });
+            }
+
+            // emit audio manifest to connected clients
+            io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+
+            // stream all audio files for caching and playback by client
+            audioManifest.forEach((file) => {
+                fs.readFile(file.path, (err, data) => {
+                    file.data = data;
+                    if(err) logger.error(`Error reading audio file: ${file.path}`);
+                    console.log('emitting audio packet:', file);
+                    io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+                });
+            });
+
+
             // position streaming
-            let stream = fs.createReadStream(CAPTURE_PATH+playback_id+'.pos', { highWaterMark: POS_CHUNK_SIZE });
-            stream.on('error', function(err) {
-                logger.error(`Error creating position playback stream for session ${session_id}: ${err}`);
-                io.to(session_id.toString()).emit('playbackEnd')
-            })
+            let capturePath = getCapturePath(capture_id, start, 'pos');
+            let stream = fs.createReadStream(capturePath, { highWaterMark: POS_CHUNK_SIZE });
 
+            // set actual playback start time
+            let playbackStart = Date.now();
+
+            // position data emit loop
             stream.on('data', function(chunk) {
+
+                stream.pause();
+
+                // start data buffer loop
                 let buff = Buffer.from(chunk);
                 let farr = new Float32Array(chunk.byteLength / 4);
                 for (var i = 0; i < farr.length; i++) {
@@ -543,45 +641,32 @@ io.on('connection', function(socket) {
                 }
                 var arr = Array.from(farr);
 
-                // get starting seq
-                if (seq_init == 0) {
-                    current_seq = arr[POS_FIELDS-1]
-                    seq_init = 1;
-                }
+                let timer = setInterval( () => {
+                    current_seq = Date.now() - playbackStart;
 
-                // alias client and entity id with prefix if entity type is not an asset
-                if (arr[4] != 3) {
-                    arr[2] = 90000 + arr[2];
-                    arr[3] = 90000 + arr[3];
-                }
+                    console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
-                // push updates if they are in the current sequence window
-                if (arr[POS_FIELDS-1] == current_seq) {
-                    update_group.push(arr);
-                    // console.log('pushing onto update group', update_group.length)
-                } else {
-                    // start drain process, wait for timing trigger
-                    // console.log('draining pos update group', update_group.length);
-                    let drain_now = 0;
-                    let now = Date.now()
-                    while (update_group.length) {
-                        if (Date.now() - now >= 10) {
-                            drain_now = 1;
+                    if (arr[POS_FIELDS-1] <= current_seq) {
+                        // alias client and entity id with prefix if entity type is not an asset
+                        if (arr[4] != 3) {
+                            arr[2] = 90000 + arr[2];
+                            arr[3] = 90000 + arr[3];
                         }
-                        if (drain_now) {
-                            io.to(session_id.toString()).emit('relayUpdate', update_group.shift());
+                        if (!audioStarted) {
+                            console.log('start playback audio event')
+                            audioStarted = true;
+                            io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
                         }
+                        io.to(session_id.toString()).emit('relayUpdate', arr);
+                        stream.resume();
+                        clearInterval(timer);
                     }
-                    drain_now = 0;
-                    // start new group with new seq from latest update
-                    update_group.push(arr);
-                    current_seq = arr[POS_FIELDS-1]
-                    if (current_seq >= current_int_seq) {
-                        if (istream.isPaused()) {
-                            istream.resume();
-                        }
-                    }
-                }
+                }, 1);
+            });
+
+            stream.on('error', function(err) {
+                logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
+                io.to(session_id.toString()).emit('playbackEnd')
             });
 
             stream.on('end', function() {
@@ -590,45 +675,35 @@ io.on('connection', function(socket) {
             })
 
             // interaction streaming
-            let istream = fs.createReadStream(CAPTURE_PATH+playback_id+'.int', { highWaterMark: INT_CHUNK_SIZE });
-            stream.on('error', function(err) {
-                logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-                io.to(session_id.toString()).emit('interactionpPlaybackEnd')
-            })
+            let ipath = getCapturePath(capture_id, start, 'int');
+            let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
 
             istream.on('data', function(chunk) {
+                istream.pause();
+
                 let buff = Buffer.from(chunk);
                 let farr = new Int32Array(chunk.byteLength / 4);
                 for (var i = 0; i < farr.length; i++) {
                     farr[i] = buff.readInt32LE(i * 4);
                 }
                 var arr = Array.from(farr);
-                
-                current_int_seq = arr[INT_FIELDS-1];
 
-                // console.log('current_int_seq', current_int_seq, 'current_seq', current_seq);
-                // push updates if they are in the current sequence window
-                if (current_int_seq < current_seq) {
-                    int_update_group.push(arr);
-                    // console.log('pushing onto interaction update group', int_update_group.length)
-                } else {
-                    istream.pause();
-                    // start drain process, wait for timing trigger
-                    let drain_now = 0;
-                    let now = Date.now()
-                    while (int_update_group.length) {
-                        if (Date.now() - now >= 10) {
-                            drain_now = 1;
-                        }
-                        if (drain_now) {
-                            // console.log('draining interaction update group', int_update_group.length);
-                            io.to(session_id.toString()).emit('interactionUpdate', int_update_group.shift());
-                        }
+                let timer = setInterval( () => {
+
+                    console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+
+                    if (arr[INT_FIELDS-1] <= current_seq) {
+                        io.to(session_id.toString()).emit('interactionUpdate', arr);
+                        istream.resume();
+                        clearInterval(timer);
                     }
-                    drain_now = 0;
-                    // start new group with new seq from latest update
-                    int_update_group.push(arr);
-                }
+                }, 1);
+
+            });
+
+            istream.on('error', function(err) {
+                logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
+                io.to(session_id.toString()).emit('interactionpPlaybackEnd')
             });
 
             istream.on('end', function() {
@@ -694,46 +769,33 @@ chat.on('connection', function(socket) {
         }
     });
 
-    // speech-to-text
+    // client audio processing
     socket.on('mic', function(data) {
         let session_id = data.session_id;
         let client_id = data.client_id;
 
         if (session_id && client_id) {
-            let buff = Buffer.from(data.buffer);
-            let farr = new Float32Array(buff.buffer);
-            let idata = convertFloat32ToInt16(farr);
-            
-            let wav = new wavefile.WaveFile();
-            let samples =  new Int16Array(idata.buffer);
-            wav.fromScratch(1, data.sampleRate, '16', samples);
-            if (data.sampleRate != 16000) {
-                wav.toSampleRate(16000)
-            }
-            let resampledBuffer = wav.toBuffer()
-            try {
-                processSpeech(resampledBuffer, session_id, client_id, data.client_name);
-            } catch (error) {
-                logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
-            }
-            
             // write to disk if recording
             let session = sessions.get(session_id);
             if (session) {
+                // speech-to-text
+                try {
+                    processSpeech(data.blob, session_id, client_id, data.client_name);
+                } catch (error) {
+                    logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
+                }
+
                 if (session.isRecording) {
-                    console.log(data) // debug
-                    let writer = session.writers.mic;
-                    data.seq = session.seq; 
-                    let bdata = BSON.serialize(data)
-                    if (bdata.byteLength + writer.cursor > writer.buffer.byteLength - 1) {
-                        // if buffer is full, dump to disk and reset the cursor
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.mic', { flags: 'a' })
-                        wstream.write(writer.buffer.slice(0, writer.cursor));
-                        wstream.close();
-                        writer.cursor = 0;
-                    }
-                    writer.buffer.writeUInt8(bdata, writer.cursor);
-                    writer.cursor += bdata.byteLength;
+                    let seq = Date.now() - session.recordingStart;
+                    let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
+                    let path = `${dir}/${seq}.wav`
+
+                    mkdirp(dir).then(made => {
+                        if (made) console.log('Creating audio dir: ', made);
+                        fs.writeFile(path, data.blob, (err) => {
+                            if (err) console.log('error writing audio file:', err)
+                        });
+                    })
                 }
             }
         }
@@ -787,7 +849,8 @@ let processSpeech = function (audioBuffer, session_id, client_id, client_name) {
                             client_id: client_id,
                             text: result.privText
                         }
-                        let wstream = fs.createWriteStream(CAPTURE_PATH+session_id+'_'+session.recordingStart+'.stt', { flags: 'a' })
+                        let path = getCapturePath(session_id, session.recordingStart, 'stt');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' })
                         wstream.write(JSON.stringify(sttObj)+'\n');
                         wstream.close();
                     }
@@ -809,15 +872,3 @@ let processSpeech = function (audioBuffer, session_id, client_id, client_name) {
         }
     );
 }
-
-// start server
-const PORT = 3000;
-server.listen(PORT, hostname = '0.0.0.0', function(){});
-
-// peerjs server and handlers
-const peerServer = ExpressPeerServer(server);
-peerServer.on('connection', (client) => {
-    logger.info(`PeerJS connection: ${client.id}`);
-});
-app.use('/call', peerServer)
-logger.info(`Komodo relay is running on :${PORT}`);
