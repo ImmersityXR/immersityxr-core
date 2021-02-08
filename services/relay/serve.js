@@ -36,10 +36,8 @@ const fs = require('fs');
 const path = require('path');
 const mkdirp = require('mkdirp');
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
-const app = require('express')();
 const io = require('socket.io')();
 const mysql = require('mysql');
-const { ExpressPeerServer } = require('peer');
 
 // setup logging
 const { createLogger, format, transports } = require('winston');
@@ -68,14 +66,6 @@ io.listen(PORT, {
     pingTimeout: 30000
 });
 logger.info(`Komodo relay is running on :${PORT}`);
-
-// peerjs server and handlers
-const server = app.listen(9000);
-const peerServer = ExpressPeerServer(server);
-peerServer.on('connection', (client) => {
-    logger.info(`PeerJS connection: ${client.id}`);
-});
-app.use('/call', peerServer);
 
 // configuration
 const config = require('./config');
