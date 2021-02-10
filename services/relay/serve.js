@@ -634,7 +634,7 @@ io.on('connection', function(socket) {
                 let timer = setInterval( () => {
                     current_seq = Date.now() - playbackStart;
 
-                    console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
+                    // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
                     if (arr[POS_FIELDS-1] <= current_seq) {
                         // alias client and entity id with prefix if entity type is not an asset
@@ -680,7 +680,7 @@ io.on('connection', function(socket) {
 
                 let timer = setInterval( () => {
 
-                    console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+                    // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
                     if (arr[INT_FIELDS-1] <= current_seq) {
                         io.to(session_id.toString()).emit('interactionUpdate', arr);
