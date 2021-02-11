@@ -577,11 +577,11 @@ io.on('connection', function(socket) {
             logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
             let audioManifest = [];
             let baseAudioPath = getCapturePath(capture_id, start, 'audio');
-            if(fs.existsSync(baseAudioPath)) {
-                let items = fs.readdirSync(baseAudioPath);
+            if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
+                let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
                 items.forEach(clientDir => {
                     let clientPath = path.join(baseAudioPath, clientDir)
-                    let files = fs.readdirSync(clientPath)
+                    let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
                     files.forEach(file => {
                         let client_id = clientDir;
                         let seq = file.split('.')[0];
@@ -605,7 +605,7 @@ io.on('connection', function(socket) {
                 fs.readFile(file.path, (err, data) => {
                     file.data = data;
                     if(err) logger.error(`Error reading audio file: ${file.path}`);
-                    console.log('emitting audio packet:', file);
+                    // console.log('emitting audio packet:', file);
                     io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
                 });
             });
@@ -643,7 +643,7 @@ io.on('connection', function(socket) {
                             arr[3] = 90000 + arr[3];
                         }
                         if (!audioStarted) {
-                            console.log('start playback audio event')
+                            // HACK(rob): trigger clients to begin playing buffered audio 
                             audioStarted = true;
                             io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
                         }
@@ -772,7 +772,7 @@ chat.on('connection', function(socket) {
                 try {
                     processSpeech(data.blob, session_id, client_id, data.client_name);
                 } catch (error) {
-                    logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
+                    logger.error(`Error processing speech-to-text: ${client_id}, session: ${session_id}, error: ${error}`);
                 }
 
                 if (session.isRecording) {
