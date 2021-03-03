@@ -346,6 +346,7 @@ io.on('connection', function(socket) {
 
     // client position update handler
     socket.on('update', function(data) {
+        let now = Date.now();
         let session_id = data[1];
         let client_id = data[2];
         
@@ -362,7 +363,7 @@ io.on('connection', function(socket) {
                 if (session.isRecording) {
 
                     // overwrite last field (dirty bit) with session sequence number
-                    data[POS_FIELDS-1] = Date.now() - session.recordingStart;
+                    data[POS_FIELDS-1] = now - session.recordingStart;
 
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.pos;
@@ -406,6 +407,7 @@ io.on('connection', function(socket) {
     // handle interaction events
     // see `INTERACTION_XXX` declarations for type values
     socket.on('interact', function(data) {
+        let now = Date.now();
         let session_id = data[1];
         let client_id = data[2];
 
@@ -488,7 +490,7 @@ io.on('connection', function(socket) {
                 if (session.isRecording) {
                     
                     // overwrite last field (dirty bit) with session sequence number
-                    data[INT_FIELDS-1] = Date.now() - session.recordingStart;
+                    data[INT_FIELDS-1] = now - session.recordingStart;
                     
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.int;
@@ -573,42 +575,44 @@ io.on('connection', function(socket) {
         // check that all params are valid
         if (client_id && session && capture_id && start) {
 
+
+            // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
             // build audio file manifest
-            logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
-            let audioManifest = [];
-            let baseAudioPath = getCapturePath(capture_id, start, 'audio');
-            if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
-                let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
-                items.forEach(clientDir => {
-                    let clientPath = path.join(baseAudioPath, clientDir)
-                    let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
-                    files.forEach(file => {
-                        let client_id = clientDir;
-                        let seq = file.split('.')[0];
-                        let audioFilePath = path.join(clientPath, file);
-                        let item = {
-                            seq: seq,
-                            client_id: client_id,
-                            path: audioFilePath,
-                            data: null
-                        }
-                        audioManifest.push(item);
-                    });
-                });
-            }
+            // logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+            // let audioManifest = [];
+            // let baseAudioPath = getCapturePath(capture_id, start, 'audio');
+            // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
+            //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
+            //     items.forEach(clientDir => {
+            //         let clientPath = path.join(baseAudioPath, clientDir)
+            //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
+            //         files.forEach(file => {
+            //             let client_id = clientDir;
+            //             let seq = file.split('.')[0];
+            //             let audioFilePath = path.join(clientPath, file);
+            //             let item = {
+            //                 seq: seq,
+            //                 client_id: client_id,
+            //                 path: audioFilePath,
+            //                 data: null
+            //             }
+            //             audioManifest.push(item);
+            //         });
+            //     });
+            // }
 
-            // emit audio manifest to connected clients
-            io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+            // // emit audio manifest to connected clients
+            // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
 
-            // stream all audio files for caching and playback by client
-            audioManifest.forEach((file) => {
-                fs.readFile(file.path, (err, data) => {
-                    file.data = data;
-                    if(err) logger.error(`Error reading audio file: ${file.path}`);
-                    // console.log('emitting audio packet:', file);
-                    io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
-                });
-            });
+            // // stream all audio files for caching and playback by client
+            // audioManifest.forEach((file) => {
+            //     fs.readFile(file.path, (err, data) => {
+            //         file.data = data;
+            //         if(err) logger.error(`Error reading audio file: ${file.path}`);
+            //         // console.log('emitting audio packet:', file);
+            //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+            //     });
+            // });
 
 
             // position streaming
@@ -775,18 +779,20 @@ chat.on('connection', function(socket) {
                     logger.error(`Error processing speech-to-text: ${client_id}, session: ${session_id}, error: ${error}`);
                 }
 
-                if (session.isRecording) {
-                    let seq = Date.now() - session.recordingStart;
-                    let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
-                    let path = `${dir}/${seq}.wav`
 
-                    mkdirp(dir).then(made => {
-                        if (made) console.log('Creating audio dir: ', made);
-                        fs.writeFile(path, data.blob, (err) => {
-                            if (err) console.log('error writing audio file:', err)
-                        });
-                    })
-                }
+                // TODO(rob): Mar 3 2021 -- audio recording on hold to focus on data playback. 
+                // if (session.isRecording) {
+                //     let seq = Date.now() - session.recordingStart;
+                //     let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
+                //     let path = `${dir}/${seq}.wav`
+
+                //     mkdirp(dir).then(made => {
+                //         if (made) console.log('Creating audio dir: ', made);
+                //         fs.writeFile(path, data.blob, (err) => {
+                //             if (err) console.log('error writing audio file:', err)
+                //         });
+                //     })
+                // }
             }
         }
     });
