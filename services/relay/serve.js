@@ -346,7 +346,7 @@ io.on('connection', function(socket) {
 
     // client position update handler
     socket.on('update', function(data) {
-        let now = Date.now();
+        let now = Date.now();  // TODO(rob): still getting buffered capture data!!! might need to stamp the payload on the client. ugh. 
         let session_id = data[1];
         let client_id = data[2];
         
