@@ -346,7 +346,6 @@ io.on('connection', function(socket) {
 
     // client position update handler
     socket.on('update', function(data) {
-        let now = Date.now();  // TODO(rob): still getting buffered capture data!!! might need to stamp the payload on the client. ugh. 
         let session_id = data[1];
         let client_id = data[2];
         
@@ -362,8 +361,9 @@ io.on('connection', function(socket) {
                 // write data to disk if recording
                 if (session.isRecording) {
 
+                    // DEPRECATED: timestamping happens on the client now. 
                     // overwrite last field (dirty bit) with session sequence number
-                    data[POS_FIELDS-1] = now - session.recordingStart;
+                    data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
 
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.pos;
@@ -407,7 +407,6 @@ io.on('connection', function(socket) {
     // handle interaction events
     // see `INTERACTION_XXX` declarations for type values
     socket.on('interact', function(data) {
-        let now = Date.now();
         let session_id = data[1];
         let client_id = data[2];
 
@@ -490,7 +489,7 @@ io.on('connection', function(socket) {
                 if (session.isRecording) {
                     
                     // overwrite last field (dirty bit) with session sequence number
-                    data[INT_FIELDS-1] = now - session.recordingStart;
+                    data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
                     
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.int;
@@ -562,18 +561,27 @@ io.on('connection', function(socket) {
         let session_id = data.session_id;
         let playback_id = data.playback_id;
 
-        let capture_id = playback_id.split('_')[0]
-        let start = playback_id.split('_')[1]
-        // TODO(rob): check that this client has permission to playback this session
+        let capture_id = null;
+        let start = null;
 
+        if (client_id && session_id && playback_id) {
+            capture_id = playback_id.split('_')[0]
+            start = playback_id.split('_')[1]
+            // TODO(rob): check that this client has permission to playback this session
+        } else {
+            console.log("Invalid playback request:", data);
+            return;
+        }
+
+        // Everything looks good, getting ref to session. 
         let session = sessions.get(session_id);
     
         // playback sequence counter
         let current_seq = 0;
-        let audioStarted = false;
+        // let audioStarted = false;
 
         // check that all params are valid
-        if (client_id && session && capture_id && start) {
+        if (capture_id && start) {
 
 
             // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
@@ -646,11 +654,11 @@ io.on('connection', function(socket) {
                             arr[2] = 90000 + arr[2];
                             arr[3] = 90000 + arr[3];
                         }
-                        if (!audioStarted) {
-                            // HACK(rob): trigger clients to begin playing buffered audio 
-                            audioStarted = true;
-                            io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
-                        }
+                        // if (!audioStarted) {
+                        //     // HACK(rob): trigger clients to begin playing buffered audio 
+                        //     audioStarted = true;
+                        //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
+                        // }
                         io.to(session_id.toString()).emit('relayUpdate', arr);
                         stream.resume();
                         clearInterval(timer);
