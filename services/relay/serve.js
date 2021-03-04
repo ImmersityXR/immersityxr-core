@@ -361,8 +361,7 @@ io.on('connection', function(socket) {
                 // write data to disk if recording
                 if (session.isRecording) {
 
-                    // DEPRECATED: timestamping happens on the client now. 
-                    // overwrite last field (dirty bit) with session sequence number
+                    // calculate and write session sequence number using client timestamp
                     data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
 
                     // get reference to session writer (buffer and cursor)
@@ -488,7 +487,7 @@ io.on('connection', function(socket) {
                 // write to file as binary data
                 if (session.isRecording) {
                     
-                    // overwrite last field (dirty bit) with session sequence number
+                    // calculate and write session sequence number
                     data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
                     
                     // get reference to session writer (buffer and cursor)
