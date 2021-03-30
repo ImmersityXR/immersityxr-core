@@ -124,6 +124,34 @@ function getCapturePath(session_id, start, type) {
     return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
 }
 
+function joinSocketToSession(err, session_id, client_id) {
+    if (err) { logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`) }
+    else {
+        let session = sessions.get(session_id);
+        io.to(session_id.toString()).emit('joined', client_id);
+        if (session.clients.length > 0) {
+            session.clients.push(client_id);
+        } else {
+            session.clients = [client_id];
+        }
+        // socket to client mapping
+        session.sockets[socket.id] = { client_id: client_id, socket: socket };
+
+        // write join event to database
+        if (pool) {
+            let event = `"connect"`;
+            pool.query(
+                "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+                (err, res) => {
+                    if (err != undefined) {
+                        logger.error(`Error writing join event to database: ${err} ${res}`);
+                    }
+                }
+            );
+        }
+    }
+}
+
 // main relay handler
 io.on('connection', function(socket) {
     logger.info(`Connection: ${socket.id}`);
@@ -172,38 +200,12 @@ io.on('connection', function(socket) {
             }
 
             // relay server joins connecting client to session room
-            socket.join(session_id.toString(), function (err) {
-                if (err) { console.log(err); }
-                else {
-                    let session = sessions.get(session_id);
-                    io.to(session_id.toString()).emit('joined', client_id);
-                    if (session.clients.length > 0) {
-                        session.clients.push(client_id);
-                    } else {
-                        session.clients = [client_id];
-                    }
-                    // socket to client mapping
-                    session.sockets[socket.id] = { client_id: client_id, socket: socket };
-
-                    // write join event to database
-                    if (pool) {
-                        let event = `"connect"`;
-                        pool.query(
-                            "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-                            (err, res) => {
-                                if (err != undefined) {
-                                    logger.error(`Error writing join event to database: ${err} ${res}`);
-                                }
-                            }
-                        );
-                    }
-                }
-            });
+            socket.join(session_id.toString(), (err) => { joinSocketToSession(err, session_id, client_id) });
         }
     });
 
     socket.on('state', function(data) {
-        logger.info(`State: ${data}`)
+        logger.info(`State: ${JSON.stringify(data)}`)
         if (data) {
             let session_id = data.session_id;
             let client_id = data.client_id;
@@ -260,7 +262,6 @@ io.on('connection', function(socket) {
         let session_id = data.session_id;
         let client_id = data.client_id;
         if (session_id && client_id) {
-            console.log('message event:', data);
             socket.to(session_id.toString()).emit('message', data);
         }
     });
@@ -351,11 +352,23 @@ io.on('connection', function(socket) {
         
         if (session_id && client_id) 
         {  
-            // relay updates to all connected clients
+            let session = sessions.get(session_id);
+            
+            // check if the incoming packet is from a client who is valid for this session
+            let joined = false;
+            for (let i=0; i < session.clients.length; i++) {
+                if (client_id == session.clients[i]) {
+                    joined = true;
+                    break;
+                }
+            }
+
+            if (!joined) return;
+
+            // relay packet if client is valid
             socket.to(session_id.toString()).emit('relayUpdate', data);
 
-            // cache entity states
-            let session = sessions.get(session_id);
+            // manage session state
             if (session) {
 
                 // write data to disk if recording
@@ -517,6 +530,35 @@ io.on('connection', function(socket) {
             let session = s[1];
             if (socket.id in session.sockets) {
                 let client_id = session.sockets[socket.id].client_id;
+
+                // Check disconnect event reason and handle
+                // see https://socket.io/docs/v3/client-api/index.html
+                if (reason === "io server disconnect") {
+                    // the disconnection was initiated by the server, you need to reconnect manually
+                    logger.info(`Client was disconnected by server, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
+                    socket.connect();
+                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                } else if (reason == "io client disconnect") {
+                    // The socket was manually disconnected using socket.disconnect()
+                    // We don't attempt to reconnect is disconnect was called by client. 
+                    logger.info(`Client was disconnected by client. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
+                } else if (reason == "ping timeout") {
+                    // The server did not send a PING within the pingInterval + pingTimeout range
+                    logger.info(`Client was disconnected due to ping timeout, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
+                    socket.disconnect();
+                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                } else if (reason == "transport close") {
+                    // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
+                    logger.info(`Client was disconnected due to transport close, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
+                    socket.disconnect();
+                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                } else if (reason == "transport error") {
+                    // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
+                    logger.info(`Client was disconnected due to transport error, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
+                    socket.disconnect();
+                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                }
+
                 // send disconnect event to session
                 socket.to(session_id.toString()).emit('disconnected', client_id);
                 // remove socket->client mapping
