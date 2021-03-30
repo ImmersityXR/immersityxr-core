@@ -537,7 +537,7 @@ io.on('connection', function(socket) {
                     // the disconnection was initiated by the server, you need to reconnect manually
                     logger.info(`Client was disconnected by server, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
                     socket.connect();
-                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, session_id, client_id) });
                 } else if (reason == "io client disconnect") {
                     // The socket was manually disconnected using socket.disconnect()
                     // We don't attempt to reconnect is disconnect was called by client. 
@@ -546,17 +546,17 @@ io.on('connection', function(socket) {
                     // The server did not send a PING within the pingInterval + pingTimeout range
                     logger.info(`Client was disconnected due to ping timeout, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
                     socket.disconnect();
-                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, session_id, client_id) });
                 } else if (reason == "transport close") {
                     // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
                     logger.info(`Client was disconnected due to transport close, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
                     socket.disconnect();
-                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, session_id, client_id) });
                 } else if (reason == "transport error") {
                     // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
                     logger.info(`Client was disconnected due to transport error, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
                     socket.disconnect();
-                    socket.join(session_id.toString(), joinSocketToSession(err, session_id, client_id));
+                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, session_id, client_id) });
                 }
 
                 // send disconnect event to session
