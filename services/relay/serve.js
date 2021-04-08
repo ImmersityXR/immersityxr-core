@@ -431,94 +431,105 @@ io.on('connection', function(socket) {
             let target_id = data[4];
             let interaction_type = data[5];
             let session = sessions.get(session_id);
-            if (session) {
-                // entity should be rendered
-                if (interaction_type == INTERACTION_RENDER) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].render = true;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: [],
-                            render: true,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
-                // entity should stop being rendered
-                if (interaction_type == INTERACTION_RENDER_END) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].render = false;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: data,
-                            render: false,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
-                // scene has changed
-                if (interaction_type == INTERACTION_SCENE_CHANGE) {
-                    session.scene = target_id;
-                }
-                // entity is locked
-                if (interaction_type == INTERACTION_LOCK) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].locked = true;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: [],
-                            render: false,
-                            locked: true
-                        }
-                        session.entities.push(entity);
-                    }
-                }
-                // entity is unlocked
-                if (interaction_type == INTERACTION_LOCK_END) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].locked = false;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: [],
-                            render: false,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
+            if (!session) return;
 
-                // write to file as binary data
-                if (session.isRecording) {
-                    
-                    // calculate and write session sequence number
-                    data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
-                    
-                    // get reference to session writer (buffer and cursor)
-                    let writer = session.writers.int;
-
-                    if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                        // if buffer is full, dump to disk and reset the cursor
-                        let path = getCapturePath(session_id, session.recordingStart, 'int');
-                        let wstream = fs.createWriteStream(path, { flags: 'a' });
-                        wstream.write(writer.buffer.slice(0, writer.cursor));
-                        wstream.close();
-                        writer.cursor = 0;
-                    }
-                    for (let i = 0; i < data.length; i++) {
-                        writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-                    }
-                    writer.cursor += INT_CHUNK_SIZE;
+            // check if the incoming packet is from a client who is valid for this session
+            let joined = false;
+            for (let i=0; i < session.clients.length; i++) {
+                if (client_id == session.clients[i]) {
+                    joined = true;
+                    break;
                 }
+            }
+
+            if (!joined) return;
+            
+            // entity should be rendered
+            if (interaction_type == INTERACTION_RENDER) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].render = true;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: true,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // entity should stop being rendered
+            if (interaction_type == INTERACTION_RENDER_END) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].render = false;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: data,
+                        render: false,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // scene has changed
+            if (interaction_type == INTERACTION_SCENE_CHANGE) {
+                session.scene = target_id;
+            }
+            // entity is locked
+            if (interaction_type == INTERACTION_LOCK) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].locked = true;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: false,
+                        locked: true
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // entity is unlocked
+            if (interaction_type == INTERACTION_LOCK_END) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].locked = false;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: false,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+
+            // write to file as binary data
+            if (session.isRecording) {
+                
+                // calculate and write session sequence number
+                data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
+                
+                // get reference to session writer (buffer and cursor)
+                let writer = session.writers.int;
+
+                if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+                    // if buffer is full, dump to disk and reset the cursor
+                    let path = getCapturePath(session_id, session.recordingStart, 'int');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
+                    wstream.write(writer.buffer.slice(0, writer.cursor));
+                    wstream.close();
+                    writer.cursor = 0;
+                }
+                for (let i = 0; i < data.length; i++) {
+                    writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+                }
+                writer.cursor += INT_CHUNK_SIZE;
             }
         }
     });
