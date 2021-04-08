@@ -353,7 +353,7 @@ io.on('connection', function(socket) {
         if (session_id && client_id) 
         {  
             let session = sessions.get(session_id);
-            
+            if (!session) return;
             // check if the incoming packet is from a client who is valid for this session
             let joined = false;
             for (let i=0; i < session.clients.length; i++) {
