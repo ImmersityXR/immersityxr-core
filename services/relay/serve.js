@@ -125,9 +125,12 @@ function getCapturePath(session_id, start, type) {
 }
 
 function joinSocketToSession(err, socket, session_id, client_id) {
-    if (err) { logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`) }
-    else {
+    if (err) { 
+        logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
+        return false;
+    } else {
         let session = sessions.get(session_id);
+        if (!session) return false;
         io.to(session_id.toString()).emit('joined', client_id);
         if (session.clients.length > 0) {
             session.clients.push(client_id);
@@ -149,6 +152,46 @@ function joinSocketToSession(err, socket, session_id, client_id) {
                 }
             );
         }
+    }
+    // socket successfully joined to session
+    return true;
+}
+
+// cleanup socket and client references in session state if reconnect fails
+function removeSocketFromSession(socket, session_id, client_id) {
+    // send disconnect event to session
+    socket.to(session_id.toString()).emit('disconnected', client_id);
+    // remove socket->client mapping
+    delete session.sockets[socket.id];
+    // remove client from session state
+    let index = session.clients.indexOf(client_id);
+    session.clients.splice(index, 1);
+    logger.info(`Disconnection: ${client_id}`);
+    // log disconnect event with timestamp to db
+    if (pool) {
+        let event = `"disconnect"`;
+        pool.query(
+            "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+            (err, res) => {
+                if (err != undefined) {
+                    logger.error(`Error writing disconnect event to database: ${err} ${res}`);
+                }
+            }
+        );
+    }
+}
+
+// cleanup session from sessions map if empty, write 
+function cleanupSessionIfEmpty(session_id) {
+    let session = sessions.get(session_id);
+    if (!session) return;
+    if (session.clients.length <= 0) {
+        logger.info(`No clients left in session, ending: ${session_id}`);
+        if (session.isRecording) {
+            logger.info(`Stopping recording of empty session: ${session_id}`);
+            end_recording(session_id);
+        }
+        sessions.delete(session_id);
     }
 }
 
@@ -547,59 +590,35 @@ io.on('connection', function(socket) {
                 if (reason === "io server disconnect") {
                     // the disconnection was initiated by the server, you need to reconnect manually
                     logger.info(`Client was disconnected by server, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
-                    socket.connect();
-                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
+                    // socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
+                    removeSocketFromSession(socket, socket_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
                 } else if (reason == "io client disconnect") {
                     // The socket was manually disconnected using socket.disconnect()
                     // We don't attempt to reconnect is disconnect was called by client. 
                     logger.info(`Client was disconnected by client. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
+                    removeSocketFromSession(socket, socket_id, client_id);
+                    cleanupSessionIfEmpty(socket_id);
                 } else if (reason == "ping timeout") {
                     // The server did not send a PING within the pingInterval + pingTimeout range
                     logger.info(`Client was disconnected due to ping timeout, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
-                    socket.disconnect();
-                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
+                    socket.join(session_id.toString(), (err) => { 
+                        let success = joinSocketToSession(err, socket, session_id, client_id);
+                        if (!success) { 
+                            removeSocketFromSession(socket, session_id, client_id);
+                            cleanupSessionIfEmpty(socket_id);
+                        } 
+                    });
+
+                // if the socket disconnect reason is a transport issue, the client will either reconnect or disconnect on its own, 
+                // or the server will bump that socket and handle with `io server disconnect` above.
+                // so we log the event, but don't do anything about it. -rw 4/8/21
                 } else if (reason == "transport close") {
                     // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
                     logger.info(`Client was disconnected due to transport close, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
-                    socket.disconnect();
-                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
                 } else if (reason == "transport error") {
                     // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
                     logger.info(`Client was disconnected due to transport error, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, state: ${JSON.stringify(session.state)}`);
-                    socket.disconnect();
-                    socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
-                }
-
-                // send disconnect event to session
-                socket.to(session_id.toString()).emit('disconnected', client_id);
-                // remove socket->client mapping
-                delete session.sockets[socket.id];
-                // remove client from session state
-                let index = session.clients.indexOf(client_id);
-                session.clients.splice(index, 1);
-                logger.info(`Disconnection: ${client_id}`);
-
-                // log disconnect event with timestamp to db
-                if (pool) {
-                    let event = `"disconnect"`;
-                    pool.query(
-                        "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-                        (err, res) => {
-                            if (err != undefined) {
-                                logger.error(`Error writing disconnect event to database: ${err} ${res}`);
-                            }
-                        }
-                    );
-
-                    // remove session if empty
-                    if (session.clients.length <= 0) {
-                        logger.info(`No clients left in session, ending: ${session_id}`);
-                        if (session.isRecording) {
-                            logger.info(`Stopping recording of empty session: ${session_id}`);
-                            end_recording(session_id);
-                        }
-                        sessions.delete(session_id);
-                    }
                 }
             }
         }
