@@ -609,16 +609,16 @@ io.on('connection', function(socket) {
                             cleanupSessionIfEmpty(socket_id);
                         } 
                     });
-
-                // if the socket disconnect reason is a transport issue, the client will either reconnect or disconnect on its own, 
-                // or the server will bump that socket and handle with `io server disconnect` above.
-                // so we log the event, but don't do anything about it. -rw 4/8/21
                 } else if (reason == "transport close") {
                     // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
                     logger.info(`Client was disconnected due to transport close. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    removeSocketFromSession(socket, socket_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
                 } else if (reason == "transport error") {
                     // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
                     logger.info(`Client was disconnected due to transport error. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    removeSocketFromSession(socket, socket_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
                 }
             }
         }
