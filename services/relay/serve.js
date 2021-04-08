@@ -591,14 +591,14 @@ io.on('connection', function(socket) {
                     // the disconnection was initiated by the server, you need to reconnect manually
                     logger.info(`Client was disconnected by server. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
                     // socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
-                    removeSocketFromSession(socket, socket_id, client_id);
+                    removeSocketFromSession(socket, session_id, client_id);
                     cleanupSessionIfEmpty(session_id);
                 } else if (reason == "io client disconnect") {
                     // The socket was manually disconnected using socket.disconnect()
                     // We don't attempt to reconnect is disconnect was called by client. 
                     logger.info(`Client was disconnected by client. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                    removeSocketFromSession(socket, socket_id, client_id);
-                    cleanupSessionIfEmpty(socket_id);
+                    removeSocketFromSession(socket, session_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
                 } else if (reason == "ping timeout") {
                     // The server did not send a PING within the pingInterval + pingTimeout range
                     logger.info(`Client was disconnected due to ping timeout, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
@@ -606,18 +606,18 @@ io.on('connection', function(socket) {
                         let success = joinSocketToSession(err, socket, session_id, client_id);
                         if (!success) { 
                             removeSocketFromSession(socket, session_id, client_id);
-                            cleanupSessionIfEmpty(socket_id);
+                            cleanupSessionIfEmpty(session_id);
                         } 
                     });
                 } else if (reason == "transport close") {
                     // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
                     logger.info(`Client was disconnected due to transport close. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                    removeSocketFromSession(socket, socket_id, client_id);
+                    removeSocketFromSession(socket, session_id, client_id);
                     cleanupSessionIfEmpty(session_id);
                 } else if (reason == "transport error") {
                     // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
                     logger.info(`Client was disconnected due to transport error. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                    removeSocketFromSession(socket, socket_id, client_id);
+                    removeSocketFromSession(socket, session_id, client_id);
                     cleanupSessionIfEmpty(session_id);
                 }
             }
