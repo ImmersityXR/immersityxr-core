@@ -159,13 +159,8 @@ function joinSocketToSession(err, socket, session_id, client_id) {
 
 // cleanup socket and client references in session state if reconnect fails
 function removeSocketFromSession(socket, session_id, client_id) {
-    // send disconnect event to session
+    // notify and log event
     socket.to(session_id.toString()).emit('disconnected', client_id);
-    // remove socket->client mapping
-    delete session.sockets[socket.id];
-    // remove client from session state
-    let index = session.clients.indexOf(client_id);
-    session.clients.splice(index, 1);
     logger.info(`Disconnection: ${client_id}`);
     // log disconnect event with timestamp to db
     if (pool) {
@@ -179,6 +174,15 @@ function removeSocketFromSession(socket, session_id, client_id) {
             }
         );
     }
+
+    // cleanup
+    let session = sessions.get(session_id);
+    if (!session) return;
+    // remove socket->client mapping
+    delete session.sockets[socket.id];
+    // remove client from session state
+    let index = session.clients.indexOf(client_id);
+    session.clients.splice(index, 1);
 }
 
 // cleanup session from sessions map if empty, write 
