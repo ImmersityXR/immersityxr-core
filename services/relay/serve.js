@@ -36,10 +36,8 @@ const fs = require('fs');
 const path = require('path');
 const mkdirp = require('mkdirp');
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
-const app = require('express')();
 const io = require('socket.io')();
 const mysql = require('mysql');
-const { ExpressPeerServer } = require('peer');
 
 // setup logging
 const { createLogger, format, transports } = require('winston');
@@ -68,14 +66,6 @@ io.listen(PORT, {
     pingTimeout: 30000
 });
 logger.info(`Komodo relay is running on :${PORT}`);
-
-// peerjs server and handlers
-const server = app.listen(9000);
-const peerServer = ExpressPeerServer(server);
-peerServer.on('connection', (client) => {
-    logger.info(`PeerJS connection: ${client.id}`);
-});
-app.use('/call', peerServer);
 
 // configuration
 const config = require('./config');
@@ -134,6 +124,81 @@ function getCapturePath(session_id, start, type) {
     return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
 }
 
+function joinSocketToSession(err, socket, session_id, client_id) {
+    if (err) { 
+        logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
+        return false;
+    } else {
+        let session = sessions.get(session_id);
+        if (!session) return false;
+        io.to(session_id.toString()).emit('joined', client_id);
+        if (session.clients.length > 0) {
+            session.clients.push(client_id);
+        } else {
+            session.clients = [client_id];
+        }
+        // socket to client mapping
+        session.sockets[socket.id] = { client_id: client_id, socket: socket };
+
+        // write join event to database
+        if (pool) {
+            let event = `"connect"`;
+            pool.query(
+                "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+                (err, res) => {
+                    if (err != undefined) {
+                        logger.error(`Error writing join event to database: ${err} ${res}`);
+                    }
+                }
+            );
+        }
+    }
+    // socket successfully joined to session
+    return true;
+}
+
+// cleanup socket and client references in session state if reconnect fails
+function removeSocketFromSession(socket, session_id, client_id) {
+    // notify and log event
+    socket.to(session_id.toString()).emit('disconnected', client_id);
+    logger.info(`Disconnection: ${client_id}`);
+    // log disconnect event with timestamp to db
+    if (pool) {
+        let event = `"disconnect"`;
+        pool.query(
+            "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+            (err, res) => {
+                if (err != undefined) {
+                    logger.error(`Error writing disconnect event to database: ${err} ${res}`);
+                }
+            }
+        );
+    }
+
+    // cleanup
+    let session = sessions.get(session_id);
+    if (!session) return;
+    // remove socket->client mapping
+    delete session.sockets[socket.id];
+    // remove client from session state
+    let index = session.clients.indexOf(client_id);
+    session.clients.splice(index, 1);
+}
+
+// cleanup session from sessions map if empty, write 
+function cleanupSessionIfEmpty(session_id) {
+    let session = sessions.get(session_id);
+    if (!session) return;
+    if (session.clients.length <= 0) {
+        logger.info(`No clients left in session, ending: ${session_id}`);
+        if (session.isRecording) {
+            logger.info(`Stopping recording of empty session: ${session_id}`);
+            end_recording(session_id);
+        }
+        sessions.delete(session_id);
+    }
+}
+
 // main relay handler
 io.on('connection', function(socket) {
     logger.info(`Connection: ${socket.id}`);
@@ -182,38 +247,12 @@ io.on('connection', function(socket) {
             }
 
             // relay server joins connecting client to session room
-            socket.join(session_id.toString(), function (err) {
-                if (err) { console.log(err); }
-                else {
-                    let session = sessions.get(session_id);
-                    io.to(session_id.toString()).emit('joined', client_id);
-                    if (session.clients.length > 0) {
-                        session.clients.push(client_id);
-                    } else {
-                        session.clients = [client_id];
-                    }
-                    // socket to client mapping
-                    session.sockets[socket.id] = { client_id: client_id, socket: socket };
-
-                    // write join event to database
-                    if (pool) {
-                        let event = `"connect"`;
-                        pool.query(
-                            "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-                            (err, res) => {
-                                if (err != undefined) {
-                                    logger.error(`Error writing join event to database: ${err} ${res}`);
-                                }
-                            }
-                        );
-                    }
-                }
-            });
+            socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
         }
     });
 
     socket.on('state', function(data) {
-        logger.info(`State: ${data}`)
+        logger.info(`State: ${JSON.stringify(data)}`)
         if (data) {
             let session_id = data.session_id;
             let client_id = data.client_id;
@@ -270,7 +309,6 @@ io.on('connection', function(socket) {
         let session_id = data.session_id;
         let client_id = data.client_id;
         if (session_id && client_id) {
-            console.log('message event:', data);
             socket.to(session_id.toString()).emit('message', data);
         }
     });
@@ -361,18 +399,30 @@ io.on('connection', function(socket) {
         
         if (session_id && client_id) 
         {  
-            // relay updates to all connected clients
+            let session = sessions.get(session_id);
+            if (!session) return;
+            // check if the incoming packet is from a client who is valid for this session
+            let joined = false;
+            for (let i=0; i < session.clients.length; i++) {
+                if (client_id == session.clients[i]) {
+                    joined = true;
+                    break;
+                }
+            }
+
+            if (!joined) return;
+
+            // relay packet if client is valid
             socket.to(session_id.toString()).emit('relayUpdate', data);
 
-            // cache entity states
-            let session = sessions.get(session_id);
+            // manage session state
             if (session) {
 
                 // write data to disk if recording
                 if (session.isRecording) {
 
-                    // overwrite last field (dirty bit) with session sequence number
-                    data[POS_FIELDS-1] = Date.now() - session.recordingStart;
+                    // calculate and write session sequence number using client timestamp
+                    data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
 
                     // get reference to session writer (buffer and cursor)
                     let writer = session.writers.pos;
@@ -428,94 +478,105 @@ io.on('connection', function(socket) {
             let target_id = data[4];
             let interaction_type = data[5];
             let session = sessions.get(session_id);
-            if (session) {
-                // entity should be rendered
-                if (interaction_type == INTERACTION_RENDER) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].render = true;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: [],
-                            render: true,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
-                // entity should stop being rendered
-                if (interaction_type == INTERACTION_RENDER_END) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].render = false;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: data,
-                            render: false,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
-                // scene has changed
-                if (interaction_type == INTERACTION_SCENE_CHANGE) {
-                    session.scene = target_id;
-                }
-                // entity is locked
-                if (interaction_type == INTERACTION_LOCK) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].locked = true;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: [],
-                            render: false,
-                            locked: true
-                        }
-                        session.entities.push(entity);
-                    }
-                }
-                // entity is unlocked
-                if (interaction_type == INTERACTION_LOCK_END) {
-                    let i = session.entities.findIndex(e => e.id == target_id);
-                    if (i != -1) {
-                        session.entities[i].locked = false;
-                    } else {
-                        let entity = {
-                            id: target_id,
-                            latest: [],
-                            render: false,
-                            locked: false
-                        }
-                        session.entities.push(entity);
-                    }
-                }
+            if (!session) return;
 
-                // write to file as binary data
-                if (session.isRecording) {
-                    
-                    // overwrite last field (dirty bit) with session sequence number
-                    data[INT_FIELDS-1] = Date.now() - session.recordingStart;
-                    
-                    // get reference to session writer (buffer and cursor)
-                    let writer = session.writers.int;
-
-                    if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                        // if buffer is full, dump to disk and reset the cursor
-                        let path = getCapturePath(session_id, session.recordingStart, 'int');
-                        let wstream = fs.createWriteStream(path, { flags: 'a' });
-                        wstream.write(writer.buffer.slice(0, writer.cursor));
-                        wstream.close();
-                        writer.cursor = 0;
-                    }
-                    for (let i = 0; i < data.length; i++) {
-                        writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-                    }
-                    writer.cursor += INT_CHUNK_SIZE;
+            // check if the incoming packet is from a client who is valid for this session
+            let joined = false;
+            for (let i=0; i < session.clients.length; i++) {
+                if (client_id == session.clients[i]) {
+                    joined = true;
+                    break;
                 }
+            }
+
+            if (!joined) return;
+            
+            // entity should be rendered
+            if (interaction_type == INTERACTION_RENDER) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].render = true;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: true,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // entity should stop being rendered
+            if (interaction_type == INTERACTION_RENDER_END) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].render = false;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: data,
+                        render: false,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // scene has changed
+            if (interaction_type == INTERACTION_SCENE_CHANGE) {
+                session.scene = target_id;
+            }
+            // entity is locked
+            if (interaction_type == INTERACTION_LOCK) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].locked = true;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: false,
+                        locked: true
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // entity is unlocked
+            if (interaction_type == INTERACTION_LOCK_END) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].locked = false;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: false,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+
+            // write to file as binary data
+            if (session.isRecording) {
+                
+                // calculate and write session sequence number
+                data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
+                
+                // get reference to session writer (buffer and cursor)
+                let writer = session.writers.int;
+
+                if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+                    // if buffer is full, dump to disk and reset the cursor
+                    let path = getCapturePath(session_id, session.recordingStart, 'int');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
+                    wstream.write(writer.buffer.slice(0, writer.cursor));
+                    wstream.close();
+                    writer.cursor = 0;
+                }
+                for (let i = 0; i < data.length; i++) {
+                    writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+                }
+                writer.cursor += INT_CHUNK_SIZE;
             }
         }
     });
@@ -527,36 +588,41 @@ io.on('connection', function(socket) {
             let session = s[1];
             if (socket.id in session.sockets) {
                 let client_id = session.sockets[socket.id].client_id;
-                // send disconnect event to session
-                socket.to(session_id.toString()).emit('disconnected', client_id);
-                // remove socket->client mapping
-                delete session.sockets[socket.id];
-                // remove client from session state
-                let index = session.clients.indexOf(client_id);
-                session.clients.splice(index, 1);
-                logger.info(`Disconnection: ${client_id}`);
 
-                // log disconnect event with timestamp to db
-                if (pool) {
-                    let event = `"disconnect"`;
-                    pool.query(
-                        "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-                        (err, res) => {
-                            if (err != undefined) {
-                                logger.error(`Error writing disconnect event to database: ${err} ${res}`);
-                            }
-                        }
-                    );
-
-                    // remove session if empty
-                    if (session.clients.length <= 0) {
-                        logger.info(`No clients left in session, ending: ${session_id}`);
-                        if (session.isRecording) {
-                            logger.info(`Stopping recording of empty session: ${session_id}`);
-                            end_recording(session_id);
-                        }
-                        sessions.delete(session_id);
-                    }
+                // Check disconnect event reason and handle
+                // see https://socket.io/docs/v3/client-api/index.html
+                if (reason === "io server disconnect") {
+                    // the disconnection was initiated by the server, you need to reconnect manually
+                    logger.info(`Client was disconnected by server. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    // socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
+                    removeSocketFromSession(socket, session_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
+                } else if (reason == "io client disconnect") {
+                    // The socket was manually disconnected using socket.disconnect()
+                    // We don't attempt to reconnect is disconnect was called by client. 
+                    logger.info(`Client was disconnected by client. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    removeSocketFromSession(socket, session_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
+                } else if (reason == "ping timeout") {
+                    // The server did not send a PING within the pingInterval + pingTimeout range
+                    logger.info(`Client was disconnected due to ping timeout, attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    socket.join(session_id.toString(), (err) => { 
+                        let success = joinSocketToSession(err, socket, session_id, client_id);
+                        if (!success) { 
+                            removeSocketFromSession(socket, session_id, client_id);
+                            cleanupSessionIfEmpty(session_id);
+                        } 
+                    });
+                } else if (reason == "transport close") {
+                    // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
+                    logger.info(`Client was disconnected due to transport close. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    removeSocketFromSession(socket, session_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
+                } else if (reason == "transport error") {
+                    // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
+                    logger.info(`Client was disconnected due to transport error. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                    removeSocketFromSession(socket, session_id, client_id);
+                    cleanupSessionIfEmpty(session_id);
                 }
             }
         }
@@ -570,55 +636,66 @@ io.on('connection', function(socket) {
         let session_id = data.session_id;
         let playback_id = data.playback_id;
 
-        let capture_id = playback_id.split('_')[0]
-        let start = playback_id.split('_')[1]
-        // TODO(rob): check that this client has permission to playback this session
+        let capture_id = null;
+        let start = null;
 
+        if (client_id && session_id && playback_id) {
+            capture_id = playback_id.split('_')[0]
+            start = playback_id.split('_')[1]
+            // TODO(rob): check that this client has permission to playback this session
+        } else {
+            console.log("Invalid playback request:", data);
+            return;
+        }
+
+        // Everything looks good, getting ref to session. 
         let session = sessions.get(session_id);
     
         // playback sequence counter
         let current_seq = 0;
-        let audioStarted = false;
+        // let audioStarted = false;
 
         // check that all params are valid
-        if (client_id && session && capture_id && start) {
+        if (capture_id && start) {
 
+
+            // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
             // build audio file manifest
-            logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
-            let audioManifest = [];
-            let baseAudioPath = getCapturePath(capture_id, start, 'audio');
-            if(fs.existsSync(baseAudioPath)) {
-                let items = fs.readdirSync(baseAudioPath);
-                items.forEach(clientDir => {
-                    let clientPath = path.join(baseAudioPath, clientDir)
-                    let files = fs.readdirSync(clientPath)
-                    files.forEach(file => {
-                        let client_id = clientDir;
-                        let seq = file.split('.')[0];
-                        let audioFilePath = path.join(clientPath, file);
-                        let item = {
-                            seq: seq,
-                            client_id: client_id,
-                            path: audioFilePath,
-                            data: null
-                        }
-                        audioManifest.push(item);
-                    });
-                });
-            }
+            // logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+            // let audioManifest = [];
+            // let baseAudioPath = getCapturePath(capture_id, start, 'audio');
+            // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
+            //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
+            //     items.forEach(clientDir => {
+            //         let clientPath = path.join(baseAudioPath, clientDir)
+            //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
+            //         files.forEach(file => {
+            //             let client_id = clientDir;
+            //             let seq = file.split('.')[0];
+            //             let audioFilePath = path.join(clientPath, file);
+            //             let item = {
+            //                 seq: seq,
+            //                 client_id: client_id,
+            //                 path: audioFilePath,
+            //                 data: null
+            //             }
+            //             audioManifest.push(item);
+            //         });
+            //     });
+            // }
 
-            // emit audio manifest to connected clients
-            io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+            // // emit audio manifest to connected clients
+            // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
 
-            // stream all audio files for caching and playback by client
-            audioManifest.forEach((file) => {
-                fs.readFile(file.path, (err, data) => {
-                    file.data = data;
-                    if(err) logger.error(`Error reading audio file: ${file.path}`);
-                    console.log('emitting audio packet:', file);
-                    io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
-                });
-            });
+            // // stream all audio files for caching and playback by client
+            // audioManifest.forEach((file) => {
+            //     fs.readFile(file.path, (err, data) => {
+            //         file.data = data;
+            //         if(err) logger.error(`Error reading audio file: ${file.path}`);
+            //         // console.log('emitting audio packet:', file);
+            //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+            //     });
+            // });
 
 
             // position streaming
@@ -644,7 +721,7 @@ io.on('connection', function(socket) {
                 let timer = setInterval( () => {
                     current_seq = Date.now() - playbackStart;
 
-                    console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
+                    // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
                     if (arr[POS_FIELDS-1] <= current_seq) {
                         // alias client and entity id with prefix if entity type is not an asset
@@ -652,11 +729,11 @@ io.on('connection', function(socket) {
                             arr[2] = 90000 + arr[2];
                             arr[3] = 90000 + arr[3];
                         }
-                        if (!audioStarted) {
-                            console.log('start playback audio event')
-                            audioStarted = true;
-                            io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
-                        }
+                        // if (!audioStarted) {
+                        //     // HACK(rob): trigger clients to begin playing buffered audio 
+                        //     audioStarted = true;
+                        //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
+                        // }
                         io.to(session_id.toString()).emit('relayUpdate', arr);
                         stream.resume();
                         clearInterval(timer);
@@ -690,7 +767,7 @@ io.on('connection', function(socket) {
 
                 let timer = setInterval( () => {
 
-                    console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+                    // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
                     if (arr[INT_FIELDS-1] <= current_seq) {
                         io.to(session_id.toString()).emit('interactionUpdate', arr);
@@ -782,21 +859,23 @@ chat.on('connection', function(socket) {
                 try {
                     processSpeech(data.blob, session_id, client_id, data.client_name);
                 } catch (error) {
-                    logger.error(`Error resampling mic data - client: ${client_id}, session: ${session_id}, error: ${error}`);
+                    logger.error(`Error processing speech-to-text: ${client_id}, session: ${session_id}, error: ${error}`);
                 }
 
-                if (session.isRecording) {
-                    let seq = Date.now() - session.recordingStart;
-                    let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
-                    let path = `${dir}/${seq}.wav`
 
-                    mkdirp(dir).then(made => {
-                        if (made) console.log('Creating audio dir: ', made);
-                        fs.writeFile(path, data.blob, (err) => {
-                            if (err) console.log('error writing audio file:', err)
-                        });
-                    })
-                }
+                // TODO(rob): Mar 3 2021 -- audio recording on hold to focus on data playback. 
+                // if (session.isRecording) {
+                //     let seq = Date.now() - session.recordingStart;
+                //     let dir = `${CAPTURE_PATH}/${session_id}/${session.recordingStart}/audio/${client_id}`;
+                //     let path = `${dir}/${seq}.wav`
+
+                //     mkdirp(dir).then(made => {
+                //         if (made) console.log('Creating audio dir: ', made);
+                //         fs.writeFile(path, data.blob, (err) => {
+                //             if (err) console.log('error writing audio file:', err)
+                //         });
+                //     })
+                // }
             }
         }
     });
