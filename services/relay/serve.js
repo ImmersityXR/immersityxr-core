@@ -302,14 +302,40 @@ io.on('connection', function(socket) {
     });
 
     // general message relay
-    // TODO(rob): this is where all interaction will eventuall end up
-    // we will be doing compares on the data.type value for to-be-defined consts
-    // of the various interactions we care about, eg. grab, drop, start/end recording, etc. 
+    // TODO(rob): this is where all event data will eventually end up
+    // we will be doing compares on the data.type value for to-be-defined const values
+    // of the various interactions we care about, eg. grab, drop, start/end recording, etc.
+    // in order to update the session state accordingly. we will probably need to protect against
+    // garbage values that might be passed by devs who are overwriting reserved message events.  
     socket.on('message', function(data) {
         let session_id = data.session_id;
         let client_id = data.client_id;
         if (session_id && client_id) {
             socket.to(session_id.toString()).emit('message', data);
+
+            // TODO(rob): message data recording
+            // let session = sessions.get(session_id);
+            // // write to file
+            // if (session.isRecording) {
+            //     // calculate and write session sequence number
+            //     let sessionSeq =  data.message.ts - session.recordingStart; // TODO(rob): what is the actual layout for message data? 
+                
+            //     // get reference to session writer (buffer and cursor)
+            //     let writer = session.writers.int;
+
+            //     if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+            //         // if buffer is full, dump to disk and reset the cursor
+            //         let path = getCapturePath(session_id, session.recordingStart, 'int');
+            //         let wstream = fs.createWriteStream(path, { flags: 'a' });
+            //         wstream.write(writer.buffer.slice(0, writer.cursor));
+            //         wstream.close();
+            //         writer.cursor = 0;
+            //     }
+            //     for (let i = 0; i < data.length; i++) {
+            //         writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+            //     }
+            //     writer.cursor += INT_CHUNK_SIZE;
+            // }
         }
     });
   
