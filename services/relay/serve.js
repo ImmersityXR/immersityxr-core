@@ -137,7 +137,8 @@ function addClientToSession(session, client_id) {
 
     if (session.clients.indexOf(client_id) >= 0) {
         //client_id is already in the array.
-        return;
+        //TODO - review the below line.
+        //  return; - this is disabled because we want to keep two clients when one bumps the other. We don't want to prematurely delete a session.
     }
     
     session.clients.push(client_id);
@@ -297,19 +298,26 @@ io.on('connection', function(socket) {
         // remove socket->client mapping
         for (socket_id in session.sockets) {
             if (session.sockets[socket_id].client_id == client_id) {
-                logger.warn(`${socket_id} - bumping old socket for client ${client_id}, session ${session_id}. First, leaving the session.`);
+                logger.info(`${socket_id} - bumping old socket for client ${client_id}, session ${session_id}.`);
 
-                let old_socket = session.sockets[socket_id].socket;
+                var old_socket = session.sockets[socket_id].socket;
 
-                old_socket.leave(session_id.toString());
+                var this_socket_id = socket_id;
 
-                var callback = () => {
-                    logger.warn(`${socket_id} - Second, disconnecting this socket.`);
+                old_socket.leave(session_id.toString(), (err) => {
+                    if (err) {
+                        logger.error(err);
+                        return;
+                    }
+                    
+                    logger.info(`${this_socket_id} - First, leaving the session.`);
+                });
+                
+                setTimeout(() => {
+                    logger.info(`${this_socket_id} - Second, disconnecting this socket.`);
 
                     old_socket.disconnect(true);
-                };
-                
-                setTimeout(callback, 500); // delay half a second and then bump the old socket
+                }, 500); // delay half a second and then bump the old socket
             }
         }
 
