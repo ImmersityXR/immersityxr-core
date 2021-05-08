@@ -59,6 +59,20 @@ const logger = createLogger({
     exitOnError: false
 });
 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors/Cyclic_object_value#examples
+function JSONStringifyCircular(obj) {
+    const seen = new WeakSet();
+    return JSON.stringify (obj, (key, value) => {
+        if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) {
+            return;
+        }
+        seen.add(value);
+        }
+        return value;
+    });
+}
+
 // relay server
 const PORT = 3000;
 io.listen(PORT, {
@@ -965,6 +979,66 @@ io.on('connection', function(socket) {
         }
     })
 
+});
+
+var admin = io.of('/admin');
+
+admin.use((socket, next) => {
+    //TODO(Brandon) - ADD AUTHENTICATION HERE!!! (should we use https://www.npmjs.com/package/socketio-auth ? )
+    next();
+})
+
+admin.on('connection', function(socket) { //TODO finish or remove.
+    socket.emit("adminInfo", socket.id);
+
+    socket.on('getAllSessions0', function() {
+        socket.emit('receiveAllSessions0', JSONStringifyCircular(Array.from(sessions.entries())));
+    });
+
+    socket.on('sessionsClientsSockets', function() {
+        // result of this function: 
+        // "{
+        //     <session_id>: ["<client_id> - <socket_id>", ...],
+        //     23: ["1 - AKLJF698690", "2 - FKJASDFSDFDFS", ... ],
+        //     ...
+        // }"
+
+        var sessionToSocketMappings = {};
+
+        sessions.forEach((value, session_id, map) => {
+            var session = sessions.get(session_id);
+
+            sessionToSocketMappings[session_id] = [];
+
+            for (var socket_id in session.sockets) {
+                sessionToSocketMappings[session_id].push(`${session.sockets[socket_id].client_id} - ${socket_id}`);
+            }
+        });
+
+        socket.emit('sessionsClientsSockets', JSON.stringify(sessionToSocketMappings));
+    });
+
+    socket.on('sockets', function() {
+        var socks = [];
+
+        for (var key in io.of("/").sockets) {
+            socks.push(key);
+        }
+
+        socket.emit('sockets', socks);
+    });
+
+    socket.on('clients', function() {
+        var sessionToClient = {};
+
+        sessions.forEach((value, key, map) => {
+            var session = sessions.get(key);
+
+            sessionToClient[key] = session.clients;
+        });
+
+        socket.emit('clients', JSON.stringify(sessionToClient));
+    });
 });
 
 
