@@ -38,6 +38,7 @@ const mkdirp = require('mkdirp');
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 const io = require('socket.io')();
 const mysql = require('mysql');
+var fromEntries = require('object.fromentries');
 
 // setup logging
 const { createLogger, format, transports } = require('winston');
@@ -310,7 +311,7 @@ io.on('connection', function(socket) {
         });
 
         // remove socket->client mapping
-        for (socket_id in session.sockets) {
+        for (var socket_id in session.sockets) {
             if (session.sockets[socket_id].client_id == client_id) {
                 logger.info(`${socket_id} - bumping old socket for client ${client_id}, session ${session_id}.`);
 
@@ -744,7 +745,7 @@ io.on('connection', function(socket) {
 
     socket.on('disconnect', function(reason) {
         // find which session this socket is in
-        for (s of sessions) {
+        for (var s of sessions) {
             let session_id = s[0];
 
             let session = s[1];
@@ -1018,6 +1019,40 @@ admin.on('connection', function(socket) { //TODO finish or remove.
         socket.emit('sessionsClientsSockets', JSON.stringify(sessionToSocketMappings));
     });
 
+    socket.on('sessionsWithDetails', function () {
+
+        var result = fromEntries(sessions);
+
+        socket.emit('sessionsWithDetails', JSONStringifyCircular(result));
+    });
+
+    socket.on('stateClientsSockets', function () {
+        var stateClientsSockets = {};
+
+        sessions.forEach((session, session_id, map) => {
+
+            stateClientsSockets[session_id] = {};
+
+            stateClientsSockets[session_id]["state"] = {
+                clients: session.clients,
+                entities: session.entities,
+                scene: session.scene,
+                isRecording: session.isRecording
+            };
+
+            stateClientsSockets[session_id]["clientsAndSockets"] = [];
+
+            for (var socket_id in session.sockets) {
+
+                var client_id = session.sockets[socket_id].client_id;
+
+                stateClientsSockets[session_id]["clientsAndSockets"].push(`${client_id} - ${socket_id}`);
+            }
+        });
+
+        socket.emit('stateClientsSockets', JSON.stringify(stateClientsSockets));
+    });
+
     socket.on('sockets', function() {
         var socks = [];
 
@@ -1026,6 +1061,26 @@ admin.on('connection', function(socket) { //TODO finish or remove.
         }
 
         socket.emit('sockets', socks);
+    });
+
+    socket.on('socketsAndRooms', function () {
+        var socketsAndRooms = {};
+
+        var sockets = io.of("/").sockets;
+
+        for (var socket_id in sockets) {
+
+            let curSocketObj = sockets[socket_id];
+
+            socketsAndRooms[socket_id] = [];
+
+            for (var room_id in curSocketObj.rooms) {
+
+                socketsAndRooms[socket_id].push(room_id);
+            }
+        }
+
+        socket.emit('socketsAndRooms', JSON.stringify(socketsAndRooms));
     });
 
     socket.on('clients', function() {
@@ -1081,7 +1136,7 @@ chat.on('connection', function(socket) {
 
     socket.on('disconnect', function(reason) {
         // find which session this socket is in
-        for (c of chats) {
+        for (var c of chats) {
             let session_id = c[0];
 
             let chat = c[1];
