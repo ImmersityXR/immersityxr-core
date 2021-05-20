@@ -312,7 +312,9 @@ io.on('connection', function(socket) {
 
         // remove socket->client mapping
         for (var socket_id in session.sockets) {
+
             if (session.sockets[socket_id].client_id == client_id) {
+
                 logger.info(`${socket_id} - bumping old socket for client ${client_id}, session ${session_id}.`);
 
                 var old_socket = session.sockets[socket_id].socket;
@@ -335,7 +337,6 @@ io.on('connection', function(socket) {
                 }, 500); // delay half a second and then bump the old socket
             }
         }
-
     }
 
     socket.on('join', function(data) {
@@ -743,9 +744,66 @@ io.on('connection', function(socket) {
         }
     });
 
+    function handleServerNamespaceDisconnect (reason, socket, session_id, client_id, session) {
+        logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        // socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
+
+        removeSocketFromSession(socket, session_id, client_id);
+
+        cleanupSessionIfEmpty(session_id);
+    }
+
+    function handleClientNamespaceDisconnect (reason, socket, session_id, client_id, session) {
+        logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        removeSocketFromSession(socket, session_id, client_id);
+
+        cleanupSessionIfEmpty(session_id);
+    }
+
+    function handleTransportClose (reason, socket, session_id, client_id, session) {
+        logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        removeSocketFromSession(socket, session_id, client_id);
+
+        cleanupSessionIfEmpty(session_id);
+    }
+
+    function handleTransportError (reason, socket, session_id, client_id, session) {
+        logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        removeSocketFromSession(socket, session_id, client_id);
+
+        cleanupSessionIfEmpty(session_id);
+    }
+
+    function handleOtherDisconnect (reason, socket, session_id, client_id, session) {
+        logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        bumpOldSockets(session, client_id);
+
+        socket.join(session_id.toString(), (err) => { 
+            let success = joinSocketToSession(err, socket, session_id, client_id);
+
+            if (!success) { 
+                logger.info('failed to reconnect');
+
+                removeSocketFromSession(socket, session_id, client_id);
+
+                cleanupSessionIfEmpty(session_id);
+
+                return;
+            } 
+
+            logger.info('successfully reconnected');
+        });
+    }
+
     socket.on('disconnect', function(reason) {
         // find which session this socket is in
         for (var s of sessions) {
+
             let session_id = s[0];
 
             let session = s[1];
@@ -759,57 +817,39 @@ io.on('connection', function(socket) {
             // Check disconnect event reason and handle
             // see https://socket.io/docs/v2/server-api/index.html
             if (reason === "server namespace disconnect") {
+
                 // the disconnection was initiated by the server, you need to reconnect manually
-                logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                // socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
-                removeSocketFromSession(socket, session_id, client_id);
-                cleanupSessionIfEmpty(session_id);
+                handleServerNamespaceDisconnect(reason, socket, session_id, client_id, session);
+
                 return;
             }
             
             if (reason == "client namespace disconnect") {
                 // The socket was manually disconnected using socket.disconnect()
-                // We don't attempt to reconnect is disconnect was called by client. 
-                logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                removeSocketFromSession(socket, session_id, client_id);
-                cleanupSessionIfEmpty(session_id);
+                // We don't attempt to reconnect if disconnect was called by client. 
+                handleClientNamespaceDisconnect(reason, socket, session_id, client_id, session);
+
                 return;
             }
             
             if (reason == "transport close") {
+
                 // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
-                logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                removeSocketFromSession(socket, session_id, client_id);
-                cleanupSessionIfEmpty(session_id);
+                handleTransportClose(reason, socket, session_id, client_id, session);
+
                 return;
             }
             
             if (reason == "transport error") {
+
                 // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
-                logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-                removeSocketFromSession(socket, session_id, client_id);
-                cleanupSessionIfEmpty(session_id);
+                handleTransportError(reason, socket, session_id, client_id, session);
+
                 return;
             }
-            
+
             // The server did not send a PING within the pingInterval + pingTimeout range, or some other reason.
-            logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-
-            socket.join(session_id.toString(), (err) => { 
-                let success = joinSocketToSession(err, socket, session_id, client_id);
-
-                if (!success) { 
-                    logger.info('failed to reconnect');
-
-                    removeSocketFromSession(socket, session_id, client_id);
-
-                    cleanupSessionIfEmpty(session_id);
-
-                    return;
-                } 
-
-                logger.info('successfully reconnected');
-            });
+            handleOtherDisconnect(reason, socket, session_id, client_id, session);
     
             return;
         }
