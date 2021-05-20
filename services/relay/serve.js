@@ -1120,7 +1120,11 @@ admin.on('connection', function(socket) { //TODO finish or remove.
             }
         }
 
-        socket.emit('socketsAndRooms', JSON.stringify(socketsAndRooms));
+        socketsAndRooms["chat"] = Object.keys(io.of("/chat").sockets);
+
+        socketsAndRooms["admin"] = Object.keys(io.of("/admin").sockets);
+
+        socket.emit('socketsAndRooms', JSONStringifyCircular(socketsAndRooms));
     });
 
     socket.on('clients', function() {
