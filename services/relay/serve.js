@@ -139,7 +139,8 @@ function getCapturePath(session_id, start, type) {
     return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
 }
 
-function addClientToSession(session, client_id) {
+//specify do_bump_duplicates = true to keep two clients when one bumps the other. We don't want to prematurely delete a session.
+function addClientToSession(session, client_id, do_bump_duplicates) {
     if (session == null) {
         logger.error("session was null");
         return;
@@ -150,10 +151,8 @@ function addClientToSession(session, client_id) {
         return;
     }
 
-    if (session.clients.indexOf(client_id) >= 0) {
-        //client_id is already in the array.
-        //TODO - review the below line.
-        //  return; - this is disabled because we want to keep two clients when one bumps the other. We don't want to prematurely delete a session.
+    if (session.clients.indexOf(client_id) >= 0 && do_bump_duplicates) {
+        return;
     }
     
     session.clients.push(client_id);
@@ -175,13 +174,13 @@ function removeClientFromSession(session, client_id) {
     if (session.clients.length == 0 || session.clients.indexOf(client_id) == -1) {
         //client_id is not in the array, so we don't need to remove it.
         logger.warn(`Tried removing client ${client_id} from session.clients, but it was not there. Proceeding anyways.`)
-        return;
+        return; 
     }
 
     session.clients.splice(index, 1);
 }
 
-function joinSocketToSession(err, socket, session_id, client_id) {
+function joinSocketToSession(err, socket, session_id, client_id, do_bump_duplicates) {
     if (err) {
         logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
 
@@ -196,7 +195,7 @@ function joinSocketToSession(err, socket, session_id, client_id) {
         return false;
     }
 
-    addClientToSession(session, client_id);
+    addClientToSession(session, client_id, do_bump_duplicates);
 
     // socket to client mapping
     session.sockets[socket.id] = { client_id: client_id, socket: socket };
@@ -218,6 +217,28 @@ function joinSocketToSession(err, socket, session_id, client_id) {
 
     // socket successfully joined to session
     return true;
+}
+
+function disconnectOldSocket (socket) {
+
+    setTimeout(() => {
+
+        socket.disconnect(true);
+
+    }, 500); // delay half a second and then bump the old socket
+}
+
+function leaveSession (socket, session_id) {
+
+    socket.leave(session_id.toString(), (err) => {
+
+        if (err) {
+
+            logger.error(err);
+
+            return;
+        }
+    });
 }
 
 // cleanup socket and client references in session state if reconnect fails
@@ -270,6 +291,43 @@ function cleanupSessionIfEmpty(session_id) {
     }
 }
 
+// if a session exists, return it. Otherwise, create one with default values, register it, and return it.
+function getOrCreateSession(session_id) {
+
+    let session = sessions.get(session_id);
+
+    if (session) {
+        return session;
+    }
+
+    logger.info(`Creating session: ${session_id}`);
+
+    sessions.set(session_id, {
+        sockets: {}, // socket.id -> client_id
+        clients: [],
+        entities: [],
+        scene: null,
+        isRecording: false,
+        start: Date.now(),
+        recordingStart: 0,
+        seq: 0,
+        writers: {
+            pos: {
+                buffer: Buffer.alloc(POS_WRITE_BUFFER_SIZE),
+                cursor: 0
+            },
+            int: {
+                buffer: Buffer.alloc(INT_WRITE_BUFFER_SIZE),
+                cursor: 0
+            }
+        }
+    });
+
+    session = sessions.get(session_id);
+    
+    return session;
+}
+
 // main relay handler
 io.on('connection', function(socket) {
     logger.info(`Session connection: ${socket.id}.`);
@@ -286,12 +344,13 @@ io.on('connection', function(socket) {
         socket.to(session_id.toString()).emit('sessionInfo', session);
     });
 
-    function bumpOldSockets (session, client_id) {
+    // bumps all old sockets that match client_id, but skips the socket you want to keep, specified by new_socket_id. Only does this for sockets connected to session.
+    function bumpOldSockets (session, client_id, new_socket_id) {
         if (session == null || session.clients == null) {
             logger.error(`Could not bump old sockets -- session was null or session.clients was null.`);
         }
 
-        if (!(session.clients.includes(client_id))) {
+        if ( !(session.clients.includes(client_id)) ) {
             //no need to bump if we're not in the session already!
             return;
         }
@@ -303,43 +362,46 @@ io.on('connection', function(socket) {
 
         let session_id;
 
-        //first, leave the room represented by the session id.
+        //Get the id of the session so we can leave the corresponding room.
         sessions.forEach((candidate_session, candidate_session_id, map) => {
+
             if (candidate_session == session) {
+
                 session_id = candidate_session_id;
             }
         });
 
         // remove socket->client mapping
-        for (var socket_id in session.sockets) {
+        for (var candidate_socket_id in session.sockets) {
 
-            if (session.sockets[socket_id].client_id == client_id) {
+            if (session.sockets[candidate_socket_id].client_id != client_id) {
 
-                logger.info(`${socket_id} - bumping old socket for client ${client_id}, session ${session_id}.`);
-
-                var old_socket = session.sockets[socket_id].socket;
-
-                var this_socket_id = socket_id;
-
-                old_socket.leave(session_id.toString(), (err) => {
-                    if (err) {
-                        logger.error(err);
-                        return;
-                    }
-                    
-                    logger.info(`${this_socket_id} - First, leaving the session.`);
-                });
-                
-                setTimeout(() => {
-                    logger.info(`${this_socket_id} - Second, disconnecting this socket.`);
-
-                    old_socket.disconnect(true);
-                }, 500); // delay half a second and then bump the old socket
+                // if the client ID doesn't match, don't try to bump it.
+                continue;
             }
+
+            if (candidate_socket_id == new_socket_id) {
+
+                logger.info(`${candidate_socket_id} - not bumping the new socket for client ${client_id}, session ${session_id}.`);
+
+                continue;
+            }
+
+            var candidate_socket = session.sockets[candidate_socket_id].socket;
+
+            logger.info(`${candidate_socket_id} - bumping old socket for client ${client_id}, session ${session_id}. First, leaving the room.`);
+
+            leaveSession(candidate_socket, session_id);
+
+            logger.info(`${candidate_socket_id} - Second, disconnecting this socket.`);
+
+            disconnectOldSocket(candidate_socket);
         }
     }
 
+    //Note: "join" is our own event name, and should not be confused with socket.join. (It does not automatically listen for socket.join either.)
     socket.on('join', function(data) {
+
         logger.info(`${socket.id} - Asked to join: ${data}`);
 
         let session_id = data[0];
@@ -351,40 +413,13 @@ io.on('connection', function(socket) {
             return;
         }
 
-        let session = sessions.get(session_id);
+        getOrCreateSession(session_id);
 
-        if (!session) {
-            logger.info(`Creating session: ${session_id}`);
-
-            sessions.set(session_id, {
-                sockets: {}, // socket.id -> client_id
-                clients: [],
-                entities: [],
-                scene: null,
-                isRecording: false,
-                start: Date.now(),
-                recordingStart: 0,
-                seq: 0,
-                writers: {
-                    pos: {
-                        buffer: Buffer.alloc(POS_WRITE_BUFFER_SIZE),
-                        cursor: 0
-                    },
-                    int: {
-                        buffer: Buffer.alloc(INT_WRITE_BUFFER_SIZE),
-                        cursor: 0
-                    }
-                }
-            });
-
-            session = sessions.get(session_id);
-        }
-
-        bumpOldSockets(session, client_id);
+        bumpOldSockets(session, client_id, socket.id);
 
         // relay server joins connecting client to session room
         socket.join(session_id.toString(), (err) => { 
-            joinSocketToSession(err, socket, session_id, client_id); 
+            joinSocketToSession(err, socket, session_id, client_id, true); 
         });
     });
 
@@ -747,8 +782,6 @@ io.on('connection', function(socket) {
     function handleServerNamespaceDisconnect (reason, socket, session_id, client_id, session) {
         logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
 
-        // socket.join(session_id.toString(), (err) => { joinSocketToSession(err, socket, session_id, client_id) });
-
         removeSocketFromSession(socket, session_id, client_id);
 
         cleanupSessionIfEmpty(session_id);
@@ -778,13 +811,12 @@ io.on('connection', function(socket) {
         cleanupSessionIfEmpty(session_id);
     }
 
-    function handleOtherDisconnect (reason, socket, session_id, client_id, session) {
+    function tryReconnectingAfterDisconnect (reason, socket, session_id, client_id, session) {
         logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
 
-        bumpOldSockets(session, client_id);
-
         socket.join(session_id.toString(), (err) => { 
-            let success = joinSocketToSession(err, socket, session_id, client_id);
+
+            let success = joinSocketToSession(err, socket, session_id, client_id, false);
 
             if (!success) { 
                 logger.info('failed to reconnect');
@@ -795,6 +827,8 @@ io.on('connection', function(socket) {
 
                 return;
             } 
+
+            bumpOldSockets(session, client_id, socket.id);
 
             logger.info('successfully reconnected');
         });
@@ -848,10 +882,18 @@ io.on('connection', function(socket) {
                 return;
             }
 
-            // The server did not send a PING within the pingInterval + pingTimeout range, or some other reason.
-            handleOtherDisconnect(reason, socket, session_id, client_id, session);
+            if (reason == "ping timeout") {
+                
+                // The server did not send a PING within the pingInterval + pingTimeout range.
+                tryReconnectingAfterDisconnect(reason, socket, session_id, client_id, session);
+
+                return;
+            }
+
+            // The server disconnected for some other reason.
+            tryReconnectingAfterDisconnect(reason, socket, session_id, client_id, session);
     
-            return;
+            return; //don't continue to check other sessions.
         }
 
         //socket not found in our records. This is usually ok.
