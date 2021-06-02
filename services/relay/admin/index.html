@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <title>Komodo Relay Monitor</title>
+    <meta name="description" content="">
+    <meta name="author" content="bcdang2">
+
+    <link rel="stylesheet" href="/index.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.dev.js"></script>
+    <script src="./index.js"></script>
+</head>
+<body>
+    <p id="adminInfo"></p>
+    <div id="sessions">   
+        <h1>All Sessions with State, Clients, and Sockets</h1>
+        <button id="getAllSessions">Get</button>
+        <p id="allSessions"></p>
+    </div>  
+    <div id="sockets">   
+        <h1>All Sockets And Rooms</h1>
+        <button id="getAllSockets">Get</button>
+        <p id="allSockets"></p>
+    </div> 
+</body>
+</html>
