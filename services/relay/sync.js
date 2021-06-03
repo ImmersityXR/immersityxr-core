@@ -42,28 +42,380 @@ const path = require('path');
 
 const mysql = require('mysql');
 
+// consts
+const CAPTURE_PATH = './captures/';
+        
+const POS_FIELDS = 14;
+const POS_BYTES_PER_FIELD = 4;
+const POS_CHUNK_SIZE = POS_FIELDS * POS_BYTES_PER_FIELD;
+
+const INT_FIELDS = 7;
+const INT_BYTES_PER_FIELD = 4;
+const INT_CHUNK_SIZE = INT_FIELDS * INT_BYTES_PER_FIELD;
+
+// write buffers are multiples of corresponding chunks
+const POS_WRITE_BUFFER_SIZE = 10000 * POS_CHUNK_SIZE;
+const INT_WRITE_BUFFER_SIZE = 128 * INT_CHUNK_SIZE;
+
 module.exports = {
-    init: function (io, logger) {
-        if (config.db.host && config.db.host != "") {
-            var pool = mysql.createPool(config.db);
+    
+    // generate formatted path for session capture files
+    getCapturePath: function (session_id, start, type) {
+        return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
+    },
+
+    start_recording: function (pool, session_id) {// TODO(rob): require client id and token
+        if (session_id) {
+            let session = this.sessions.get(session_id);
+            if (session && !session.isRecording) {
+                session.isRecording = true;
+                session.recordingStart = Date.now();
+                let path = this.getCapturePath(session_id, session.recordingStart, '');
+                fs.mkdir(path, { recursive: true }, (err) => {
+                    if(err) this.logger.warn(`Error creating capture path: ${err}`);
+                });
+                let capture_id = session_id+'_'+session.recordingStart;
+                pool.query(
+                    "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
+                    (err, res) => {
+                        if (err != undefined) {
+                            this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                        }
+                    }
+                );
+                this.logger.info(`Capture started: ${session_id}`);
+            } else if (session && session.isRecording) {
+                this.logger.warn(`Requested session capture, but session is already recording: ${session_id}`)
+            } else {
+                this.logger.warn(`Error starting capture for session: ${session_id}`);
+            }
+        }
+    }, 
+
+    // define end_recording event handler, use on socket event as well as on server cleanup for empty sessions
+    end_recording: function (pool, session_id) {
+        if (session_id) {
+            let session = this.sessions.get(session_id);
+            if (session && session.isRecording) {
+                session.isRecording = false;
+                this.logger.info(`Capture ended: ${session_id}`);                
+                // write out the buffers if not empty, but only up to where the cursor is
+
+                let pos_writer = session.writers.pos;
+                if (pos_writer.cursor > 0) {
+                    let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
+                    wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
+                    wstream.close();
+                    pos_writer.cursor = 0;
+                }
+                let int_writer = session.writers.int;
+                if (int_writer.cursor > 0) {
+                    let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
+                    wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
+                    wstream.close();
+                    int_writer.cursor = 0;
+                }
+                
+                // write the capture end event to database
+                if (pool) {
+                    let capture_id = session_id+'_'+session.recordingStart;
+                    pool.query(
+                        "UPDATE captures SET end = ? WHERE capture_id = ?", [Date.now(), capture_id],
+                        (err, res) => {
+                            if (err != undefined) {
+                                this.logger.error(`Error writing recording end event to database: ${err} ${res}`);
+                            }
+                        }
+                    );
+                }
+
+            } else if (session && !session.isRecording) {
+                this.logger.warn(`Requested to end session capture, but capture is already ended: ${session_id}`)
+            } else {
+                this.logger.warn(`Error ending capture for session: ${session_id}`);
+            }
+        }
+    },
+
+    record_message_data: function (data) {
+        if (!data) {
+            this.logger.error("data was null");
+            return;
         }
 
-        // consts
-        const CAPTURE_PATH = './captures/';
-        const POS_FIELDS = 14;
-        const POS_BYTES_PER_FIELD = 4;
-        const POS_CHUNK_SIZE = POS_FIELDS * POS_BYTES_PER_FIELD;
-        const INT_FIELDS = 7;
-        const INT_BYTES_PER_FIELD = 4;
-        const INT_CHUNK_SIZE = INT_FIELDS * INT_BYTES_PER_FIELD;
+        let session_id = data.session_id;
 
-        // session state maps
-        var sessions = new Map();
+        if (!session_id) {
+            this.logger.error("session_id was null");
+            return;
+        }
+        
+        let client_id = data.client_id;
 
-        // write buffers are multiples of corresponding chunks
-        const POS_WRITE_BUFFER_SIZE = 10000 * POS_CHUNK_SIZE;
-        const INT_WRITE_BUFFER_SIZE = 128 * INT_CHUNK_SIZE;
+        if (!client_id) {
+            this.logger.error("client_id was null");
+            return;
+        }
 
+        // TODO(rob): message data recording
+        // let session = this.sessions.get(session_id);
+        // // write to file
+        // if (session.isRecording) {
+        //     // calculate and write session sequence number
+        //     let sessionSeq =  data.message.ts - session.recordingStart; // TODO(rob): what is the actual layout for message data? 
+            
+        //     // get reference to session writer (buffer and cursor)
+        //     let writer = session.writers.int;
+
+        //     if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+        //         // if buffer is full, dump to disk and reset the cursor
+        //         let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+        //         let wstream = fs.createWriteStream(path, { flags: 'a' });
+        //         wstream.write(writer.buffer.slice(0, writer.cursor));
+        //         wstream.close();
+        //         writer.cursor = 0;
+        //     }
+        //     for (let i = 0; i < data.length; i++) {
+        //         writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+        //     }
+        //     writer.cursor += INT_CHUNK_SIZE;
+        // }
+    },
+
+    handlePlayback: function (io, data) {
+        // TODO(rob): need to use playback object to track seq and group by playback_id, 
+        // so users can request to pause playback, maybe rewind?
+        this.logger.info(`Playback request: ${data.playback_id}`);
+        let client_id = data.client_id;
+        let session_id = data.session_id;
+        let playback_id = data.playback_id;
+
+        let capture_id = null;
+        let start = null;
+
+        if (client_id && session_id && playback_id) {
+            capture_id = playback_id.split('_')[0]
+            start = playback_id.split('_')[1]
+            // TODO(rob): check that this client has permission to playback this session
+        } else {
+            console.log("Invalid playback request:", data);
+            return;
+        }
+
+        // Everything looks good, getting ref to session. 
+        let session = this.sessions.get(session_id);
+    
+        // playback sequence counter
+        let current_seq = 0;
+        // let audioStarted = false;
+
+        // check that all params are valid
+        if (capture_id && start) {
+
+
+            // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
+            // build audio file manifest
+            // this.logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+            // let audioManifest = [];
+            // let baseAudioPath = this.getCapturePath(capture_id, start, 'audio');
+            // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
+            //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
+            //     items.forEach(clientDir => {
+            //         let clientPath = path.join(baseAudioPath, clientDir)
+            //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
+            //         files.forEach(file => {
+            //             let client_id = clientDir;
+            //             let seq = file.split('.')[0];
+            //             let audioFilePath = path.join(clientPath, file);
+            //             let item = {
+            //                 seq: seq,
+            //                 client_id: client_id,
+            //                 path: audioFilePath,
+            //                 data: null
+            //             }
+            //             audioManifest.push(item);
+            //         });
+            //     });
+            // }
+
+            // // emit audio manifest to connected clients
+            // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+
+            // // stream all audio files for caching and playback by client
+            // audioManifest.forEach((file) => {
+            //     fs.readFile(file.path, (err, data) => {
+            //         file.data = data;
+            //         if(err) this.logger.error(`Error reading audio file: ${file.path}`);
+            //         // console.log('emitting audio packet:', file);
+            //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+            //     });
+            // });
+
+
+            // position streaming
+            let capturePath = this.getCapturePath(capture_id, start, 'pos');
+            let stream = fs.createReadStream(capturePath, { highWaterMark: POS_CHUNK_SIZE });
+
+            // set actual playback start time
+            let playbackStart = Date.now();
+
+            // position data emit loop
+            stream.on('data', function(chunk) {
+
+                stream.pause();
+
+                // start data buffer loop
+                let buff = Buffer.from(chunk);
+                let farr = new Float32Array(chunk.byteLength / 4);
+                for (var i = 0; i < farr.length; i++) {
+                    farr[i] = buff.readFloatLE(i * 4);
+                }
+                var arr = Array.from(farr);
+
+                let timer = setInterval( () => {
+                    current_seq = Date.now() - playbackStart;
+
+                    // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
+
+                    if (arr[POS_FIELDS-1] <= current_seq) {
+                        // alias client and entity id with prefix if entity type is not an asset
+                        if (arr[4] != 3) {
+                            arr[2] = 90000 + arr[2];
+                            arr[3] = 90000 + arr[3];
+                        }
+                        // if (!audioStarted) {
+                        //     // HACK(rob): trigger clients to begin playing buffered audio 
+                        //     audioStarted = true;
+                        //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
+                        // }
+                        io.to(session_id.toString()).emit('relayUpdate', arr);
+                        stream.resume();
+                        clearInterval(timer);
+                    }
+                }, 1);
+            });
+
+            stream.on('error', function(err) {
+                this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
+                io.to(session_id.toString()).emit('playbackEnd')
+            });
+
+            stream.on('end', function() {
+                this.logger.info(`End of pos data for playback session: ${session_id}`)
+                io.to(session_id.toString()).emit('playbackEnd')
+            })
+
+            // interaction streaming
+            let ipath = this.getCapturePath(capture_id, start, 'int');
+            let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
+
+            istream.on('data', function(chunk) {
+                istream.pause();
+
+                let buff = Buffer.from(chunk);
+                let farr = new Int32Array(chunk.byteLength / 4);
+                for (var i = 0; i < farr.length; i++) {
+                    farr[i] = buff.readInt32LE(i * 4);
+                }
+                var arr = Array.from(farr);
+
+                let timer = setInterval( () => {
+
+                    // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+
+                    if (arr[INT_FIELDS-1] <= current_seq) {
+                        io.to(session_id.toString()).emit('interactionUpdate', arr);
+                        istream.resume();
+                        clearInterval(timer);
+                    }
+                }, 1);
+
+            });
+
+            istream.on('error', function(err) {
+                this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
+                io.to(session_id.toString()).emit('interactionpPlaybackEnd')
+            });
+
+            istream.on('end', function() {
+                this.logger.info(`End of int data for playback session: ${session_id}`)
+                io.to(session_id.toString()).emit('interactionPlaybackEnd')
+            });
+        }
+    },
+
+    handleUpdate: function (socket, data) {
+        let session_id = data[1];
+        let client_id = data[2];
+        
+        if (session_id && client_id) 
+        {  
+            let session = this.sessions.get(session_id);
+            if (!session) return;
+            // check if the incoming packet is from a client who is valid for this session
+            let joined = false;
+            for (let i=0; i < session.clients.length; i++) {
+                if (client_id == session.clients[i]) {
+                    joined = true;
+                    break;
+                }
+            }
+
+            if (!joined) return;
+
+            // relay packet if client is valid
+            socket.to(session_id.toString()).emit('relayUpdate', data);
+
+            // manage session state
+            if (session) {
+
+                // write data to disk if recording
+                if (session.isRecording) {
+
+                    // calculate and write session sequence number using client timestamp
+                    data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
+
+                    // get reference to session writer (buffer and cursor)
+                    let writer = session.writers.pos;
+
+                    if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+                        // if buffer is full, dump to disk and reset the cursor
+                        let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+                        let wstream = fs.createWriteStream(path, { flags: 'a' });
+                        wstream.write(writer.buffer.slice(0, writer.cursor));
+                        wstream.close();
+                        writer.cursor = 0;
+                    }
+                    for (let i = 0; i < data.length; i++) {
+                        writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
+                    }
+                    writer.cursor += POS_CHUNK_SIZE;
+                }
+
+                // update session state with latest entity positions
+                let entity_type = data[4]
+                if (entity_type == 3) {
+                    let entity_id = data[3]
+                    let i = session.entities.findIndex(e => e.id == entity_id);
+                    if (i != -1) {
+                        session.entities[i].latest = data;
+                    } else {
+                        let entity = {
+                            id: entity_id,
+                            latest: data,
+                            render: true,
+                            locked: false
+                        }
+                        session.entities.push(entity);
+                    }
+                }
+            }
+        }
+    },
+
+    handleInteraction: function (socket, data) {
         // interaction event values
         const INTERACTION_LOOK          = 0;
         const INTERACTION_LOOK_END      = 1;
@@ -76,349 +428,655 @@ module.exports = {
         const INTERACTION_LOCK          = 8;
         const INTERACTION_LOCK_END      = 9;
 
+        let session_id = data[1];
+        let client_id = data[2];
 
-        if (!fs.existsSync(CAPTURE_PATH)) {
-            logger.info(`Creating directory for session captures: ${CAPTURE_PATH}`)
-            fs.mkdirSync(CAPTURE_PATH);
-        }
+        if (session_id && client_id) {
+            // relay interaction events to all connected clients
+            socket.to(session_id.toString()).emit('interactionUpdate', data);
 
-        // generate formatted path for session capture files
-        function getCapturePath(session_id, start, type) {
-            return path.join(__dirname, CAPTURE_PATH, session_id.toString(), start.toString(), type);
-        }
+            // do session state update if needed
+            let source_id = data[3];
+            let target_id = data[4];
+            let interaction_type = data[5];
+            let session = this.sessions.get(session_id);
+            if (!session) return;
 
-        //specify do_bump_duplicates = true to keep two clients when one bumps the other. We don't want to prematurely delete a session.
-        function addClientToSession(session, client_id, do_bump_duplicates) {
-            if (session == null) {
-                logger.error("session was null");
-                return;
+            // check if the incoming packet is from a client who is valid for this session
+            let joined = false;
+            for (let i=0; i < session.clients.length; i++) {
+                if (client_id == session.clients[i]) {
+                    joined = true;
+                    break;
+                }
             }
 
-            if (session.clients == null || session.clients.length == 0) {
-                session.clients = [client_id];
-                return;
-            }
-
-            if (session.clients.indexOf(client_id) >= 0 && do_bump_duplicates) {
-                return;
-            }
+            if (!joined) return;
             
-            session.clients.push(client_id);
-        }
-
-        function removeClientFromSession(session, client_id) {
-            if (session == null) {
-                logger.error("session was null");
-                return;
+            // entity should be rendered
+            if (interaction_type == INTERACTION_RENDER) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].render = true;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: true,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // entity should stop being rendered
+            if (interaction_type == INTERACTION_RENDER_END) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].render = false;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: data,
+                        render: false,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // scene has changed
+            if (interaction_type == INTERACTION_SCENE_CHANGE) {
+                session.scene = target_id;
+            }
+            // entity is locked
+            if (interaction_type == INTERACTION_LOCK) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].locked = true;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: false,
+                        locked: true
+                    }
+                    session.entities.push(entity);
+                }
+            }
+            // entity is unlocked
+            if (interaction_type == INTERACTION_LOCK_END) {
+                let i = session.entities.findIndex(e => e.id == target_id);
+                if (i != -1) {
+                    session.entities[i].locked = false;
+                } else {
+                    let entity = {
+                        id: target_id,
+                        latest: [],
+                        render: false,
+                        locked: false
+                    }
+                    session.entities.push(entity);
+                }
             }
 
-            if (session.clients == null) {
-                logger.error("session.clients was null");
-                return;
-            } 
-
-            let index = session.clients.indexOf(client_id);
-
-            if (session.clients.length == 0 || session.clients.indexOf(client_id) == -1) {
-                //client_id is not in the array, so we don't need to remove it.
-                logger.warn(`Tried removing client ${client_id} from session.clients, but it was not there. Proceeding anyways.`)
-                return; 
-            }
-
-            session.clients.splice(index, 1);
-        }
-
-        function joinSocketToSession(err, socket, session_id, client_id, do_bump_duplicates) {
-            if (err) {
-                logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
-
-                return false;
-            } 
-
-            let session = sessions.get(session_id);
-
-            if (!session) {
-                logger.error (`could not join client ${client_id} to session ${session_id} because it does not exist.`);
+            // write to file as binary data
+            if (session.isRecording) {
                 
-                return false;
-            }
+                // calculate and write session sequence number
+                data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
+                
+                // get reference to session writer (buffer and cursor)
+                let writer = session.writers.int;
 
-            addClientToSession(session, client_id, do_bump_duplicates);
-
-            // socket to client mapping
-            session.sockets[socket.id] = { client_id: client_id, socket: socket };
-
-            io.to(session_id.toString()).emit('joined', client_id);
-
-            // write join event to database
-            if (pool) {
-                let event = `"connect"`;
-                pool.query(
-                    "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-                    (err, res) => {
-                        if (err != undefined) {
-                            logger.error(`Error writing join event to database: ${err} ${res}`);
-                        }
-                    }
-                );
-            }
-
-            // socket successfully joined to session
-            return true;
-        }
-
-        function disconnectOldSocket (socket) {
-
-            setTimeout(() => {
-
-                socket.disconnect(true);
-
-            }, 500); // delay half a second and then bump the old socket
-        }
-
-        function leaveSession (socket, session_id) {
-
-            socket.leave(session_id.toString(), (err) => {
-
-                if (err) {
-
-                    logger.error(err);
-
-                    return;
+                if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+                    // if buffer is full, dump to disk and reset the cursor
+                    let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+                    let wstream = fs.createWriteStream(path, { flags: 'a' });
+                    wstream.write(writer.buffer.slice(0, writer.cursor));
+                    wstream.close();
+                    writer.cursor = 0;
                 }
-            });
+                for (let i = 0; i < data.length; i++) {
+                    writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+                }
+                writer.cursor += INT_CHUNK_SIZE;
+            }
+        }
+    },
+
+    handleState: function (_io, data) {
+        if (data) {
+            let session_id = data.session_id;
+            let client_id = data.client_id;
+            if (session_id && client_id) {
+                let version = data.version;
+                let session = this.sessions.get(session_id);
+                if (session) {
+                    let state = {};
+                    // check requested api version
+                    if (version === 2) {
+                        state = {
+                            clients: session.clients,
+                            entities: session.entities,
+                            scene: session.scene,
+                            isRecording: session.isRecording
+                        }
+                    } else { // version 1 or no api version indicated
+                        let entities = [];
+                        let locked = [];
+                        for (let i = 0; i < session.entities.length; i++) {
+                            entities.push(session.entities[i].id);
+                            if (session.entities[i].locked) {
+                                locked.push(session.entities[i].id);
+                            }
+                        }
+
+                        state = {
+                            clients: session.clients,
+                            entities: entities,
+                            locked: locked,
+                            scene: session.scene,
+                            isRecording: session.isRecording
+                        };
+                    }
+
+                    return { session_id, state };
+                }
+            }
+        }
+    },
+    
+    //specify do_bump_duplicates = true to keep two clients when one bumps the other. We don't want to prematurely delete a session.
+    addClientToSession: function (session, client_id, do_bump_duplicates) {
+        if (session == null) {
+            this.logger.error("session was null");
+            return;
         }
 
-        // cleanup socket and client references in session state if reconnect fails
-        function removeSocketFromSession(socket, session_id, client_id) {
-            // notify and log event
-            socket.to(session_id.toString()).emit('disconnected', client_id);
+        if (session.clients == null || session.clients.length == 0) {
+            session.clients = [client_id];
+            return;
+        }
 
-            logger.info(`${socket.id} - Disconnection: ${session_id} ${client_id}`);
+        if (session.clients.indexOf(client_id) >= 0 && do_bump_duplicates) {
+            return;
+        }
+        
+        session.clients.push(client_id);
+    },
 
-            // log disconnect event with timestamp to db
-            if (pool) {
-                let event = `"disconnect"`;
-                pool.query(
-                    "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-                    (err, res) => {
-                        if (err != undefined) {
-                            logger.error(`Error writing disconnect event to database: ${err} ${res}`);
-                        }
+    removeClientFromSession: function (session, client_id) {
+        if (session == null) {
+            this.logger.error("session was null");
+            return;
+        }
+
+        if (session.clients == null) {
+            this.logger.error("session.clients was null");
+            return;
+        }
+
+        let index = session.clients.indexOf(client_id);
+
+        if (session.clients.length == 0 || session.clients.indexOf(client_id) == -1) {
+            //client_id is not in the array, so we don't need to remove it.
+            this.logger.warn(`Tried removing client ${client_id} from session.clients, but it was not there. Proceeding anyways.`)
+            return; 
+        }
+
+        session.clients.splice(index, 1);
+    },
+
+    joinSocketToSession: function (err, io, socket, pool, session_id, client_id, do_bump_duplicates) {
+        if (err) {
+            this.logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
+
+            return false;
+        }
+
+        let session = this.sessions.get(session_id);
+
+        if (!session) {
+            this.logger.error (`could not join client ${client_id} to session ${session_id} because it does not exist.`);
+            
+            return false;
+        }
+
+        this.addClientToSession(session, client_id, do_bump_duplicates);
+
+        // socket to client mapping
+        session.sockets[socket.id] = { client_id: client_id, socket: socket };
+
+        io.to(session_id.toString()).emit('joined', client_id);
+
+        // write join event to database
+        if (pool) {
+            let event = `"connect"`;
+            pool.query(
+                "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+                (err, res) => {
+                    if (err != undefined) {
+                        this.logger.error(`Error writing join event to database: ${err} ${res}`);
                     }
-                );
+                }
+            );
+        }
+
+        // socket successfully joined to session
+        return true;
+    },
+
+    // bumps all old sockets that match client_id, but skips the socket you want to keep, specified by new_socket_id. Only does this for sockets connected to session.
+    bumpOldSockets: function (session, client_id, new_socket_id) {
+
+        if (session == null || session.clients == null) {
+            this.logger.error(`Could not bump old sockets -- session was null or session.clients was null.`);
+        }
+
+        if ( !(session.clients.includes(client_id)) ) {
+            //no need to bump if we're not in the session already!
+            return;
+        }
+
+        if (session.sockets == null) {
+            this.logger.error(`Could not bump old sockets -- session.sockets was null.`);
+            return;
+        }
+
+        let session_id;
+
+        //Get the id of the session so we can leave the corresponding room.
+        this.sessions.forEach((candidate_session, candidate_session_id, map) => {
+
+            if (candidate_session == session) {
+
+                session_id = candidate_session_id;
+            }
+        });
+
+        // remove socket->client mapping
+        for (var candidate_socket_id in session.sockets) {
+
+            if (session.sockets[candidate_socket_id].client_id != client_id) {
+
+                // if the client ID doesn't match, don't try to bump it.
+                continue;
             }
 
-            // cleanup
-            let session = sessions.get(session_id);
+            if (candidate_socket_id == new_socket_id) {
 
-            if (!session) return;
+                this.logger.info(`${candidate_socket_id} - not bumping the new socket for client ${client_id}, session ${session_id}.`);
 
-            if (!(socket.id in session.sockets)) {
-                logger.error(`tried removing ${socket.id} from session.sockets, but it was not found.`);
+                continue;
+            }
+
+            var candidate_socket = session.sockets[candidate_socket_id].socket;
+
+            this.logger.info(`${candidate_socket_id} - bumping old socket for client ${client_id}, session ${session_id}. First, leaving the room.`);
+
+            leaveSession(candidate_socket, session_id);
+
+            this.logger.info(`${candidate_socket_id} - Second, disconnecting this socket.`);
+
+            disconnectOldSocket(candidate_socket);
+        }
+    },
+
+    disconnectOldSocket: function (socket) {
+
+        setTimeout(() => {
+
+            socket.disconnect(true);
+
+        }, 500); // delay half a second and then bump the old socket
+    },
+
+    leaveSession: function (socket, session_id) {
+
+        socket.leave(session_id.toString(), (err) => {
+
+            if (err) {
+
+                this.logger.error(err);
+
                 return;
             }
+        });
+    },
 
-            // remove socket->client mapping
-            delete session.sockets[socket.id];
-            
-            removeClientFromSession(session, client_id);
-        }
+    // cleanup socket and client references in session state if reconnect fails
+    removeSocketFromSession: function (pool, socket, session_id, client_id) {
+        // notify and log event
+        socket.to(session_id.toString()).emit('disconnected', client_id);
 
-        // cleanup session from sessions map if empty, write 
-        function cleanupSessionIfEmpty(session_id) {
-            let session = sessions.get(session_id);
-            if (!session) return;
-            if (session.clients.length <= 0) {
-                logger.info(`No clients left in session, ending: ${session_id}`);
-                if (session.isRecording) {
-                    logger.info(`Stopping recording of empty session: ${session_id}`);
-                    end_recording(session_id);
-                }
-                sessions.delete(session_id);
-            }
-        }
+        this.logger.info(`${socket.id} - Disconnection: ${session_id} ${client_id}`);
 
-        // if a session exists, return it. Otherwise, create one with default values, register it, and return it.
-        function getOrCreateSession(session_id) {
-
-            let session = sessions.get(session_id);
-
-            if (session) {
-                return session;
-            }
-
-            logger.info(`Creating session: ${session_id}`);
-
-            sessions.set(session_id, {
-                sockets: {}, // socket.id -> client_id
-                clients: [],
-                entities: [],
-                scene: null,
-                isRecording: false,
-                start: Date.now(),
-                recordingStart: 0,
-                seq: 0,
-                writers: {
-                    pos: {
-                        buffer: Buffer.alloc(POS_WRITE_BUFFER_SIZE),
-                        cursor: 0
-                    },
-                    int: {
-                        buffer: Buffer.alloc(INT_WRITE_BUFFER_SIZE),
-                        cursor: 0
+        // log disconnect event with timestamp to db
+        if (pool) {
+            let event = `"disconnect"`;
+            pool.query(
+                "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+                (err, res) => {
+                    if (err != undefined) {
+                        this.logger.error(`Error writing disconnect event to database: ${err} ${res}`);
                     }
                 }
-            });
+            );
+        }
 
-            session = sessions.get(session_id);
-            
+        // cleanup
+        let session = this.sessions.get(session_id);
+
+        if (!session) return;
+
+        if (!(socket.id in session.sockets)) {
+            this.logger.error(`tried removing ${socket.id} from session.sockets, but it was not found.`);
+            return;
+        }
+
+        // remove socket->client mapping
+        delete session.sockets[socket.id];
+        
+        this.removeClientFromSession(session, client_id);
+    },
+
+    // cleanup session from sessions map if empty, write 
+    cleanupSessionIfEmpty: function (session_id) {
+        let session = this.sessions.get(session_id);
+        if (!session) return;
+        if (session.clients.length <= 0) {
+            this.logger.info(`No clients left in session, ending: ${session_id}`);
+            if (session.isRecording) {
+                this.logger.info(`Stopping recording of empty session: ${session_id}`);
+                end_recording(session_id);
+            }
+            this.sessions.delete(session_id);
+        }
+    },
+
+    // if a session exists, return it. Otherwise, create one with default values, register it, and return it.
+    getOrCreateSession: function (session_id) {
+
+        let session = this.sessions.get(session_id);
+
+        if (session) {
             return session;
         }
 
+        this.logger.info(`Creating session: ${session_id}`);
+
+        this.sessions.set(session_id, {
+            sockets: {}, // socket.id -> client_id
+            clients: [],
+            entities: [],
+            scene: null,
+            isRecording: false,
+            start: Date.now(),
+            recordingStart: 0,
+            seq: 0,
+            writers: {
+                pos: {
+                    buffer: Buffer.alloc(POS_WRITE_BUFFER_SIZE),
+                    cursor: 0
+                },
+                int: {
+                    buffer: Buffer.alloc(INT_WRITE_BUFFER_SIZE),
+                    cursor: 0
+                }
+            }
+        });
+
+        session = this.sessions.get(session_id);
+        
+        return session;
+    },
+
+    handleServerNamespaceDisconnect: function (reason, pool, socket, session_id, client_id, session) {
+        this.logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        this.removeSocketFromSession(pool, socket, session_id, client_id);
+
+        this.cleanupSessionIfEmpty(session_id);
+    },
+
+    handleClientNamespaceDisconnect: function (reason, pool, socket, session_id, client_id, session) {
+        this.logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        this.removeSocketFromSession(pool, socket, session_id, client_id);
+
+        this.cleanupSessionIfEmpty(pool, session_id);
+    },
+
+    handleTransportClose: function (reason, pool, socket, session_id, client_id, session) {
+        this.logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        this.removeSocketFromSession(pool, socket, session_id, client_id);
+
+        this.cleanupSessionIfEmpty(pool, session_id);
+    },
+
+    handleTransportError: function (reason, pool, socket, session_id, client_id, session) {
+        this.logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        this.removeSocketFromSession(pool, socket, session_id, client_id);
+
+        this.cleanupSessionIfEmpty(pool, session_id);
+    },
+
+    tryReconnectingAfterDisconnect: function (reason, io, socket, pool, session_id, client_id, session) {
+
+        this.logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+
+        socket.join(session_id.toString(), (err) => { 
+
+            let success = this.joinSocketToSession(err, io, socket, pool, session_id, client_id, false);
+
+            if (!success) { 
+                this.logger.info('failed to reconnect');
+
+                this.removeSocketFromSession(pool, socket, session_id, client_id);
+
+                this.cleanupSessionIfEmpty(session_id);
+
+                return;
+            } 
+
+            this.bumpOldSockets(session, client_id, socket.id);
+
+            this.logger.info('successfully reconnected');
+        });
+    },
+
+    handleDisconnect: function (io, socket, pool, reason) {
+        // find which session this socket is in
+        for (var s of this.sessions) {
+
+            let session_id = s[0];
+
+            let session = s[1];
+
+            if (!(socket.id in session.sockets)) {
+                continue;
+            }
+            
+            let client_id = session.sockets[socket.id].client_id;
+
+            // Check disconnect event reason and handle
+            // see https://socket.io/docs/v2/server-api/index.html
+            if (reason === "server namespace disconnect") {
+
+                // the disconnection was initiated by the server, you need to reconnect manually
+                this.handleServerNamespaceDisconnect(reason, pool, socket, session_id, client_id, session);
+
+                return;
+            }
+            
+            if (reason == "client namespace disconnect") {
+                // The socket was manually disconnected using socket.disconnect()
+                // We don't attempt to reconnect if disconnect was called by client. 
+                this.handleClientNamespaceDisconnect(reason, pool, socket, session_id, client_id, session);
+
+                return;
+            }
+            
+            if (reason == "transport close") {
+
+                // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
+                this.handleTransportClose(reason, pool, socket, session_id, client_id, session);
+
+                return;
+            }
+            
+            if (reason == "transport error") {
+
+                // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
+                this.handleTransportError(reason, pool, socket, session_id, client_id, session);
+
+                return;
+            }
+
+            if (reason == "ping timeout") {
+                
+                // The server did not send a PING within the pingInterval + pingTimeout range.
+                this.tryReconnectingAfterDisconnect(reason, io, socket, pool, session_id, client_id, session);
+
+                return;
+            }
+
+            // The server disconnected for some other reason.
+            tryReconnectingAfterDisconnect(reason, io, socket, pool, session_id, client_id, session);
+    
+            return; //don't continue to check other sessions.
+        }
+
+        //socket not found in our records. This is usually ok.
+        this.logger.info(`(${socket.id} - disconnected. Not found in sessions. Probably ok.)`);
+    },
+
+    createPool: function () {
+
+        if (config.db.host && config.db.host != "") {
+
+            return mysql.createPool(config.db);
+
+        }
+        
+        this.logger.warn("Could not create MySQL Pool.");
+
+        return null;
+
+    },
+
+    createCapturesDirectory: function () {
+
+        if (!fs.existsSync(CAPTURE_PATH)) {
+
+            this.logger.info(`Creating directory for session captures: ${CAPTURE_PATH}`);
+
+            fs.mkdirSync(CAPTURE_PATH);
+        }
+
+    },
+
+    init: function (io, logger) {
+
+        this.logger = logger;
+
+        // session state maps
+        this.sessions = new Map();
+
+        var pool = this.createPool();
+
+        this.createCapturesDirectory();
+
+        let self = this;
+
         // main relay handler
         io.on('connection', function(socket) {
+
             logger.info(`Session connection: ${socket.id}.`);
 
             socket.on('sessionInfo', function (session_id) {
-                let session = sessions.get(session_id);
+                let session = self.sessions.get(session_id);
 
                 if (!session) {
-                    logger.warn(`Requested session ${session_id} but it does not exist.`);
+                    self.logger.warn(`Requested session ${session_id} but it does not exist.`);
                     
                     return;
                 }
 
                 socket.to(session_id.toString()).emit('sessionInfo', session);
+
             });
-
-            // bumps all old sockets that match client_id, but skips the socket you want to keep, specified by new_socket_id. Only does this for sockets connected to session.
-            function bumpOldSockets (session, client_id, new_socket_id) {
-                if (session == null || session.clients == null) {
-                    logger.error(`Could not bump old sockets -- session was null or session.clients was null.`);
-                }
-
-                if ( !(session.clients.includes(client_id)) ) {
-                    //no need to bump if we're not in the session already!
-                    return;
-                }
-
-                if (session.sockets == null) {
-                    logger.error(`Could not bump old sockets -- session.sockets was null.`);
-                    return;
-                }
-
-                let session_id;
-
-                //Get the id of the session so we can leave the corresponding room.
-                sessions.forEach((candidate_session, candidate_session_id, map) => {
-
-                    if (candidate_session == session) {
-
-                        session_id = candidate_session_id;
-                    }
-                });
-
-                // remove socket->client mapping
-                for (var candidate_socket_id in session.sockets) {
-
-                    if (session.sockets[candidate_socket_id].client_id != client_id) {
-
-                        // if the client ID doesn't match, don't try to bump it.
-                        continue;
-                    }
-
-                    if (candidate_socket_id == new_socket_id) {
-
-                        logger.info(`${candidate_socket_id} - not bumping the new socket for client ${client_id}, session ${session_id}.`);
-
-                        continue;
-                    }
-
-                    var candidate_socket = session.sockets[candidate_socket_id].socket;
-
-                    logger.info(`${candidate_socket_id} - bumping old socket for client ${client_id}, session ${session_id}. First, leaving the room.`);
-
-                    leaveSession(candidate_socket, session_id);
-
-                    logger.info(`${candidate_socket_id} - Second, disconnecting this socket.`);
-
-                    disconnectOldSocket(candidate_socket);
-                }
-            }
 
             //Note: "join" is our own event name, and should not be confused with socket.join. (It does not automatically listen for socket.join either.)
             socket.on('join', function(data) {
 
-                logger.info(`${socket.id} - Asked to join: ${data}`);
+                self.logger.info(`${socket.id} - Asked to join: ${data}`);
+
+                let _pool = pool;
 
                 let session_id = data[0];
 
                 let client_id = data[1];
 
                 if (!client_id || !session_id) {
-                    logger.error(`client_id or session_id were null in 'join'.`);
+
+                    self.logger.error(`client_id or session_id were null in 'join'.`);
+
                     return;
                 }
 
-                let session = getOrCreateSession(session_id);
+                let session = self.getOrCreateSession(session_id);
 
-                bumpOldSockets(session, client_id, socket.id);
+                self.bumpOldSockets(session, client_id, socket.id);
 
                 // relay server joins connecting client to session room
                 socket.join(session_id.toString(), (err) => { 
-                    joinSocketToSession(err, socket, session_id, client_id, true); 
+
+                    self.joinSocketToSession(err, io, socket, _pool, session_id, client_id, true); 
+
                 });
+
             });
 
             socket.on('state', function(data) {
-                logger.info(`State: ${JSON.stringify(data)}`)
-                if (data) {
-                    let session_id = data.session_id;
-                    let client_id = data.client_id;
-                    if (session_id && client_id) {
-                        let version = data.version;
-                        let session = sessions.get(session_id);
-                        if (session) {
-                            let state = {};
-                            // check requested api version
-                            if (version === 2) {
-                                state = {
-                                    clients: session.clients,
-                                    entities: session.entities,
-                                    scene: session.scene,
-                                    isRecording: session.isRecording
-                                }
-                            } else { // version 1 or no api version indicated
-                                let entities = [];
-                                let locked = [];
-                                for (let i = 0; i < session.entities.length; i++) {
-                                    entities.push(session.entities[i].id);
-                                    if (session.entities[i].locked) {
-                                        locked.push(session.entities[i].id);
-                                    }
-                                }
-                                state = {
-                                    clients: session.clients,
-                                    entities: entities,
-                                    locked: locked,
-                                    scene: session.scene,
-                                    isRecording: session.isRecording
-                                }
-                            }
-                            // emit versioned state data
-                            io.to(session_id).emit('state', state);
-                        }
-                    }
+                
+                self.logger.info(`State: ${JSON.stringify(data)}`);
+
+                let { session_id, state } = self.handleState(io, data);
+
+                if (!state) {
+
+                    self.logger.warn("state was null");
+
+                    return;
                 }
+
+                try {
+
+                    // emit versioned state data
+                    io.to(session_id).emit('state', state);
+
+                } catch (err) {
+
+                    throw err;
+
+                }
+
             });
 
             socket.on('draw', function(data) {
+
                 let session_id = data[1];
+
                 let client_id = data[2];
+
                 if (session_id && client_id) {
+
                     socket.to(session_id.toString()).emit('draw', data);
+
                 }
+
             });
 
             // general message relay
@@ -428,587 +1086,61 @@ module.exports = {
             // in order to update the session state accordingly. we will probably need to protect against
             // garbage values that might be passed by devs who are overwriting reserved message events.  
             socket.on('message', function(data) {
+
                 let session_id = data.session_id;
+
                 let client_id = data.client_id;
+
                 if (session_id && client_id) {
+
                     socket.to(session_id.toString()).emit('message', data);
 
-                    // TODO(rob): message data recording
-                    // let session = sessions.get(session_id);
-                    // // write to file
-                    // if (session.isRecording) {
-                    //     // calculate and write session sequence number
-                    //     let sessionSeq =  data.message.ts - session.recordingStart; // TODO(rob): what is the actual layout for message data? 
-                        
-                    //     // get reference to session writer (buffer and cursor)
-                    //     let writer = session.writers.int;
-
-                    //     if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                    //         // if buffer is full, dump to disk and reset the cursor
-                    //         let path = getCapturePath(session_id, session.recordingStart, 'int');
-                    //         let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    //         wstream.write(writer.buffer.slice(0, writer.cursor));
-                    //         wstream.close();
-                    //         writer.cursor = 0;
-                    //     }
-                    //     for (let i = 0; i < data.length; i++) {
-                    //         writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-                    //     }
-                    //     writer.cursor += INT_CHUNK_SIZE;
-                    // }
+                    record_message_data(data);
                 }
+
             });
-        
-            // session capture handler
-            socket.on('start_recording', function(session_id) { // TODO(rob): require client id and token
-                if (session_id) {
-                    let session = sessions.get(session_id);
-                    if (session && !session.isRecording) {
-                        session.isRecording = true;
-                        session.recordingStart = Date.now();
-                        let path = getCapturePath(session_id, session.recordingStart, '');
-                        fs.mkdir(path, { recursive: true }, (err) => {
-                            if(err) logger.warn(`Error creating capture path: ${err}`);
-                        });
-                        let capture_id = session_id+'_'+session.recordingStart;
-                        pool.query(
-                            "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
-                            (err, res) => {
-                                if (err != undefined) {
-                                    logger.error(`Error writing recording start event to database: ${err} ${res}`);
-                                }
-                            }
-                        );
-                        logger.info(`Capture started: ${session_id}`);
-                    } else if (session && session.isRecording) {
-                        logger.warn(`Requested session capture, but session is already recording: ${session_id}`)
-                    } else {
-                        logger.warn(`Error starting capture for session: ${session_id}`);
-                    }
-                }
-            });
-
-            // define end_recording event handler, use on socket event as well as on server cleanup for empty sessions
-            function end_recording(session_id) {
-                if (session_id) {
-                    let session = sessions.get(session_id);
-                    if (session && session.isRecording) {
-                        session.isRecording = false;
-                        logger.info(`Capture ended: ${session_id}`);                
-                        // write out the buffers if not empty, but only up to where the cursor is
-
-                        let pos_writer = session.writers.pos;
-                        if (pos_writer.cursor > 0) {
-                            let path = getCapturePath(session_id, session.recordingStart, 'pos');
-                            let wstream = fs.createWriteStream(path, { flags: 'a' });
-                            wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
-                            wstream.close();
-                            pos_writer.cursor = 0;
-                        }
-                        let int_writer = session.writers.int;
-                        if (int_writer.cursor > 0) {
-                            let path = getCapturePath(session_id, session.recordingStart, 'int');
-                            let wstream = fs.createWriteStream(path, { flags: 'a' });
-                            wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
-                            wstream.close();
-                            int_writer.cursor = 0;
-                        }
-                        
-                        // write the capture end event to database
-                        if (pool) {
-                            let capture_id = session_id+'_'+session.recordingStart;
-                            pool.query(
-                                "UPDATE captures SET end = ? WHERE capture_id = ?", [Date.now(), capture_id],
-                                (err, res) => {
-                                    if (err != undefined) {
-                                        logger.error(`Error writing recording end event to database: ${err} ${res}`);
-                                    }
-                                }
-                            );
-                        }
-
-                    } else if (session && !session.isRecording) {
-                        logger.warn(`Requested to end session capture, but capture is already ended: ${session_id}`)
-                    } else {
-                        logger.warn(`Error ending capture for session: ${session_id}`);
-                    }
-                }
-            }
-
-            socket.on('end_recording', end_recording);
-
 
             // client position update handler
             socket.on('update', function(data) {
-                let session_id = data[1];
-                let client_id = data[2];
-                
-                if (session_id && client_id) 
-                {  
-                    let session = sessions.get(session_id);
-                    if (!session) return;
-                    // check if the incoming packet is from a client who is valid for this session
-                    let joined = false;
-                    for (let i=0; i < session.clients.length; i++) {
-                        if (client_id == session.clients[i]) {
-                            joined = true;
-                            break;
-                        }
-                    }
 
-                    if (!joined) return;
-
-                    // relay packet if client is valid
-                    socket.to(session_id.toString()).emit('relayUpdate', data);
-
-                    // manage session state
-                    if (session) {
-
-                        // write data to disk if recording
-                        if (session.isRecording) {
-
-                            // calculate and write session sequence number using client timestamp
-                            data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
-
-                            // get reference to session writer (buffer and cursor)
-                            let writer = session.writers.pos;
-
-                            if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                                // if buffer is full, dump to disk and reset the cursor
-                                let path = getCapturePath(session_id, session.recordingStart, 'pos');
-                                let wstream = fs.createWriteStream(path, { flags: 'a' });
-                                wstream.write(writer.buffer.slice(0, writer.cursor));
-                                wstream.close();
-                                writer.cursor = 0;
-                            }
-                            for (let i = 0; i < data.length; i++) {
-                                writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
-                            }
-                            writer.cursor += POS_CHUNK_SIZE;
-                        }
-
-                        // update session state with latest entity positions
-                        let entity_type = data[4]
-                        if (entity_type == 3) {
-                            let entity_id = data[3]
-                            let i = session.entities.findIndex(e => e.id == entity_id);
-                            if (i != -1) {
-                                session.entities[i].latest = data;
-                            } else {
-                                let entity = {
-                                    id: entity_id,
-                                    latest: data,
-                                    render: true,
-                                    locked: false
-                                }
-                                session.entities.push(entity);
-                            }
-                        }
-                    }
-                }
+                self.handleUpdate(socket, data);
             
             });
 
             // handle interaction events
             // see `INTERACTION_XXX` declarations for type values
             socket.on('interact', function(data) {
-                let session_id = data[1];
-                let client_id = data[2];
 
-                if (session_id && client_id) {
-                    // relay interaction events to all connected clients
-                    socket.to(session_id.toString()).emit('interactionUpdate', data);
-
-                    // do session state update if needed
-                    let source_id = data[3];
-                    let target_id = data[4];
-                    let interaction_type = data[5];
-                    let session = sessions.get(session_id);
-                    if (!session) return;
-
-                    // check if the incoming packet is from a client who is valid for this session
-                    let joined = false;
-                    for (let i=0; i < session.clients.length; i++) {
-                        if (client_id == session.clients[i]) {
-                            joined = true;
-                            break;
-                        }
-                    }
-
-                    if (!joined) return;
-                    
-                    // entity should be rendered
-                    if (interaction_type == INTERACTION_RENDER) {
-                        let i = session.entities.findIndex(e => e.id == target_id);
-                        if (i != -1) {
-                            session.entities[i].render = true;
-                        } else {
-                            let entity = {
-                                id: target_id,
-                                latest: [],
-                                render: true,
-                                locked: false
-                            }
-                            session.entities.push(entity);
-                        }
-                    }
-                    // entity should stop being rendered
-                    if (interaction_type == INTERACTION_RENDER_END) {
-                        let i = session.entities.findIndex(e => e.id == target_id);
-                        if (i != -1) {
-                            session.entities[i].render = false;
-                        } else {
-                            let entity = {
-                                id: target_id,
-                                latest: data,
-                                render: false,
-                                locked: false
-                            }
-                            session.entities.push(entity);
-                        }
-                    }
-                    // scene has changed
-                    if (interaction_type == INTERACTION_SCENE_CHANGE) {
-                        session.scene = target_id;
-                    }
-                    // entity is locked
-                    if (interaction_type == INTERACTION_LOCK) {
-                        let i = session.entities.findIndex(e => e.id == target_id);
-                        if (i != -1) {
-                            session.entities[i].locked = true;
-                        } else {
-                            let entity = {
-                                id: target_id,
-                                latest: [],
-                                render: false,
-                                locked: true
-                            }
-                            session.entities.push(entity);
-                        }
-                    }
-                    // entity is unlocked
-                    if (interaction_type == INTERACTION_LOCK_END) {
-                        let i = session.entities.findIndex(e => e.id == target_id);
-                        if (i != -1) {
-                            session.entities[i].locked = false;
-                        } else {
-                            let entity = {
-                                id: target_id,
-                                latest: [],
-                                render: false,
-                                locked: false
-                            }
-                            session.entities.push(entity);
-                        }
-                    }
-
-                    // write to file as binary data
-                    if (session.isRecording) {
-                        
-                        // calculate and write session sequence number
-                        data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
-                        
-                        // get reference to session writer (buffer and cursor)
-                        let writer = session.writers.int;
-
-                        if (INT_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                            // if buffer is full, dump to disk and reset the cursor
-                            let path = getCapturePath(session_id, session.recordingStart, 'int');
-                            let wstream = fs.createWriteStream(path, { flags: 'a' });
-                            wstream.write(writer.buffer.slice(0, writer.cursor));
-                            wstream.close();
-                            writer.cursor = 0;
-                        }
-                        for (let i = 0; i < data.length; i++) {
-                            writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-                        }
-                        writer.cursor += INT_CHUNK_SIZE;
-                    }
-                }
+                self.handleInteraction(socket, data);
+                
             });
+        
+            // session capture handler
+            socket.on('start_recording', function (session_id) {
 
-            function handleServerNamespaceDisconnect (reason, socket, session_id, client_id, session) {
-                logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+                self.start_recording(pool, session_id);
 
-                removeSocketFromSession(socket, session_id, client_id);
+            });
+                
+            socket.on('end_recording', function (session_id) {
 
-                cleanupSessionIfEmpty(session_id);
-            }
+                self.end_recording(pool, session_id);
 
-            function handleClientNamespaceDisconnect (reason, socket, session_id, client_id, session) {
-                logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-
-                removeSocketFromSession(socket, session_id, client_id);
-
-                cleanupSessionIfEmpty(session_id);
-            }
-
-            function handleTransportClose (reason, socket, session_id, client_id, session) {
-                logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-
-                removeSocketFromSession(socket, session_id, client_id);
-
-                cleanupSessionIfEmpty(session_id);
-            }
-
-            function handleTransportError (reason, socket, session_id, client_id, session) {
-                logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-
-                removeSocketFromSession(socket, session_id, client_id);
-
-                cleanupSessionIfEmpty(session_id);
-            }
-
-            function tryReconnectingAfterDisconnect (reason, socket, session_id, client_id, session) {
-                logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-
-                socket.join(session_id.toString(), (err) => { 
-
-                    let success = joinSocketToSession(err, socket, session_id, client_id, false);
-
-                    if (!success) { 
-                        logger.info('failed to reconnect');
-
-                        removeSocketFromSession(socket, session_id, client_id);
-
-                        cleanupSessionIfEmpty(session_id);
-
-                        return;
-                    } 
-
-                    bumpOldSockets(session, client_id, socket.id);
-
-                    logger.info('successfully reconnected');
-                });
-            }
-
-            socket.on('disconnect', function(reason) {
-                // find which session this socket is in
-                for (var s of sessions) {
-
-                    let session_id = s[0];
-
-                    let session = s[1];
-
-                    if (!(socket.id in session.sockets)) {
-                        continue;
-                    }
-                    
-                    let client_id = session.sockets[socket.id].client_id;
-
-                    // Check disconnect event reason and handle
-                    // see https://socket.io/docs/v2/server-api/index.html
-                    if (reason === "server namespace disconnect") {
-
-                        // the disconnection was initiated by the server, you need to reconnect manually
-                        handleServerNamespaceDisconnect(reason, socket, session_id, client_id, session);
-
-                        return;
-                    }
-                    
-                    if (reason == "client namespace disconnect") {
-                        // The socket was manually disconnected using socket.disconnect()
-                        // We don't attempt to reconnect if disconnect was called by client. 
-                        handleClientNamespaceDisconnect(reason, socket, session_id, client_id, session);
-
-                        return;
-                    }
-                    
-                    if (reason == "transport close") {
-
-                        // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
-                        handleTransportClose(reason, socket, session_id, client_id, session);
-
-                        return;
-                    }
-                    
-                    if (reason == "transport error") {
-
-                        // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
-                        handleTransportError(reason, socket, session_id, client_id, session);
-
-                        return;
-                    }
-
-                    if (reason == "ping timeout") {
-                        
-                        // The server did not send a PING within the pingInterval + pingTimeout range.
-                        tryReconnectingAfterDisconnect(reason, socket, session_id, client_id, session);
-
-                        return;
-                    }
-
-                    // The server disconnected for some other reason.
-                    tryReconnectingAfterDisconnect(reason, socket, session_id, client_id, session);
-            
-                    return; //don't continue to check other sessions.
-                }
-
-                //socket not found in our records. This is usually ok.
-                logger.info(`(${socket.id} - disconnected. Not found in sessions. Probably ok.)`);
             });
 
             socket.on('playback', function(data) {
-                // TODO(rob): need to use playback object to track seq and group by playback_id, 
-                // so users can request to pause playback, maybe rewind?
-                logger.info(`Playback request: ${data.playback_id}`);
-                let client_id = data.client_id;
-                let session_id = data.session_id;
-                let playback_id = data.playback_id;
 
-                let capture_id = null;
-                let start = null;
+                self.handlePlayback(io, data);
 
-                if (client_id && session_id && playback_id) {
-                    capture_id = playback_id.split('_')[0]
-                    start = playback_id.split('_')[1]
-                    // TODO(rob): check that this client has permission to playback this session
-                } else {
-                    console.log("Invalid playback request:", data);
-                    return;
-                }
+            });
 
-                // Everything looks good, getting ref to session. 
-                let session = sessions.get(session_id);
-            
-                // playback sequence counter
-                let current_seq = 0;
-                // let audioStarted = false;
+            socket.on('disconnect', function (reason) {
 
-                // check that all params are valid
-                if (capture_id && start) {
+                let _pool = pool;
 
+                self.handleDisconnect(io, socket, _pool, reason);
 
-                    // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
-                    // build audio file manifest
-                    // logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
-                    // let audioManifest = [];
-                    // let baseAudioPath = getCapturePath(capture_id, start, 'audio');
-                    // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
-                    //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
-                    //     items.forEach(clientDir => {
-                    //         let clientPath = path.join(baseAudioPath, clientDir)
-                    //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
-                    //         files.forEach(file => {
-                    //             let client_id = clientDir;
-                    //             let seq = file.split('.')[0];
-                    //             let audioFilePath = path.join(clientPath, file);
-                    //             let item = {
-                    //                 seq: seq,
-                    //                 client_id: client_id,
-                    //                 path: audioFilePath,
-                    //                 data: null
-                    //             }
-                    //             audioManifest.push(item);
-                    //         });
-                    //     });
-                    // }
-
-                    // // emit audio manifest to connected clients
-                    // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
-
-                    // // stream all audio files for caching and playback by client
-                    // audioManifest.forEach((file) => {
-                    //     fs.readFile(file.path, (err, data) => {
-                    //         file.data = data;
-                    //         if(err) logger.error(`Error reading audio file: ${file.path}`);
-                    //         // console.log('emitting audio packet:', file);
-                    //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
-                    //     });
-                    // });
-
-
-                    // position streaming
-                    let capturePath = getCapturePath(capture_id, start, 'pos');
-                    let stream = fs.createReadStream(capturePath, { highWaterMark: POS_CHUNK_SIZE });
-
-                    // set actual playback start time
-                    let playbackStart = Date.now();
-
-                    // position data emit loop
-                    stream.on('data', function(chunk) {
-
-                        stream.pause();
-
-                        // start data buffer loop
-                        let buff = Buffer.from(chunk);
-                        let farr = new Float32Array(chunk.byteLength / 4);
-                        for (var i = 0; i < farr.length; i++) {
-                            farr[i] = buff.readFloatLE(i * 4);
-                        }
-                        var arr = Array.from(farr);
-
-                        let timer = setInterval( () => {
-                            current_seq = Date.now() - playbackStart;
-
-                            // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
-
-                            if (arr[POS_FIELDS-1] <= current_seq) {
-                                // alias client and entity id with prefix if entity type is not an asset
-                                if (arr[4] != 3) {
-                                    arr[2] = 90000 + arr[2];
-                                    arr[3] = 90000 + arr[3];
-                                }
-                                // if (!audioStarted) {
-                                //     // HACK(rob): trigger clients to begin playing buffered audio 
-                                //     audioStarted = true;
-                                //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
-                                // }
-                                io.to(session_id.toString()).emit('relayUpdate', arr);
-                                stream.resume();
-                                clearInterval(timer);
-                            }
-                        }, 1);
-                    });
-
-                    stream.on('error', function(err) {
-                        logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
-                        io.to(session_id.toString()).emit('playbackEnd')
-                    });
-
-                    stream.on('end', function() {
-                        logger.info(`End of pos data for playback session: ${session_id}`)
-                        io.to(session_id.toString()).emit('playbackEnd')
-                    })
-
-                    // interaction streaming
-                    let ipath = getCapturePath(capture_id, start, 'int');
-                    let istream = fs.createReadStream(ipath, { highWaterMark: INT_CHUNK_SIZE });
-
-                    istream.on('data', function(chunk) {
-                        istream.pause();
-
-                        let buff = Buffer.from(chunk);
-                        let farr = new Int32Array(chunk.byteLength / 4);
-                        for (var i = 0; i < farr.length; i++) {
-                            farr[i] = buff.readInt32LE(i * 4);
-                        }
-                        var arr = Array.from(farr);
-
-                        let timer = setInterval( () => {
-
-                            // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
-
-                            if (arr[INT_FIELDS-1] <= current_seq) {
-                                io.to(session_id.toString()).emit('interactionUpdate', arr);
-                                istream.resume();
-                                clearInterval(timer);
-                            }
-                        }, 1);
-
-                    });
-
-                    istream.on('error', function(err) {
-                        logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-                        io.to(session_id.toString()).emit('interactionpPlaybackEnd')
-                    });
-
-                    istream.on('end', function() {
-                        logger.info(`End of int data for playback session: ${session_id}`)
-                        io.to(session_id.toString()).emit('interactionPlaybackEnd')
-                    })
-                }
-            })
+            });
         });
     }
 };
