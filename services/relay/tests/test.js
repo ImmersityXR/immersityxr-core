@@ -188,5 +188,5 @@ setTimeout(() => {
     client1.close();
     client2.close();
     process.exit();
-}, 10000)
+}, 1000)
 
