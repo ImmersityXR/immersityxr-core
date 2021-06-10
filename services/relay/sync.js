@@ -585,7 +585,7 @@ module.exports = {
         }
     },
     
-    //specify do_bump_duplicates = true to keep two clients when one bumps the other. We don't want to prematurely delete a session.
+    //specify do_bump_duplicates = false to keep two clients when one bumps the other. We don't want to prematurely delete a session.
     addClientToSession: function (session, client_id, do_bump_duplicates) {
         if (session == null) {
             this.logger.error("session was null");
