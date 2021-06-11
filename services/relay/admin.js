@@ -50,7 +50,7 @@ function JSONStringifyCircular(obj) {
 }
 
 module.exports = {
-    init: function (io) {
+    init: function (io, syncServer, chatServer) {
         var admin = io.of('/admin');
 
         admin.use((socket, next) => {
@@ -62,6 +62,9 @@ module.exports = {
             socket.emit("adminInfo", socket.id);
 
             socket.on('getAllSessions0', function() {
+
+                this.sessions = syncServer.sessions;
+
                 socket.emit('receiveAllSessions0', JSONStringifyCircular(Array.from(sessions.entries())));
             });
 
@@ -74,6 +77,8 @@ module.exports = {
                 // }"
 
                 var sessionToSocketMappings = {};
+
+                this.sessions = syncServer.sessions;
 
                 sessions.forEach((value, session_id, map) => {
                     var session = sessions.get(session_id);
@@ -90,19 +95,25 @@ module.exports = {
 
             socket.on('sessionsWithDetails', function () {
 
-                var result = fromEntries(sessions);
+                this.sessions = syncServer.sessions;
+
+                var result = fromEntries(this.sessions);
 
                 socket.emit('sessionsWithDetails', JSONStringifyCircular(result));
             });
 
             socket.on('stateClientsSockets', function () {
+
+                this.sessions = syncServer.sessions;
+
                 var stateClientsSockets = {};
 
-                sessions.forEach((session, session_id, map) => {
+                this.sessions.forEach((session, session_id, map) => {
 
                     stateClientsSockets[session_id] = {};
 
                     stateClientsSockets[session_id].state = {
+                        
                         clients: session.clients,
                         entities: session.entities,
                         scene: session.scene,

@@ -76,4 +76,4 @@ syncServer.init(io, logger);
 
 chatServer.init(io, logger);
 
-adminServer.init(io);
+adminServer.init(io, syncServer, chatServer);
