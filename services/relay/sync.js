@@ -696,11 +696,11 @@ module.exports = {
             session.clients = [client_id];
         }
 
-        const first_instance = session.clients.instanceOf(client_id);
+        const first_instance = session.clients.indexOf(client_id);
 
         for (let i = 0; i < session.clients.length; i += 1) {
 
-            if (candidate_id != first_instance && candidate_id == client_id) {
+            if (session.clients[i] != first_instance && session.clients[i] == client_id) {
 
                 session.clients.splice(i, 1);
 
@@ -730,7 +730,7 @@ module.exports = {
         session.clients.splice(index, 1);
     },
 
-    joinSocketToSession: function (err, io, socket, session_id, client_id, do_bump_duplicates) {
+    joinSocketToSession: function (err, socket, session_id, client_id, do_bump_duplicates) {
 
         if (err) {
 
@@ -743,7 +743,7 @@ module.exports = {
 
         this.addClientToSession(session_id, client_id);
 
-        this.bumpDuplicateSockets(session_id, client_id, do_bump_duplicates);
+        this.bumpDuplicateSockets(session_id, client_id, do_bump_duplicates, socket.id);
 
         // socket to client mapping
         session.sockets[socket.id] = { client_id: client_id, socket: socket };
@@ -754,13 +754,13 @@ module.exports = {
         return true;
     },
 
-    bumpDuplicateSockets: function (session_id, client_id, do_bump_duplicates) {
+    bumpDuplicateSockets: function (session_id, client_id, do_bump_duplicates, socket_id) {
         
         if (do_bump_duplicates) {
 
             this.removeDuplicateClientsFromSession(session_id, client_id);
 
-            let sockets = this.getSessionSocketsFromClientId(session_id, client_id, socket.id);
+            let sockets = this.getSessionSocketsFromClientId(session_id, client_id, socket_id);
             
             this.bumpAction(session_id, sockets);
 
@@ -831,7 +831,7 @@ module.exports = {
 
                 this.logger.info(`${candidate_socket_id} - found this socket for client ${client_id}, session ${session_id}.`);
 
-                result.push(session.sockets[candidate_socket_id]);
+                result.push(session.sockets[candidate_socket_id].socket);
             }
         }
 
@@ -851,33 +851,15 @@ module.exports = {
 
         var count = 0;
 
-        session.clients.forEach((value, index) => {
+        session.clients.forEach((value) => {
+
             if (value == client_id) {
+
                 count += 1;
             }
         });
 
         return count;
-    },
-
-    // bumps all old sockets that match client_id, but skips the socket you want to keep, specified by new_socket_id. Only does this for sockets connected to session.
-    bumpOldSockets: function (session_id, client_id, new_socket_id) {
-
-        if (this.getNumClientInstancesForClient(session_id, client_id) <= 0) {
-
-            //no need to bump if we're not in the session already!
-            return; 
-        }
-
-        let socket_objects = this.getSessionSocketsFromClientId(session_id, client_id, new_socket_id);
-
-        // remove socket->client mapping
-        socket_objects.forEach((socket_obj, index) => {
-
-            this.leaveSession(socket_obj.socket, session_id);
-
-            this.disconnectOldSocket(socket_obj.socket);
-        });
     },
 
     // cleanup socket and client references in session state if reconnect fails
@@ -1012,9 +994,9 @@ module.exports = {
         return session;
     },
 
-    processReconnectionAttempt: function (err, io, socket, session_id, client_id) {
+    processReconnectionAttempt: function (err, socket, session_id, client_id) {
 
-        let success = this.joinSocketToSession(err, io, socket, session_id, client_id, true);
+        let success = this.joinSocketToSession(err, socket, session_id, client_id, true);
 
         if (!success) { 
 
@@ -1117,7 +1099,7 @@ module.exports = {
 
             if ((knownReasons.hasOwnProperty(reason) && knownReasons[reason].doReconnect) || doReconnectOnUnknownReason) {
 
-                return this.reconnectAction(reason, io, socket, session_id, client_id, session); // Don't continue to check other sessions.
+                return this.reconnectAction(reason, socket, session_id, client_id, session); // Don't continue to check other sessions.
             }
 
             //Disconnect the socket
@@ -1158,6 +1140,11 @@ module.exports = {
             fs.mkdirSync(CAPTURE_PATH);
         }
 
+    },
+
+    getSessions: function () {
+        
+        return this.sessions;
     },
 
     init: function (io, logger) {
@@ -1219,9 +1206,9 @@ module.exports = {
     
             socket.join(session_id.toString(), (err) => { 
     
-                self.processReconnectionAttempt(err, io, socket, session_id, client_id);
+                self.processReconnectionAttempt(err, socket, session_id, client_id);
             });
-        },
+        };
 
         // main relay handler
         io.on('connection', function(socket) {
@@ -1262,7 +1249,7 @@ module.exports = {
                 // relay server joins connecting client to session room
                 socket.join(session_id.toString(), (err) => { 
 
-                    let success = self.joinSocketToSession(err, io, socket, session_id, client_id, true); 
+                    let success = self.joinSocketToSession(err, socket, session_id, client_id, true); 
 
                     if (success) {
                         
