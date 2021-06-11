@@ -624,45 +624,76 @@ module.exports = {
     },
 
     handleState: function (_io, data) {
-        if (data) {
-            let session_id = data.session_id;
-            let client_id = data.client_id;
-            if (session_id && client_id) {
-                let version = data.version;
-                let session = this.sessions.get(session_id);
-                if (session) {
-                    let state = {};
-                    // check requested api version
-                    if (version === 2) {
-                        state = {
-                            clients: session.clients,
-                            entities: session.entities,
-                            scene: session.scene,
-                            isRecording: session.isRecording
-                        };
-                    } else { // version 1 or no api version indicated
-                        let entities = [];
-                        let locked = [];
-                        for (let i = 0; i < session.entities.length; i++) {
-                            entities.push(session.entities[i].id);
-                            if (session.entities[i].locked) {
-                                locked.push(session.entities[i].id);
-                            }
-                        }
 
-                        state = {
-                            clients: session.clients,
-                            entities: entities,
-                            locked: locked,
-                            scene: session.scene,
-                            isRecording: session.isRecording
-                        };
-                    }
+        if (!data) {
+            
+            logger.error(`data was null`);
 
-                    return { session_id, state };
+            return null;
+        }
+            
+        let session_id = data.session_id;
+            
+        let client_id = data.client_id;
+            
+        if (!session_id || !client_id) {
+
+            logger.error(`session_id or client_id was null`);
+
+            return null;
+        }
+        
+        let version = data.version;
+
+        let session = this.sessions.get(session_id);
+
+        if (!session) {
+
+            logger.error(`session was null`);
+
+            return null;
+        }
+
+        let state = {};
+
+        // check requested api version
+        if (version === 2) {
+
+            state = {
+
+                clients: session.clients,
+                entities: session.entities,
+                scene: session.scene,
+                isRecording: session.isRecording
+            };
+
+        } else { // version 1 or no api version indicated
+
+            let entities = [];
+
+            let locked = [];
+
+            for (let i = 0; i < session.entities.length; i++) {
+
+                entities.push(session.entities[i].id);
+
+                if (session.entities[i].locked) {
+
+                    locked.push(session.entities[i].id);
                 }
             }
+
+            state = {
+                
+                clients: session.clients,
+                entities: entities,
+                locked: locked,
+                scene: session.scene,
+                isRecording: session.isRecording
+            };
         }
+
+        return { session_id, state };
     },
     
     addClientToSession: function (session_id, client_id) {
@@ -708,7 +739,10 @@ module.exports = {
         }
     },
 
-    removeClientFromSession: function (session, client_id) {
+    removeClientFromSession: function (session_id, client_id) {
+
+        let session = this.sessions.get(session_id);
+
         if (session == null) {
             this.logger.error("session was null");
             return;
@@ -761,15 +795,31 @@ module.exports = {
             this.removeDuplicateClientsFromSession(session_id, client_id);
 
             let sockets = this.getSessionSocketsFromClientId(session_id, client_id, socket_id);
+
+            sockets.forEach((socket) => {
             
-            this.bumpAction(session_id, sockets);
+                this.bumpAction(session_id, socket);
+
+                this.removeSocketFromSession(socket, session_id, client_id);
+
+                this.removeClientFromSession(session_id, client_id);
+
+            });
 
             return;
         }
 
         let sockets = this.getSessionSocketsFromClientId(session_id, client_id, null);
+            
+        sockets.forEach((socket) => {
+        
+            this.bumpAction(session_id, socket);
 
-        this.bumpAction(session_id, sockets);
+            this.removeSocketFromSession(socket, session_id, client_id);
+
+            this.removeClientFromSession(session_id, client_id);
+
+        });
     },
 
     writeEventToConnections: function (event, session_id, client_id) {
@@ -865,11 +915,9 @@ module.exports = {
     // cleanup socket and client references in session state if reconnect fails
     removeSocketFromSession: function (socket, session_id, client_id) {
 
-        this.logger.info(`${socket.id} (client ${client_id}) - Removed from session ${session_id}`);
-
         this.disconnectAction(socket, session_id, client_id);
 
-        // cleanup
+        // clean up
         let session = this.sessions.get(session_id);
 
         if (!session) {
@@ -887,14 +935,11 @@ module.exports = {
         }
 
         // remove socket->client mapping
-        let success = session.sockets.delete(socket.id);
+        delete session.sockets[socket.id];
 
-        if (!success) {
-
-            this.logger.error(`Could not delete session.sockets[${socket.id}]`);
-        }
+        this.logger.info(`${socket.id} (client ${client_id}) - Removed from session ${session_id}`);
         
-        this.removeClientFromSession(session, client_id);
+        this.removeClientFromSession(session_id, client_id);
     },
 
     getNumClientInstances: function (session_id) {
@@ -1160,32 +1205,29 @@ module.exports = {
 
         let self = this;
 
-        this.bumpAction = function (session_id, sockets) {
-
-            sockets.forEach((socket) => {
+        this.bumpAction = function (session_id, socket) {
                 
-                self.logger.info(`${socket.id}: leaving session ${session_id}`);
+            self.logger.info(`${socket.id}: leaving session ${session_id}`);
 
-                socket.leave(session_id.toString(), (err) => {
+            socket.leave(session_id.toString(), (err) => {
 
-                    if (err) {
+                if (err) {
 
-                        this.logger.error(err);
+                    this.logger.error(err);
 
-                        return;
-                    }
-                });
-
-                self.logger.info(`${socket.id} Disconnecting: ...`);
-
-                setTimeout(() => {
-
-                    socket.disconnect(true);
-
-                    self.logger.info(`${socket.id} Disconnecting: Done.`);
-
-                }, 500); // delay half a second and then bump the old socket    
+                    return;
+                }
             });
+
+            self.logger.info(`${socket.id} Disconnecting: ...`);
+
+            setTimeout(() => {
+
+                socket.disconnect(true);
+
+                self.logger.info(`${socket.id} Disconnecting: Done.`);
+
+            }, 500); // delay half a second and then bump the old socket    
         };
 
         this.joinSessionAction = function (session_id, client_id) {
