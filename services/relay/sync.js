@@ -366,71 +366,131 @@ module.exports = {
         }
     },
 
-    handleUpdate: function (socket, data) {
+    isValidRelayPacket: function (data) {
+
         let session_id = data[1];
+
         let client_id = data[2];
         
         if (session_id && client_id) 
         {  
+
             let session = this.sessions.get(session_id);
-            if (!session) return;
+
+            if (!session) {
+                return;
+            }
+
             // check if the incoming packet is from a client who is valid for this session
-            let joined = false;
-            for (let i=0; i < session.clients.length; i++) {
+
+            for (let i = 0; i < session.clients.length; i += 1) {
+
                 if (client_id == session.clients[i]) {
-                    joined = true;
-                    break;
+
+                    return true;
                 }
             }
 
-            if (!joined) return;
+            return false;
+        }
+    },
 
-            // relay packet if client is valid
-            socket.to(session_id.toString()).emit('relayUpdate', data);
+    writeRecordedRelayData: function (data) {
 
-            // manage session state
-            if (session) {
+        if (!data) {
 
-                // write data to disk if recording
-                if (session.isRecording) {
+            logger.error(`data was null`);
 
-                    // calculate and write session sequence number using client timestamp
-                    data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
+            return;
+        }
 
-                    // get reference to session writer (buffer and cursor)
-                    let writer = session.writers.pos;
+        let session_id = data[1];
 
-                    if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
-                        // if buffer is full, dump to disk and reset the cursor
-                        let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
-                        let wstream = fs.createWriteStream(path, { flags: 'a' });
-                        wstream.write(writer.buffer.slice(0, writer.cursor));
-                        wstream.close();
-                        writer.cursor = 0;
-                    }
-                    for (let i = 0; i < data.length; i++) {
-                        writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
-                    }
-                    writer.cursor += POS_CHUNK_SIZE;
-                }
+        let session = this.sessions.get(session_id);
 
-                // update session state with latest entity positions
-                let entity_type = data[4];
-                if (entity_type == 3) {
-                    let entity_id = data[3];
-                    let i = session.entities.findIndex(e => e.id == entity_id);
-                    if (i != -1) {
-                        session.entities[i].latest = data;
-                    } else {
-                        let entity = {
-                            id: entity_id,
-                            latest: data,
-                            render: true,
-                            locked: false
-                        };
-                        session.entities.push(entity);
-                    }
-                }
+        if (!session) {
+
+            logger.error(`session was null or data was null`);
+
+            return;
+        }
+
+        if (!session.isRecording) {
+            return;
+        }
+
+        // calculate and write session sequence number using client timestamp
+        data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
+
+        // get reference to session writer (buffer and cursor)
+        let writer = session.writers.pos;
+
+        if (POS_CHUNK_SIZE + writer.cursor > writer.buffer.byteLength) {
+
+            // if buffer is full, dump to disk and reset the cursor
+            let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+
+            let wstream = fs.createWriteStream(path, { flags: 'a' });
+
+            wstream.write(writer.buffer.slice(0, writer.cursor));
+
+            wstream.close();
+
+            writer.cursor = 0;
+        }
+
+        for (let i = 0; i < data.length; i++) {
+
+            writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
+        }
+
+        writer.cursor += POS_CHUNK_SIZE;
+    },
+
+    updateSessionState: function (data) {
+
+        if (!data) {
+
+            logger.error(`data was null`);
+
+            return;
+        }
+
+        let session_id = data[1];
+
+        let session = this.sessions.get(session_id);
+
+        if (!session) {
+
+            logger.error(`session was null`);
+
+            return;
+        }
+
+        // update session state with latest entity positions
+        let entity_type = data[4];
+
+        if (entity_type == 3) {
+
+            let entity_id = data[3];
+
+            let i = session.entities.findIndex(e => e.id == entity_id);
+
+            if (i != -1) {
+
+                session.entities[i].latest = data;
+
+            } else {
+
+                let entity = {
+
+                    id: entity_id,
+                    latest: data,
+                    render: true,
+                    locked: false
+                };
+
+                session.entities.push(entity);
             }
         }
     },
@@ -605,35 +665,47 @@ module.exports = {
         }
     },
     
-    //specify do_bump_duplicates = false to keep two clients when one bumps the other. We don't want to prematurely delete a session.
-    addClientToSession: function (session_id, client_id, do_bump_duplicates) {
+    addClientToSession: function (session_id, client_id) {
 
         let session = this.sessions.get(session_id);
 
         if (session == null) {
 
             this.logger.error("session was null");
-
-            return;
         }
 
         if (session.clients == null || session.clients.length == 0) {
 
             session.clients = [client_id];
-
-            return;
-        }
-
-        if (do_bump_duplicates && session.clients.indexOf(client_id) >= 0) {
-
-            this.bumpOldSockets(session_id, client_id, null); //TODO(Brandon): check if we can use new_socket_id here.
-
-            session.clients.push(client_id);
-
-            return;
         }
 
         session.clients.push(client_id);
+    },
+
+    removeDuplicateClientsFromSession: function (session_id, client_id) {
+
+        let session = this.sessions.get(session_id);
+
+        if (session == null) {
+
+            this.logger.error("session was null");
+        }
+
+        if (session.clients == null || session.clients.length == 0) {
+
+            session.clients = [client_id];
+        }
+
+        const first_instance = session.clients.instanceOf(client_id);
+
+        for (let i = 0; i < session.clients.length; i += 1) {
+
+            if (candidate_id != first_instance && candidate_id == client_id) {
+
+                session.clients.splice(i, 1);
+
+            }
+        }
     },
 
     removeClientFromSession: function (session, client_id) {
@@ -659,32 +731,45 @@ module.exports = {
     },
 
     joinSocketToSession: function (err, io, socket, session_id, client_id, do_bump_duplicates) {
+
         if (err) {
+
             this.logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
 
             return false;
         }
 
-        let session = this.sessions.get(session_id);
+        let session = this.getOrCreateSession(session_id);
 
-        if (!session) {
-            this.logger.error (`could not join client ${client_id} to session ${session_id} because it does not exist.`);
-            
-            return false;
-        }
+        this.addClientToSession(session_id, client_id);
 
-        this.addClientToSession(session_id, client_id, do_bump_duplicates);
+        this.bumpDuplicateSockets(session_id, client_id, do_bump_duplicates);
 
         // socket to client mapping
         session.sockets[socket.id] = { client_id: client_id, socket: socket };
 
-        io.to(session_id.toString()).emit('joined', client_id);
-
-        // write join event to database
-        this.writeEventToConnections("connect", session_id, client_id);
+        this.joinSessionAction(session_id, client_id);
 
         // socket successfully joined to session
         return true;
+    },
+
+    bumpDuplicateSockets: function (session_id, client_id, do_bump_duplicates) {
+        
+        if (do_bump_duplicates) {
+
+            this.removeDuplicateClientsFromSession(session_id, client_id);
+
+            let sockets = this.getSessionSocketsFromClientId(session_id, client_id, socket.id);
+            
+            this.bumpAction(session_id, sockets);
+
+            return;
+        }
+
+        let sockets = this.getSessionSocketsFromClientId(session_id, client_id, null);
+
+        this.bumpAction(session_id, sockets);
     },
 
     writeEventToConnections: function (event, session_id, client_id) {
@@ -758,6 +843,7 @@ module.exports = {
         let session = this.sessions.get(session_id);
 
         if (session == null || session.clients == null) {
+
             this.logger.error(`Could not get number of client instances -- session was null or session.clients was null.`);
 
             return -1;
@@ -788,60 +874,43 @@ module.exports = {
         // remove socket->client mapping
         socket_objects.forEach((socket_obj, index) => {
 
-            this.logger.info(`${socket_obj.socket.id} - bumping old socket for client ${client_id}, session ${session_id}. First, leaving the room.`);
-
             this.leaveSession(socket_obj.socket, session_id);
-
-            this.logger.info(`Second, disconnecting the socket.`);
 
             this.disconnectOldSocket(socket_obj.socket);
         });
     },
 
-    disconnectOldSocket: function (socket) {
-
-        setTimeout(() => {
-
-            socket.disconnect(true);
-
-        }, 500); // delay half a second and then bump the old socket
-    },
-
-    leaveSession: function (socket, session_id) {
-
-        socket.leave(session_id.toString(), (err) => {
-
-            if (err) {
-
-                this.logger.error(err);
-
-                return;
-            }
-        });
-    },
-
     // cleanup socket and client references in session state if reconnect fails
     removeSocketFromSession: function (socket, session_id, client_id) {
-        // notify and log event
-        socket.to(session_id.toString()).emit('disconnected', client_id);
 
-        this.logger.info(`${socket.id} - Disconnection: ${session_id} ${client_id}`);
+        this.logger.info(`${socket.id} (client ${client_id}) - Removed from session ${session_id}`);
 
-        // log disconnect event with timestamp to db
-        this.writeEventToConnections("disconnect", session_id, client_id);
+        this.disconnectAction(socket, session_id, client_id);
 
         // cleanup
         let session = this.sessions.get(session_id);
 
-        if (!session) return;
+        if (!session) {
+            
+            logger.warn(`Could not find session ${session_id} when trying to remove a socket from it.`);
+
+            return;
+        }
 
         if (!(socket.id in session.sockets)) {
+
             this.logger.error(`tried removing ${socket.id} from session.sockets, but it was not found.`);
+
             return;
         }
 
         // remove socket->client mapping
-        delete session.sockets[socket.id];
+        let success = session.sockets.delete(socket.id);
+
+        if (!success) {
+
+            this.logger.error(`Could not delete session.sockets[${socket.id}]`);
+        }
         
         this.removeClientFromSession(session, client_id);
     },
@@ -943,63 +1012,92 @@ module.exports = {
         return session;
     },
 
-    handleServerNamespaceDisconnect: function (reason, socket, session_id, client_id, session) {
-        this.logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+    processReconnectionAttempt: function (err, io, socket, session_id, client_id) {
 
-        this.removeSocketFromSession(socket, session_id, client_id);
+        let success = this.joinSocketToSession(err, io, socket, session_id, client_id, true);
 
-        this.cleanUpSessionIfEmpty(session_id);
+        if (!success) { 
+
+            this.logger.info('failed to reconnect');
+
+            this.removeSocketFromSession(socket, session_id, client_id);
+
+            this.cleanUpSessionIfEmpty(session_id);
+
+            return false;
+        } 
+
+        ////TODO does this need to be called here???? this.bumpOldSockets(session_id, client_id, socket.id);
+
+        this.logger.info('successfully reconnected');
+
+        return true;
+
     },
 
-    handleClientNamespaceDisconnect: function (reason, socket, session_id, client_id, session) {
-        this.logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+    whoDisconnected: function (socket) {
+        
+        for (var s in this.sessions) {
 
-        this.removeSocketFromSession(socket, session_id, client_id);
+            const session_id = s[0];
 
-        this.cleanUpSessionIfEmpty(session_id);
+            let session = s[1];
+
+            if (!(socket.id in session.sockets)) {
+
+                // This isn't the right session, so keep looking.
+                continue;
+            }
+
+            // We found the right session.
+
+            return {
+                session_id: session_id,
+
+                client_id: client_id
+            };
+        }
+
+        return {
+
+            session_id: null,
+
+            client_id: null
+        };
     },
 
-    handleTransportClose: function (reason, socket, session_id, client_id, session) {
-        this.logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+    // returns true if socket is still connected
+    handleDisconnect: function (io, socket, reason) {
 
-        this.removeSocketFromSession(socket, session_id, client_id);
+        // Check disconnect event reason and handle
+        // see https://socket.io/docs/v2/server-api/index.html
 
-        this.cleanUpSessionIfEmpty(session_id);
-    },
+        let knownReasons = {
+            // the disconnection was initiated by the server, you need to reconnect manually
+            "server namespace disconnect": {
+                doReconnect: false,
+            },
+            // The socket was manually disconnected using socket.disconnect()
+            // We don't attempt to reconnect if disconnect was called by client. 
+            "client namespace disconnect": {
+                doReconnect: false,
+            },
+            // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
+            "transport close": {
+                doReconnect: false,
+            },
+            // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
+            "transport error": {
+                doReconnect: false,
+            },
+            // The server did not send a PING within the pingInterval + pingTimeout range.
+            "ping timeout": {
+                doReconnect: true,
+            },
+        };
 
-    handleTransportError: function (reason, socket, session_id, client_id, session) {
-        this.logger.info(`Client was disconnected. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+        let doReconnectOnUnknownReason = true;
 
-        this.removeSocketFromSession(socket, session_id, client_id);
-
-        this.cleanUpSessionIfEmpty(session_id);
-    },
-
-    tryReconnectingAfterDisconnect: function (reason, io, socket, session_id, client_id, session) {
-
-        this.logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
-
-        socket.join(session_id.toString(), (err) => { 
-
-            let success = this.joinSocketToSession(err, io, socket, session_id, client_id, false);
-
-            if (!success) { 
-                this.logger.info('failed to reconnect');
-
-                this.removeSocketFromSession(socket, session_id, client_id);
-
-                this.cleanUpSessionIfEmpty(session_id);
-
-                return;
-            } 
-
-            this.bumpOldSockets(session_id, client_id, socket.id);
-
-            this.logger.info('successfully reconnected');
-        });
-    },
-
-    handleDisconnect: function (io, socket, pool, reason) {
         // find which session this socket is in
         for (var s of this.sessions) {
 
@@ -1008,60 +1106,32 @@ module.exports = {
             let session = s[1];
 
             if (!(socket.id in session.sockets)) {
+
+                // This isn't the right session, so keep looking.
                 continue;
             }
+
+            // We found the right session.
             
             let client_id = session.sockets[socket.id].client_id;
 
-            // Check disconnect event reason and handle
-            // see https://socket.io/docs/v2/server-api/index.html
-            if (reason === "server namespace disconnect") {
+            if ((knownReasons.hasOwnProperty(reason) && knownReasons[reason].doReconnect) || doReconnectOnUnknownReason) {
 
-                // the disconnection was initiated by the server, you need to reconnect manually
-                this.handleServerNamespaceDisconnect(reason, socket, session_id, client_id, session);
-
-                return;
-            }
-            
-            if (reason == "client namespace disconnect") {
-                // The socket was manually disconnected using socket.disconnect()
-                // We don't attempt to reconnect if disconnect was called by client. 
-                this.handleClientNamespaceDisconnect(reason, socket, session_id, client_id, session);
-
-                return;
-            }
-            
-            if (reason == "transport close") {
-
-                // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)    
-                this.handleTransportClose(reason, socket, session_id, client_id, session);
-
-                return;
-            }
-            
-            if (reason == "transport error") {
-
-                // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
-                this.handleTransportError(reason, socket, session_id, client_id, session);
-
-                return;
+                return this.reconnectAction(reason, io, socket, session_id, client_id, session); // Don't continue to check other sessions.
             }
 
-            if (reason == "ping timeout") {
-                
-                // The server did not send a PING within the pingInterval + pingTimeout range.
-                this.tryReconnectingAfterDisconnect(reason, io, socket, session_id, client_id, session);
+            //Disconnect the socket
 
-                return;
-            }
+            this.logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
 
-            // The server disconnected for some other reason.
-            tryReconnectingAfterDisconnect(reason, io, socket, session_id, client_id, session);
-    
-            return; //don't continue to check other sessions.
+            this.removeSocketFromSession(socket, session_id, client_id);
+
+            this.cleanUpSessionIfEmpty(session_id);
+
+            return false; // Don't continue to check other sessions.
         }
 
-        //socket not found in our records. This is usually ok.
+        //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
         this.logger.info(`(${socket.id} - disconnected. Not found in sessions. Probably ok.)`);
     },
 
@@ -1103,12 +1173,63 @@ module.exports = {
 
         let self = this;
 
+        this.bumpAction = function (session_id, sockets) {
+
+            sockets.forEach((socket) => {
+                
+                self.logger.info(`${socket.id}: leaving session ${session_id}`);
+
+                socket.leave(session_id.toString(), (err) => {
+
+                    if (err) {
+
+                        this.logger.error(err);
+
+                        return;
+                    }
+                });
+
+                self.logger.info(`${socket.id} Disconnecting: ...`);
+
+                setTimeout(() => {
+
+                    socket.disconnect(true);
+
+                    self.logger.info(`${socket.id} Disconnecting: Done.`);
+
+                }, 500); // delay half a second and then bump the old socket    
+            });
+        };
+
+        this.joinSessionAction = function (session_id, client_id) {
+
+            io.to(session_id.toString()).emit('joined', client_id);
+        };
+
+        this.disconnectAction = function (socket, session_id, client_id) {
+            
+            // notify and log event
+            socket.to(session_id.toString()).emit('disconnected', client_id);
+        };
+
+        // returns true for successful reconnection
+        this.reconnectAction = function (reason, socket, session_id, client_id, session) {
+    
+            self.logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+    
+            socket.join(session_id.toString(), (err) => { 
+    
+                self.processReconnectionAttempt(err, io, socket, session_id, client_id);
+            });
+        },
+
         // main relay handler
         io.on('connection', function(socket) {
 
             logger.info(`Session connection: ${socket.id}.`);
 
             socket.on('sessionInfo', function (session_id) {
+
                 let session = self.sessions.get(session_id);
 
                 if (!session) {
@@ -1118,15 +1239,12 @@ module.exports = {
                 }
 
                 socket.to(session_id.toString()).emit('sessionInfo', session);
-
             });
 
             //Note: "join" is our own event name, and should not be confused with socket.join. (It does not automatically listen for socket.join either.)
             socket.on('join', function(data) {
 
                 self.logger.info(`${socket.id} - Asked to join: ${data}`);
-
-                let _pool = this.pool;
 
                 let session_id = data[0];
 
@@ -1139,17 +1257,19 @@ module.exports = {
                     return;
                 }
 
-                let session = self.getOrCreateSession(session_id);
-
-                self.bumpOldSockets(session_id, client_id, socket.id);
+                //TODO does this need to be called here???? self.bumpOldSockets(session_id, client_id, socket.id);
 
                 // relay server joins connecting client to session room
                 socket.join(session_id.toString(), (err) => { 
 
-                    self.joinSocketToSession(err, io, socket, session_id, client_id, true); 
+                    let success = self.joinSocketToSession(err, io, socket, session_id, client_id, true); 
 
+                    if (success) {
+                        
+                        // write join event to database
+                        self.writeEventToConnections("connect", session_id, client_id);
+                    }
                 });
-
             });
 
             socket.on('state', function(data) {
@@ -1215,8 +1335,20 @@ module.exports = {
 
             // client position update handler
             socket.on('update', function(data) {
+        
+                if (!self.isValidRelayPacket(data)) {  
+                    
+                    return;
+                }
 
-                self.handleUpdate(socket, data);
+                let session_id = data[1];
+
+                // relay packet if client is valid
+                socket.to(session_id.toString()).emit('relayUpdate', data);
+
+                self.writeRecordedRelayData(data);
+
+                self.updateSessionState(data);
             
             });
 
@@ -1249,10 +1381,20 @@ module.exports = {
 
             socket.on('disconnect', function (reason) {
 
-                let _pool = this.pool;
+                const { session_id, client_id } = self.whoDisconnected(socket);
 
-                self.handleDisconnect(io, socket, _pool, reason);
+                let didReconnect = self.handleDisconnect(io, socket, reason);
 
+                if (didReconnect) {
+
+                    // log reconnect event with timestamp to db
+                    self.writeEventToConnections("reconnect", session_id, client_id);
+
+                    return;
+                }
+
+                // log reconnect event with timestamp to db
+                self.writeEventToConnections("disconnect", session_id, client_id);
             });
         });
     }
