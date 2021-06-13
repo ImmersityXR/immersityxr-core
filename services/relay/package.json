@@ -4,7 +4,7 @@
   "description": "Relay server for Komodo VR client application",
   "main": "serve.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "author": "Grainger IDEA Lab",
   "license": "NCSA",
@@ -17,5 +17,9 @@
     "object.fromentries": "^2.0.4",
     "socket.io": "^2.3.0",
     "winston": "^3.3.3"
+  },
+  "devDependencies": {
+    "mocha": "^9.0.0",
+    "should": "^13.2.3"
   }
 }
