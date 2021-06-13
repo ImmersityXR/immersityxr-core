@@ -51,16 +51,28 @@ const printFormat = printf(({ level, message, timestamp }) => {
 });
 
 const logger = createLogger({
+
     format: combine(
+
         timestamp(),
+
         printFormat
     ),
     transports: [
+
         new transports.Console(),
         new transports.File({ filename: 'log.txt' })
     ],
     exitOnError: false
 });
+
+let pool;
+
+if (config.db.host && config.db.host != "") {
+
+    pool = mysql.createPool(config.db);
+
+}
 
 // relay server
 const PORT = 3000;
@@ -72,7 +84,7 @@ io.listen(PORT, {
 
 logger.info(`Komodo relay is running on :${PORT}`);
 
-syncServer.init(io, logger);
+syncServer.init(io, pool, logger);
 
 chatServer.init(io, logger);
 

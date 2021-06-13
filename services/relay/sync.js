@@ -57,9 +57,12 @@ const INT_CHUNK_SIZE = INT_FIELDS * INT_BYTES_PER_FIELD;
 const POS_WRITE_BUFFER_SIZE = 10000 * POS_CHUNK_SIZE;
 const INT_WRITE_BUFFER_SIZE = 128 * INT_CHUNK_SIZE;
 
+//TODO refactor this.sessions into instances of the Session object.
+
 module.exports = {
 
     logInfoSessionClientSocketAction: function (socket_id, session_id, client_id, action) {
+
         if (session_id == null) {
             session_id = "n/a";
         }
@@ -76,8 +79,10 @@ module.exports = {
             action = "n/a";
         }
 
-        this.logger.info(`${socket_id}    ${session_id}  ${client_id}    ${action}`);
+        this.logger?.info(`${socket_id}    ${session_id}  ${client_id}    ${action}`);
     },
+
+    //TODO -- factor recording and playback out into a separate file
     
     // generate formatted path for session capture files
     getCapturePath: function (session_id, start, type) {
@@ -92,22 +97,22 @@ module.exports = {
                 session.recordingStart = Date.now();
                 let path = this.getCapturePath(session_id, session.recordingStart, '');
                 fs.mkdir(path, { recursive: true }, (err) => {
-                    if(err) this.logger.warn(`Error creating capture path: ${err}`);
+                    if(err) this.logger?.warn(`Error creating capture path: ${err}`);
                 });
                 let capture_id = session_id+'_'+session.recordingStart;
                 pool.query(
                     "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
                     (err, res) => {
                         if (err != undefined) {
-                            this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                            this.logger?.error(`Error writing recording start event to database: ${err} ${res}`);
                         }
                     }
                 );
-                this.logger.info(`Capture started: ${session_id}`);
+                this.logger?.info(`Capture started: ${session_id}`);
             } else if (session && session.isRecording) {
-                this.logger.warn(`Requested session capture, but session is already recording: ${session_id}`);
+                this.logger?.warn(`Requested session capture, but session is already recording: ${session_id}`);
             } else {
-                this.logger.warn(`Error starting capture for session: ${session_id}`);
+                this.logger?.warn(`Error starting capture for session: ${session_id}`);
             }
         }
     }, 
@@ -118,7 +123,7 @@ module.exports = {
             let session = this.sessions.get(session_id);
             if (session && session.isRecording) {
                 session.isRecording = false;
-                this.logger.info(`Capture ended: ${session_id}`);                
+                this.logger?.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
 
                 let pos_writer = session.writers.pos;
@@ -145,37 +150,37 @@ module.exports = {
                         "UPDATE captures SET end = ? WHERE capture_id = ?", [Date.now(), capture_id],
                         (err, res) => {
                             if (err != undefined) {
-                                this.logger.error(`Error writing recording end event to database: ${err} ${res}`);
+                                this.logger?.error(`Error writing recording end event to database: ${err} ${res}`);
                             }
                         }
                     );
                 }
 
             } else if (session && !session.isRecording) {
-                this.logger.warn(`Requested to end session capture, but capture is already ended: ${session_id}`);
+                this.logger?.warn(`Requested to end session capture, but capture is already ended: ${session_id}`);
             } else {
-                this.logger.warn(`Error ending capture for session: ${session_id}`);
+                this.logger?.warn(`Error ending capture for session: ${session_id}`);
             }
         }
     },
 
     record_message_data: function (data) {
         if (!data) {
-            this.logger.error("data was null");
+            this.logger?.error("data was null");
             return;
         }
 
         let session_id = data.session_id;
 
         if (!session_id) {
-            this.logger.error("session_id was null");
+            this.logger?.error("session_id was null");
             return;
         }
         
         let client_id = data.client_id;
 
         if (!client_id) {
-            this.logger.error("client_id was null");
+            this.logger?.error("client_id was null");
             return;
         }
 
@@ -207,7 +212,7 @@ module.exports = {
     handlePlayback: function (io, data) {
         // TODO(rob): need to use playback object to track seq and group by playback_id, 
         // so users can request to pause playback, maybe rewind?
-        this.logger.info(`Playback request: ${data.playback_id}`);
+        this.logger?.info(`Playback request: ${data.playback_id}`);
         let client_id = data.client_id;
         let session_id = data.session_id;
         let playback_id = data.playback_id;
@@ -237,7 +242,7 @@ module.exports = {
 
             // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
             // build audio file manifest
-            // this.logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+            // this.logger?.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
             // let audioManifest = [];
             // let baseAudioPath = this.getCapturePath(capture_id, start, 'audio');
             // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
@@ -267,7 +272,7 @@ module.exports = {
             // audioManifest.forEach((file) => {
             //     fs.readFile(file.path, (err, data) => {
             //         file.data = data;
-            //         if(err) this.logger.error(`Error reading audio file: ${file.path}`);
+            //         if(err) this.logger?.error(`Error reading audio file: ${file.path}`);
             //         // console.log('emitting audio packet:', file);
             //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
             //     });
@@ -318,12 +323,12 @@ module.exports = {
             });
 
             stream.on('error', function(err) {
-                this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
+                this.logger?.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
                 io.to(session_id.toString()).emit('playbackEnd');
             });
 
             stream.on('end', function() {
-                this.logger.info(`End of pos data for playback session: ${session_id}`);
+                this.logger?.info(`End of pos data for playback session: ${session_id}`);
                 io.to(session_id.toString()).emit('playbackEnd');
             });
 
@@ -355,12 +360,12 @@ module.exports = {
             });
 
             istream.on('error', function(err) {
-                this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
+                this.logger?.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
                 io.to(session_id.toString()).emit('interactionpPlaybackEnd');
             });
 
             istream.on('end', function() {
-                this.logger.info(`End of int data for playback session: ${session_id}`);
+                this.logger?.info(`End of int data for playback session: ${session_id}`);
                 io.to(session_id.toString()).emit('interactionPlaybackEnd');
             });
         }
@@ -702,7 +707,7 @@ module.exports = {
 
         if (session == null) {
 
-            this.logger.error("session was null");
+            this.logger?.error("session was null");
         }
 
         if (session.clients == null || session.clients.length == 0) {
@@ -719,7 +724,7 @@ module.exports = {
 
         if (session == null) {
 
-            this.logger.error("session was null");
+            this.logger?.error("session was null");
         }
 
         if (session.clients == null || session.clients.length == 0) {
@@ -744,20 +749,27 @@ module.exports = {
         let session = this.sessions.get(session_id);
 
         if (session == null) {
-            this.logger.error("session was null");
+
+            this.logger?.error("session was null");
+
             return;
         }
 
         if (session.clients == null) {
-            this.logger.error("session.clients was null");
+
+            this.logger?.error("session.clients was null");
+
             return;
         }
 
         let index = session.clients.indexOf(client_id);
 
-        if (session.clients.length == 0 || session.clients.indexOf(client_id) == -1) {
+        if (session.clients.length == 0 || 
+            session.clients.indexOf(client_id) == -1) {
+
             //client_id is not in the array, so we don't need to remove it.
-            this.logger.warn(`Tried removing client ${client_id} from session.clients, but it was not there. Proceeding anyways.`);
+            this.logger?.warn(`Tried removing client ${client_id} from session.clients, but it was not there. Proceeding anyways.`);
+
             return; 
         }
 
@@ -768,7 +780,7 @@ module.exports = {
 
         if (err) {
 
-            this.logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
+            this.logger?.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
 
             return false;
         }
@@ -826,7 +838,7 @@ module.exports = {
 
         if (!this.pool) {
 
-            this.logger.error("pool was null");
+            this.logger?.error("pool was null");
 
             return;
         }
@@ -838,7 +850,7 @@ module.exports = {
 
                 if (err != undefined) {
 
-                    this.logger.error(`Error writing ${event} event to database: ${err} ${res}`);
+                    this.logger?.error(`Error writing ${event} event to database: ${err} ${res}`);
 
                 }
             }
@@ -861,11 +873,11 @@ module.exports = {
         let session = this.sessions.get(session_id);
 
         if (session == null) {
-            this.logger.error(`Could not get session sockets from client ID -- session was null.`);
+            this.logger?.error(`Could not get session sockets from client ID -- session was null.`);
         }
 
         if (session.sockets == null) {
-            this.logger.error(`Could not get session sockets from client  -- session.sockets was null.`);
+            this.logger?.error(`Could not get session sockets from client  -- session.sockets was null.`);
             return;
         }
 
@@ -879,7 +891,7 @@ module.exports = {
 
             if (isCorrectId && !doExclude) {
 
-                this.logger.info(`${candidate_socket_id} - found this socket for client ${client_id}, session ${session_id}.`);
+                this.logger?.info(`${candidate_socket_id} - found this socket for client ${client_id}, session ${session_id}.`);
 
                 result.push(session.sockets[candidate_socket_id].socket);
             }
@@ -894,7 +906,7 @@ module.exports = {
 
         if (session == null || session.clients == null) {
 
-            this.logger.error(`Could not get number of client instances -- session was null or session.clients was null.`);
+            this.logger?.error(`Could not get number of client instances -- session was null or session.clients was null.`);
 
             return -1;
         }
@@ -929,7 +941,7 @@ module.exports = {
 
         if (!(socket.id in session.sockets)) {
 
-            this.logger.error(`tried removing ${socket.id} from session.sockets, but it was not found.`);
+            this.logger?.error(`tried removing ${socket.id} from session.sockets, but it was not found.`);
 
             return;
         }
@@ -937,7 +949,7 @@ module.exports = {
         // remove socket->client mapping
         delete session.sockets[socket.id];
 
-        this.logger.info(`${socket.id} (client ${client_id}) - Removed from session ${session_id}`);
+        this.logger?.info(`${socket.id} (client ${client_id}) - Removed from session ${session_id}`);
         
         this.removeClientFromSession(session_id, client_id);
     },
@@ -980,7 +992,7 @@ module.exports = {
 
         }
 
-        this.logger.info(`Stopping recording for empty session ${session_id}`);
+        this.logger?.info(`Stopping recording for empty session ${session_id}`);
 
         this.end_recording(session_id);
     },
@@ -994,7 +1006,7 @@ module.exports = {
             return;
         }
 
-        this.logger.info(`Ending empty session ${session_id}`);
+        this.logger?.info(`Ending empty session ${session_id}`);
 
         this.try_to_end_recording(session_id);
         
@@ -1004,16 +1016,44 @@ module.exports = {
     // if a session exists, return it. Otherwise, create one with default values, register it, and return it.
     getOrCreateSession: function (session_id) {
 
-        let session = this.sessions.get(session_id);
+        let { success, session } = this.getSession(session_id);
 
-        if (session) {
+        if (success) {
 
             return session;
         }
 
-        this.logger.info(`Creating session: ${session_id}`);
+        return this.createSession(session_id);
+    },
+
+    getSession: function (session_id) {
+
+        let session = this.sessions.get(session_id);
+
+        if (session) {
+
+            return {
+
+                success: true,
+
+                session: session
+            };
+        }
+
+        return { 
+
+            success: false, 
+
+            session: null 
+        };
+    }, 
+
+    createSession: function (session_id) {
+
+        this.logger?.info(`Creating session: ${session_id}`);
 
         this.sessions.set(session_id, {
+
             sockets: {}, // socket.id -> client_id
             clients: [],
             entities: [],
@@ -1045,7 +1085,7 @@ module.exports = {
 
         if (!success) { 
 
-            this.logger.info('failed to reconnect');
+            this.logger?.info('failed to reconnect');
 
             this.removeSocketFromSession(socket, session_id, client_id);
 
@@ -1056,7 +1096,7 @@ module.exports = {
 
         ////TODO does this need to be called here???? this.bumpOldSockets(session_id, client_id, socket.id);
 
-        this.logger.info('successfully reconnected');
+        this.logger?.info('successfully reconnected');
 
         return true;
 
@@ -1149,7 +1189,7 @@ module.exports = {
 
             //Disconnect the socket
 
-            this.logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+            this.logger?.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
 
             this.removeSocketFromSession(socket, session_id, client_id);
 
@@ -1159,51 +1199,51 @@ module.exports = {
         }
 
         //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
-        this.logger.info(`(${socket.id} - disconnected. Not found in sessions. Probably ok.)`);
-    },
-
-    createPool: function () {
-
-        if (config.db.host && config.db.host != "") {
-
-            return mysql.createPool(config.db);
-
-        }
-        
-        this.logger.warn("Could not create MySQL Pool.");
-
-        return null;
-
+        this.logger?.info(`(${socket.id} - disconnected. Not found in sessions. Probably ok.)`);
     },
 
     createCapturesDirectory: function () {
 
         if (!fs.existsSync(CAPTURE_PATH)) {
 
-            this.logger.info(`Creating directory for session captures: ${CAPTURE_PATH}`);
+            this.logger?.info(`Creating directory for session captures: ${CAPTURE_PATH}`);
 
             fs.mkdirSync(CAPTURE_PATH);
         }
 
     },
 
-    getSessions: function () {
-        
-        return this.sessions;
+    initGlobals: function () {
+
+        this.sessions = new Map();
     },
 
-    init: function (io, logger) {
+    init: function (io, pool, logger) {
 
-        this.logger = logger;
-
-        // session state maps
-        this.sessions = new Map();
-
-        this.pool = this.createPool();
+        this.initGlobals();
 
         this.createCapturesDirectory();
 
+        if (logger == null) {
+
+            console.warn("No logger was found.");
+        }
+
+        this.logger = logger;
+
+        if (pool == null) {
+
+            this.logger?.warn("No MySQL Pool was found.");
+        }
+
+        this.pool = pool;
+
         let self = this;
+
+        if (io == null) {
+
+            this.logger?.warn("No SocketIO server was found.");
+        }
 
         this.bumpAction = function (session_id, socket) {
                 
@@ -1213,7 +1253,7 @@ module.exports = {
 
                 if (err) {
 
-                    this.logger.error(err);
+                    this.logger?.error(err);
 
                     return;
                 }
