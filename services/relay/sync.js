@@ -40,8 +40,6 @@ const fs = require('fs');
 
 const path = require('path');
 
-const mysql = require('mysql');
-
 function positionChunkSize () {
 
     return config.sync.POS_FIELDS * config.sync.POS_BYTES_PER_FIELD;
@@ -53,6 +51,17 @@ function interactionChunkSize () {
 }
 
 //TODO refactor this.sessions into instances of the Session object.
+
+// Courtesy of Casey Foster on Stack Overflow
+// https://stackoverflow.com/a/14368628
+function compareKeys(a, b) {
+
+    var aKeys = Object.keys(a).sort();
+
+    var bKeys = Object.keys(b).sort();
+
+    return JSON.stringify(aKeys) === JSON.stringify(bKeys);
+}
 
 module.exports = {
 
@@ -68,22 +77,26 @@ module.exports = {
         return config.sync.INT_COUNT * interactionChunkSize();
     },
 
-    logInfoSessionClientSocketAction: function (socket_id, session_id, client_id, action) {
+    logInfoSessionClientSocketAction: function (session_id, client_id, socket_id, action) {
 
         if (session_id == null) {
-            session_id = "n/a";
+            session_id = "---";
         }
+
+        session_id = `s${session_id}`;
 
         if (client_id == null) {
-            client_id = "n/a";
+            client_id = "---";
         }
 
+        client_id = `c${client_id}`;
+
         if (socket_id == null) {
-            socket_id = "n/a";
+            socket_id = "---.................";
         }
 
         if (action == null) {
-            action = "n/a";
+            action = "---";
         }
 
         if (!this.logger) {
@@ -91,9 +104,68 @@ module.exports = {
             return;
         }
 
-        if (this.logger) this.logger.info(`${socket_id}    ${session_id}  ${client_id}    ${action}`);
+        if (this.logger) this.logger.info(` ${socket_id}    ${session_id}  ${client_id}    ${action}`);
     },
 
+    logErrorSessionClientSocketAction: function (session_id, client_id, socket_id, action) {
+
+        if (session_id == null) {
+            session_id = "---";
+        }
+
+        session_id = `s${session_id}`;
+
+        if (client_id == null) {
+            client_id = "---";
+        }
+
+        client_id = `c${client_id}`;
+
+        if (socket_id == null) {
+            socket_id = "---.................";
+        }
+
+        if (action == null) {
+            action = "---";
+        }
+
+        if (!this.logger) {
+
+            return;
+        }
+
+        if (this.logger) this.logger.error(`${socket_id}    ${session_id}  ${client_id}    ${action}`);
+    },
+
+    logWarningSessionClientSocketAction: function (session_id, client_id, socket_id, action) {
+
+        if (session_id == null) {
+            session_id = "---";
+        }
+
+        session_id = `s${session_id}`;
+
+        if (client_id == null) {
+            client_id = "---";
+        }
+
+        client_id = `c${client_id}`;
+
+        if (socket_id == null) {
+            socket_id = "---.................";
+        }
+
+        if (action == null) {
+            action = "---";
+        }
+
+        if (!this.logger) {
+
+            return;
+        }
+
+        if (this.logger) this.logger.warn(` ${socket_id}    ${session_id}  ${client_id}    ${action}`);
+    },
     //TODO -- factor recording and playback out into a separate file
     
     // generate formatted path for session capture files
@@ -636,7 +708,7 @@ module.exports = {
         }
     },
 
-    handleState: function (_io, data) {
+    handleState: function (socket, data) {
 
         if (!data) {
             
@@ -647,11 +719,14 @@ module.exports = {
         let session_id = data.session_id;
             
         let client_id = data.client_id;
+        
+        this.logInfoSessionClientSocketAction(session_id, client_id, socket.id, `State: ${JSON.stringify(data)}`);
             
         if (!session_id || !client_id) {
 
-            throw new ReferenceError ("session_id or client_id was null");
-            
+            this.connectionAuthorizationErrorAction(socket, "You must provide a session ID and a client ID in the URL options.");
+
+            return { session_id: -1, state: null };
         }
         
         let version = data.version;
@@ -660,8 +735,9 @@ module.exports = {
 
         if (!session) {
 
-            throw new ReferenceError ("session was null");
+            this.stateErrorAction(socket, "The session was null, so no state could be found.");
 
+            return { session_id: -1, state: null };
         }
 
         let state = {};
@@ -706,16 +782,23 @@ module.exports = {
         return { session_id, state };
     },
     
-    addClientToSession: function (session, client_id) {
+    addClientToSession: function (session, client_id, do_create_session) {
 
-        if (session == null) {
+        if (session == null && !do_create_session) {
 
             throw new ReferenceError ("session was null");
         }
 
-        if (session.clients == null || session.clients.length == 0) {
+        if (session == null && do_create_session) {
 
-            session.clients = [client_id];
+            session = this.createSession();
+        }
+
+        if (session.clients == null || 
+            typeof session.clients === "undefined" || 
+            session.clients.length == 0) {
+
+            session.clients = [ client_id ];
 
             return;
         }
@@ -744,7 +827,7 @@ module.exports = {
 
         for (let i = 0; i < session.clients.length; i += 1) {
 
-            if (session.clients[i] != first_instance && session.clients[i] == client_id) {
+            if (i != first_instance && session.clients[i] == client_id) {
 
                 session.clients.splice(i, 1);
 
@@ -770,7 +853,7 @@ module.exports = {
             session.clients.indexOf(client_id) == -1) {
 
             //client_id is not in the array, so we don't need to remove it.
-            if (this.logger) this.logger.warn(`Tried removing client ${client_id} from session.clients, but it was not there. Proceeding anyways.`);
+            this.logWarningSessionClientSocketAction(null, null, client_id, `Tried removing client from session.clients, but it was not there. Proceeding anyways.`);
 
             return; 
         }
@@ -797,7 +880,7 @@ module.exports = {
 
         if (err) {
 
-            if (this.logger) this.logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
+            this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `Error joining client to session: ${err}`);
 
             return false;
         }
@@ -806,7 +889,7 @@ module.exports = {
 
         if (!success || !session) {
 
-            if (this.logger) this.logger.warn("session was null when adding socket to session. Creating a session for you.");
+            this.logWarningSessionClientSocketAction(session_id, client_id, socket.id, "session was null when adding socket to session. Creating a session for you.");
 
             session = this.createSession(session_id);
         }
@@ -814,6 +897,11 @@ module.exports = {
         this.addClientToSession(session, client_id);
 
         this.bumpDuplicateSockets(session, client_id, do_bump_duplicates, socket.id);
+        
+        if (do_bump_duplicates) {
+
+            this.removeDuplicateClientsFromSession(session, client_id);
+        }
 
         // socket to client mapping
         this.addSocketToSession(session, socket, client_id);
@@ -843,8 +931,6 @@ module.exports = {
         
         if (do_bump_duplicates) {
 
-            this.removeDuplicateClientsFromSession(session, client_id);
-
             sockets = this.getSessionSocketsFromClientId(session, client_id, socket_id);
 
         } else {
@@ -866,7 +952,7 @@ module.exports = {
 
         if (!this.pool) {
 
-            if (this.logger) this.logger.error("pool was null");
+            this.logErrorSessionClientSocketAction(session_id, client_id, null, "pool was null");
 
             return;
         }
@@ -878,7 +964,7 @@ module.exports = {
 
                 if (err != undefined) {
 
-                    if (this.logger) this.logger.error(`Error writing ${event} event to database: ${err} ${res}`);
+                    this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
 
                 }
             }
@@ -887,15 +973,54 @@ module.exports = {
 
     getSessionIdFromSession: function (session) {
 
-        this.sessions.forEach((candidate_session, candidate_session_id, map) => {
+        if (session == null || typeof session === "undefined") {
+            
+            throw new Error("session was null or undefined.");
+        }
 
-            if (candidate_session == session) {
+        if (typeof session !== "object") {
+            
+            throw new Error("session was not an object.");
+        }
 
-                return candidate_session_id;
+        if (session.clients == null || typeof session.clients === "undefined") {
+            
+            throw new Error("session.clients was null or undefined.");
+        }
+
+        if (session.sockets == null || typeof session.sockets === "undefined") {
+            
+            throw new Error("session.sockets was null or undefined.");
+        }
+
+        let result = -1;
+
+        this.sessions.forEach((candidate_session, candidate_session_id) => {
+
+            if (candidate_session.clients == null || 
+                typeof candidate_session.clients === "undefined") {
+                
+                return; // return from the inner function only.
+            }
+    
+            if (candidate_session.sockets == null || 
+                typeof candidate_session.sockets === "undefined") {
+                
+                return; // return from the inner function only.
+            }
+
+            if (candidate_session.sockets.size != session.sockets.size) {
+
+                return; // return from the inner function only.
+            }
+
+            if (compareKeys(candidate_session.sockets, session.sockets)) {
+
+                result = candidate_session_id;
             }
         });
 
-        return -1;
+        return result;
     },
     
     getSessionSocketsFromClientId: function (session, client_id, excluded_socket_id) {
@@ -916,11 +1041,9 @@ module.exports = {
 
             let isCorrectId = session.sockets[candidate_socket_id].client_id == client_id;
 
-            let doExclude = candidate_socket_id == excluded_socket_id;
+            let doExclude = (session.sockets[candidate_socket_id].socket.id == excluded_socket_id);
 
             if (isCorrectId && !doExclude) {
-
-                if (this.logger) this.logger.info(`${candidate_socket_id} - found this socket for client ${client_id}, session ${session_id}.`);
 
                 result.push(session.sockets[candidate_socket_id].socket);
             }
@@ -935,7 +1058,7 @@ module.exports = {
 
         if (session == null || session.clients == null) {
 
-            if (this.logger) this.logger.error(`Could not get number of client instances -- session was null or session.clients was null.`);
+            this.logErrorSessionClientSocketAction(session_id, client_id, null, `Could not get number of client instances -- session was null or session.clients was null.`);
 
             return -1;
         }
@@ -968,14 +1091,14 @@ module.exports = {
 
         if (!session) {
             
-            logger.warn(`Could not find session ${session_id} when trying to remove a socket from it.`);
+            this.logWarningSessionClientSocketAction(session_id, client_id, socket.id, `Could not find session when trying to remove a socket from it.`);
 
             return;
         }
 
         if (!(socket.id in session.sockets)) {
 
-            if (this.logger) this.logger.error(`tried removing ${socket.id} from session.sockets, but it was not found.`);
+            this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `tried removing socket from session.sockets, but it was not found.`);
 
             return;
         }
@@ -983,7 +1106,7 @@ module.exports = {
         // remove socket->client mapping
         delete session.sockets[socket.id];
 
-        if (this.logger) this.logger.info(`${socket.id} (client ${client_id}) - Removed from session ${session_id}`);
+        this.logInfoSessionClientSocketAction(session_id, client_id, socket.id, `Removed client from session.`);
         
         this.removeClientFromSession(session, client_id);
     },
@@ -994,14 +1117,14 @@ module.exports = {
 
         if (!session) {
 
-            logger.warn(`tried to clean up session ${session_id}, but it was not found.`);
+            this.logWarningSessionClientSocketAction(session_id, null, null, `tried to get number of clients for a session, but it was not found.`);
 
             return -1;
         }
 
         if (session.clients == null) {
             
-            logger.warn(`session ${session_id}'s session.clients was null.`);
+            this.logWarningSessionClientSocketAction(session_id, null, null, `the session's session.clients was null.`);
 
             return -1;
         }
@@ -1015,7 +1138,7 @@ module.exports = {
 
         if (!session) {
 
-            logger.warn(`tried to end recording for session ${session_id}, but it was not found.`);
+            this.logWarningSessionClientSocketAction(session_id, null, null, `tried to end recording for session ${session_id}, but it was not found.`);
 
             return;
         }
@@ -1026,7 +1149,7 @@ module.exports = {
 
         }
 
-        if (this.logger) this.logger.info(`Stopping recording for empty session ${session_id}`);
+        this.logInfoSessionClientSocketAction(session_id, null, null, `Stopping recording for empty session`);
 
         this.end_recording(session_id);
     },
@@ -1040,7 +1163,7 @@ module.exports = {
             return;
         }
 
-        if (this.logger) this.logger.info(`Ending empty session ${session_id}`);
+        this.logInfoSessionClientSocketAction(session_id, null, null, `Ending empty session`);
 
         this.try_to_end_recording(session_id);
         
@@ -1062,15 +1185,15 @@ module.exports = {
 
     getSession: function (session_id) {
 
-        let session = this.sessions.get(session_id);
+        let _session = this.sessions.get(session_id);
 
-        if (session) {
+        if (_session != null && typeof _session != "undefined") {
 
             return {
 
                 success: true,
 
-                session: session
+                session: _session
             };
         }
 
@@ -1088,7 +1211,7 @@ module.exports = {
 
     createSession: function (session_id) {
 
-        if (this.logger) this.logger.info(`Creating session: ${session_id}`);
+        this.logInfoSessionClientSocketAction(session_id, null, null, `Creating session: ${session_id}`);
 
         this.sessions.set(session_id, {
 
@@ -1123,7 +1246,7 @@ module.exports = {
 
         if (!success) { 
 
-            if (this.logger) this.logger.info('failed to reconnect');
+            this.logInfoSessionClientSocketAction(session_id, client_id, socket.id, 'failed to reconnect');
 
             this.removeSocketFromSession(socket, session_id, client_id);
 
@@ -1134,7 +1257,7 @@ module.exports = {
 
         ////TODO does this need to be called here???? this.bumpOldSockets(session_id, client_id, socket.id);
 
-        if (this.logger) this.logger.info('successfully reconnected');
+        this.logInfoSessionClientSocketAction(session_id, client_id, socket.id, 'successfully reconnected');
 
         return true;
 
@@ -1183,12 +1306,11 @@ module.exports = {
         // see https://socket.io/docs/v2/server-api/index.html
 
         let knownReasons = {
-            // the disconnection was initiated by the server, you need to reconnect manually
+            // the disconnection was initiated by the server
             "server namespace disconnect": {
                 doReconnect: false,
             },
             // The socket was manually disconnected using socket.disconnect()
-            // We don't attempt to reconnect if disconnect was called by client. 
             "client namespace disconnect": {
                 doReconnect: false,
             },
@@ -1232,7 +1354,7 @@ module.exports = {
 
             //Disconnect the socket
 
-            if (this.logger) this.logger.info(`Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+            this.logInfoSessionClientSocketAction(session_id, client_id, socket.id, `Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, clients: ${JSON.stringify(session.clients)}`);
 
             this.removeSocketFromSession(socket, session_id, client_id);
 
@@ -1242,14 +1364,14 @@ module.exports = {
         }
 
         //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
-        if (this.logger) this.logger.info(`(${socket.id} - disconnected. Not found in sessions. Probably ok.)`);
+        this.logInfoSessionClientSocketAction(null, null, socket.id, `disconnected. Not found in sessions. Probably ok.)`);
     },
 
     createCapturesDirectory: function () {
 
         if (!fs.existsSync(config.capture.path)) {
 
-            if (this.logger) this.logger.info(`Creating directory for session captures: ${config.capture.path}`);
+            this.logInfoSessionClientSocketAction(null, null, null, `Creating directory for session captures: ${config.capture.path}`);
 
             fs.mkdirSync(config.capture.path);
         }
@@ -1278,6 +1400,8 @@ module.exports = {
 
         this.logger = logger;
 
+        this.logInfoSessionClientSocketAction("Session ID", "Client ID", "Socket ID", "Message");
+
         if (pool == null) {
 
             if (this.logger) this.logger.warn("No MySQL Pool was found.");
@@ -1292,27 +1416,32 @@ module.exports = {
             if (this.logger) this.logger.warn("No SocketIO server was found.");
         }
 
+        this.connectionAuthorizationErrorAction = function (socket, message) {
+
+            socket.emit("connectionError", message);
+        };
+
         this.bumpAction = function (session_id, socket) {
                 
-            self.logger.info(`${socket.id}: leaving session ${session_id}`);
+            self.logInfoSessionClientSocketAction(session_id, null, socket.id, `leaving session`);
 
             socket.leave(session_id.toString(), (err) => {
 
                 if (err) {
 
-                    if (this.logger) this.logger.error(err);
+                    self.logErrorSessionClientSocketAction(session_id, null, socket.id, err);
 
                     return;
                 }
             });
 
-            self.logger.info(`${socket.id} Disconnecting: ...`);
+            self.logInfoSessionClientSocketAction(session_id, null, socket.id, `Disconnecting: ...`);
 
             setTimeout(() => {
 
                 socket.disconnect(true);
 
-                self.logger.info(`${socket.id} Disconnecting: Done.`);
+                self.logInfoSessionClientSocketAction(session_id, null, socket.id, `Disconnecting: Done.`);
 
             }, 500); // delay half a second and then bump the old socket    
         };
@@ -1328,10 +1457,15 @@ module.exports = {
             socket.to(session_id.toString()).emit('disconnected', client_id);
         };
 
+        this.stateErrorAction = function (socket, message) {
+
+            socket.emit('stateError', message);
+        };
+
         // returns true for successful reconnection
         this.reconnectAction = function (reason, socket, session_id, client_id, session) {
     
-            self.logger.info(`Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, session: ${session_id}, client: ${client_id}, clients: ${JSON.stringify(session.clients)}`);
+            self.logInfoSessionClientSocketAction(session_id, client_id, socket.id, `Client was disconnected; attempting to reconnect. Disconnect reason: ${reason}, clients: ${JSON.stringify(session.clients)}`);
     
             socket.join(session_id.toString(), (err) => { 
     
@@ -1342,14 +1476,14 @@ module.exports = {
         // main relay handler
         io.on('connection', function(socket) {
 
-            logger.info(`Session connection: ${socket.id}.`);
+            self.logInfoSessionClientSocketAction(null, null, socket.id, `Session connection`);
 
             socket.on('sessionInfo', function (session_id) {
 
                 let session = self.sessions.get(session_id);
 
                 if (!session) {
-                    self.logger.warn(`Requested session ${session_id} but it does not exist.`);
+                    self.logWarningSessionClientSocketAction(session_id, null, socket.id, `Requested session, but it does not exist.`);
                     
                     return;
                 }
@@ -1360,15 +1494,15 @@ module.exports = {
             //Note: "join" is our own event name, and should not be confused with socket.join. (It does not automatically listen for socket.join either.)
             socket.on('join', function(data) {
 
-                self.logger.info(`${socket.id} - Asked to join: ${data}`);
-
                 let session_id = data[0];
 
                 let client_id = data[1];
 
+                self.logInfoSessionClientSocketAction(session_id, client_id, socket.id, `Asked to join`);
+
                 if (!client_id || !session_id) {
 
-                    self.logger.error(`client_id or session_id were null in 'join'.`);
+                    self.connectionAuthorizationErrorAction(socket, "You must provide a client ID and a session ID in the URL options.");
 
                     return;
                 }
@@ -1389,14 +1523,12 @@ module.exports = {
             });
 
             socket.on('state', function(data) {
-                
-                self.logger.info(`State: ${JSON.stringify(data)}`);
 
-                let { session_id, state } = self.handleState(io, data);
+                let { session_id, state } = self.handleState(socket, data);
 
-                if (!state) {
+                if (session_id == -1 || !state) {
 
-                    self.logger.warn("state was null");
+                    self.logWarningSessionClientSocketAction(session_id, null, socket.id, "state was null");
 
                     return;
                 }
