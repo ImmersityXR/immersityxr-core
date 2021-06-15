@@ -35,11 +35,15 @@
 
 const io = require('socket.io')();
 
+const mysql = require('mysql');
+
 const syncServer = require('./sync');
 
 const chatServer = require('./chat');
 
 const adminServer = require('./admin');
+
+const config = require('./config');
 
 // set up logging
 const { createLogger, format, transports } = require('winston');
