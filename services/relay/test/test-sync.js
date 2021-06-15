@@ -12,6 +12,24 @@ describe("Sync Server", function (done) {
     beforeEach(function () {
 
         syncServer.initGlobals();
+        
+        syncServer.bumpAction = function () { 
+
+            throw Error("An unexpected bump occurred.");
+        
+        };
+        
+        syncServer.reconnectAction = function () { 
+
+            throw Error("An unexpected reconnect occurred.");
+        
+        };
+        
+        syncServer.disconnectAction = function () { 
+
+            throw Error("An unexpected disconnect occurred.");
+        
+        };
     });
 
     it("should have 0 sessions on startup", function () {
@@ -112,6 +130,25 @@ describe("Sync Server: Clients", function (done) {
     const DUMMY_SOCKET_B = { "dummy": "socketB", "id": "LIVEBEEF" };
 
     beforeEach(function () {
+
+        syncServer.bumpAction = function () { 
+
+            throw Error("An unexpected bump occurred.");
+        
+        };
+        
+        syncServer.reconnectAction = function () { 
+
+            throw Error("An unexpected reconnect occurred.");
+        
+        };
+        
+        syncServer.disconnectAction = function () { 
+
+            throw Error("An unexpected disconnect occurred.");
+        
+        };
+
         syncServer.joinSessionAction = function (session_id, client_id) {
 
             session_id.should.equal(SESSION_ID);
@@ -269,22 +306,47 @@ describe("Sync Server: Clients", function (done) {
 
     it("should return all session sockets for a given client ID", function () {
 
-        syncServer.createSession(SESSION_ID);
+        syncServer.sessions = new Map ();
+
+        syncServer.sessions.set(SESSION_ID, {
+                clients: [CLIENT_ID],
+                sockets: {
+                    socketA: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A }
+                }
+        });
+
+        let session = syncServer.sessions.get(SESSION_ID);
 
         let sockets = syncServer.getSessionSocketsFromClientId(session, CLIENT_ID, null);
 
-        sockets.should.eql([]);
+        sockets.should.eql([ DUMMY_SOCKET_A ]);
+        
+        syncServer.bumpAction = function (session_id, socket) {
+            
+            session_id.should.equal(SESSION_ID);
 
-        syncServer.addClientToSession(session, CLIENT_ID);
+            socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
+        };
+
+        syncServer.sessions.set(SESSION_ID, {
+            clients: [CLIENT_ID, CLIENT_ID],
+            sockets: {
+                socketA: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A },
+                socketB: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_B }
+            }
+        });
+
+        session = syncServer.sessions.get(SESSION_ID);
 
         sockets = syncServer.getSessionSocketsFromClientId(session, CLIENT_ID, null);
 
-        syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
-
-        sockets.should.eql([ DUMMY_SOCKET_A ]);
-
-        syncServer.handleJoin(null, DUMMY_SOCKET_B, SESSION_ID, CLIENT_ID, true);
-
         sockets.should.eql([ DUMMY_SOCKET_A, DUMMY_SOCKET_B ]);
+    });
+
+    it("should add a client to an empty session", function () {
+
+        syncServer.createSession(SESSION_ID);
+
+        syncServer.addClientToSession(session, CLIENT_ID);
     });
 });

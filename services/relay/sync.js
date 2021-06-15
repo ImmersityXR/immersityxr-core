@@ -790,6 +790,11 @@ module.exports = {
 
     handleJoin: function (err, socket, session_id, client_id, do_bump_duplicates) {
 
+        if (!this.joinSessionAction) {
+            
+            throw new Error("this.disconnectAction was null");
+        }
+
         if (err) {
 
             if (this.logger) this.logger.error(`Error joining client ${client_id} to session ${session_id}: ${err}`);
@@ -826,6 +831,13 @@ module.exports = {
 
             throw new ReferenceError("session was null");
         }
+
+        let session_id = this.getSessionIdFromSession(session);
+
+        if (this.bumpAction == null) {
+
+            throw new Error("this.bumpAction was null");
+        }
         
         let sockets;
         
@@ -839,12 +851,14 @@ module.exports = {
 
             sockets = this.getSessionSocketsFromClientId(session, client_id, null);
         }
+
+        let self = this;
             
         sockets.forEach((socket) => {
         
-            this.bumpAction(session_id, socket);
+            self.bumpAction(session_id, socket);
 
-            this.removeSocketFromSession(socket, session_id, client_id);
+            self.removeSocketFromSession(socket, session_id, client_id);
         });
     },
 
@@ -877,9 +891,11 @@ module.exports = {
 
             if (candidate_session == session) {
 
-                session_id = candidate_session_id;
+                return candidate_session_id;
             }
         });
+
+        return -1;
     },
     
     getSessionSocketsFromClientId: function (session, client_id, excluded_socket_id) {
@@ -891,9 +907,7 @@ module.exports = {
 
         if (session.sockets == null) {
             
-            if (this.logger) this.logger.warn("session.sockets was null");
-
-            return [];
+            throw new Error("session.sockets was null");
         }
 
         var result = [];
@@ -941,6 +955,11 @@ module.exports = {
 
     // cleanup socket and client references in session state if reconnect fails
     removeSocketFromSession: function (socket, session_id, client_id) {
+
+        if (!this.disconnectAction) {
+            
+            throw new Error("this.disconnectAction was null");
+        }
 
         this.disconnectAction(socket, session_id, client_id);
 
@@ -1154,6 +1173,11 @@ module.exports = {
 
     // returns true if socket is still connected
     handleDisconnect: function (socket, reason) {
+
+        if (!this.reconnectAction) {
+            
+            throw new Error("this.reconnectAction was null");
+        }
 
         // Check disconnect event reason and handle
         // see https://socket.io/docs/v2/server-api/index.html
