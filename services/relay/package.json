@@ -4,7 +4,7 @@
   "description": "Relay server for Komodo VR client application",
   "main": "serve.js",
   "scripts": {
-    "test": "mocha --exit"
+    "test": "nyc mocha --exit"
   },
   "author": "Grainger IDEA Lab",
   "license": "NCSA",
@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "mocha": "^9.0.0",
+    "nyc": "^15.1.0",
     "should": "^13.2.3"
   }
 }
