@@ -274,30 +274,6 @@ module.exports = {
                     console.log(`Session ${message.session_id} message buffer size: ${message_buffer.length}`)
                 }
             }
-
-        // TODO(rob): message data recording
-        // let session = this.sessions.get(session_id);
-        // // write to file
-        // if (session.isRecording) {
-        //     // calculate and write session sequence number
-        //     let sessionSeq =  data.message.ts - session.recordingStart; // TODO(rob): what is the actual layout for message data? 
-            
-        //     // get reference to session writer (buffer and cursor)
-        //     let writer = session.writers.int;
-
-        //     if (interactionChunkSize() + writer.cursor > writer.buffer.byteLength) {
-        //         // if buffer is full, dump to disk and reset the cursor
-        //         let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-        //         let wstream = fs.createWriteStream(path, { flags: 'a' });
-        //         wstream.write(writer.buffer.slice(0, writer.cursor));
-        //         wstream.close();
-        //         writer.cursor = 0;
-        //     }
-        //     for (let i = 0; i < data.length; i++) {
-        //         writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-        //     }
-        //     writer.cursor += interactionChunkSize();
-        // }
         }
     },
 
@@ -1576,22 +1552,23 @@ module.exports = {
                 if (data) {
 
                     let session_id = data.session_id;
-
                     let client_id = data.client_id;
 
                     if (session_id && client_id) {
-
+                        // relay the message
                         socket.to(session_id.toString()).emit('message', data);
 
                         // get reference to session and parse message payload for state updates, if needed. 
                         let session = this.sessions.get(session_id)
                         if (session) {
 
+                            // DEBUG(rob): 
                             console.log(`message received for session: ${session.id}`)
+                            console.log(`message payload: ${message}`);
                             
                             let message = JSON.parse(data.message);
-
-                            console.log(`message payload: ${message}`);
+                            if (!message) return;
+                            if (!message.type) return;
 
                             if (message.type == "interaction") {
                                 console.log("core interaction message received, handling...");
@@ -1681,10 +1658,40 @@ module.exports = {
                                     }
                                 }
                             }
+
+                            if (message.type == "sync") {
+                                // update session state with latest entity positions
+                                let data = message.data;
+                                let entity_type = data[4];
+
+                                if (entity_type == 3) {
+
+                                    let entity_id = data[3];
+
+                                    let i = session.entities.findIndex(e => e.id == entity_id);
+
+                                    if (i != -1) {
+
+                                        session.entities[i].latest = data;
+
+                                    } else {
+
+                                        let entity = {
+
+                                            id: entity_id,
+                                            latest: data,
+                                            render: true,
+                                            locked: false
+                                        };
+
+                                        session.entities.push(entity);
+                                    }
+                                }
+                            }
                             
                             // data capture
                             if (session.isRecording) {
-                                record_message_data(message);
+                                record_message_data(data);
                             }
                         }
                     }
