@@ -250,6 +250,30 @@ module.exports = {
 
     record_message_data: function (message) {
         if (message) {
+            let session = this.sessions.get(message.session_id);
+
+            // calculate a canonical session sequence number for this message from session start and message timestamp. 
+            let seq =  message.ts - session.recordingStart;
+
+            // create message record with sequence metadata
+            let record = {
+                seq: seq,
+                message: message
+            }
+
+            if (session.message_buffer) {
+                // TODO(rob): find optimal buffer size
+                // if (session.message_buffer.length < MESSAGE_BUFFER_MAX_SIZE) {
+                //     this.session.message_buffer.push(record)
+                // } else
+
+                session.message_buffer.push(record);
+
+                // DEBUG(rob): 
+                if (session.message_buffer.length % 128 == 0) {
+                    console.log(`Session ${message.session_id} message buffer size: ${message_buffer.length}`)
+                }
+            }
 
         // TODO(rob): message data recording
         // let session = this.sessions.get(session_id);
@@ -1213,10 +1237,7 @@ module.exports = {
                     cursor: 0
                 }
             },
-            message_buffer: {
-                buffer: Buffer.alloc(1024*1024),
-                cursor: 0
-            }
+            message_buffer: []
         });
 
         session = this.sessions.get(session_id);
