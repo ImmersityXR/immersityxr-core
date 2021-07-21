@@ -248,29 +248,8 @@ module.exports = {
         }
     },
 
-    record_message_data: function (data) {
-        if (!data) {
-
-            throw new ReferenceError ("data was null");
-            
-            
-        }
-
-        let session_id = data.session_id;
-
-        if (!session_id) {
-
-            throw new ReferenceError ("session was null");
-            
-        }
-        
-        let client_id = data.client_id;
-
-        if (!client_id) {
-
-            throw new ReferenceError ("client_id was null");
-            
-        }
+    record_message_data: function (message) {
+        if (message) {
 
         // TODO(rob): message data recording
         // let session = this.sessions.get(session_id);
@@ -295,6 +274,7 @@ module.exports = {
         //     }
         //     writer.cursor += interactionChunkSize();
         // }
+        }
     },
 
     handlePlayback: function (io, data) {
@@ -1232,6 +1212,10 @@ module.exports = {
                     buffer: Buffer.alloc(this.interactionWriteBufferSize()),
                     cursor: 0
                 }
+            },
+            message_buffer: {
+                buffer: Buffer.alloc(1024*1024),
+                cursor: 0
             }
         });
 
@@ -1568,15 +1552,121 @@ module.exports = {
             // garbage values that might be passed by devs who are overwriting reserved message events.  
             socket.on('message', function(data) {
 
-                let session_id = data.session_id;
+                if (data) {
 
-                let client_id = data.client_id;
+                    let session_id = data.session_id;
 
-                if (session_id && client_id) {
+                    let client_id = data.client_id;
 
-                    socket.to(session_id.toString()).emit('message', data);
+                    if (session_id && client_id) {
 
-                    record_message_data(data);
+                        socket.to(session_id.toString()).emit('message', data);
+
+                        // get reference to session and parse message payload for state updates, if needed. 
+                        let session = this.sessions.get(session_id)
+                        if (session) {
+
+                            console.log(`message received for session: ${session.id}`)
+                            
+                            let message = JSON.parse(data.message);
+
+                            console.log(`message payload: ${message}`);
+
+                            if (message.type == "interaction") {
+                                console.log("core interaction message received, handling...");
+                                let data = message.data;
+
+                                // `data` here will be in the legacy packed-array format. 
+
+                                // NOTE(rob): the following code is copypasta from the old interactionUpdate handler. 7/21/2021
+
+                                // check if the incoming packet is from a client who is valid for this session
+                                let joined = false;
+                                for (let i=0; i < session.clients.length; i++) {
+                                    if (client_id == session.clients[i]) {
+                                        joined = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!joined) return;
+
+                                let source_id = data[3];
+                                let target_id = data[4];
+                                let interaction_type = data[5];
+                                
+                                // entity should be rendered
+                                if (interaction_type == INTERACTION_RENDER) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].render = true;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: [],
+                                            render: true,
+                                            locked: false
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+                                // entity should stop being rendered
+                                if (interaction_type == INTERACTION_RENDER_END) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].render = false;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: data,
+                                            render: false,
+                                            locked: false
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+                                // scene has changed
+                                if (interaction_type == INTERACTION_SCENE_CHANGE) {
+                                    session.scene = target_id;
+                                }
+                                // entity is locked
+                                if (interaction_type == INTERACTION_LOCK) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].locked = true;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: [],
+                                            render: false,
+                                            locked: true
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+                                // entity is unlocked
+                                if (interaction_type == INTERACTION_LOCK_END) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].locked = false;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: [],
+                                            render: false,
+                                            locked: false
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+                            }
+                            
+                            // data capture
+                            if (session.isRecording) {
+                                record_message_data(message);
+                            }
+                        }
+                    }
                 }
 
             });
