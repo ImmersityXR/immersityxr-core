@@ -40,14 +40,35 @@ const fs = require('fs');
 
 const path = require('path');
 
+// event data globals
+// TODO(rob): deprecate. 
+const POS_FIELDS            = 14;
+const POS_BYTES_PER_FIELD   = 4;
+const POS_COUNT             = 10000;
+const INT_FIELDS            = 7;
+const INT_BYTES_PER_FIELD   = 4;
+const INT_COUNT             = 128;
+// interaction event values
+// TODO(rob): deprecate.
+const INTERACTION_LOOK          = 0;
+const INTERACTION_LOOK_END      = 1;
+const INTERACTION_RENDER        = 2;
+const INTERACTION_RENDER_END    = 3;
+const INTERACTION_GRAB          = 4;
+const INTERACTION_GRAB_END      = 5;
+const INTERACTION_SCENE_CHANGE  = 6;
+const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unused. 2020-12-1
+const INTERACTION_LOCK          = 8;
+const INTERACTION_LOCK_END      = 9;
+
 function positionChunkSize () {
 
-    return config.sync.POS_FIELDS * config.sync.POS_BYTES_PER_FIELD;
+    return POS_FIELDS * POS_BYTES_PER_FIELD;
 }
 
 function interactionChunkSize () {
 
-    return config.sync.INT_FIELDS * config.sync.INT_BYTES_PER_FIELD;
+    return INT_FIELDS * INT_BYTES_PER_FIELD;
 }
 
 //TODO refactor this.sessions into instances of the Session object.
@@ -68,13 +89,13 @@ module.exports = {
     // write buffers are multiples of corresponding chunks
     positionWriteBufferSize: function () {
     
-        return config.sync.POS_COUNT * positionChunkSize();
+        return POS_COUNT * positionChunkSize();
     },
     
     // write buffers are multiples of corresponding chunks
     interactionWriteBufferSize: function () {
     
-        return config.sync.INT_COUNT * interactionChunkSize();
+        return INT_COUNT * interactionChunkSize();
     },
 
     logInfoSessionClientSocketAction: function (session_id, client_id, socket_id, action) {
@@ -271,7 +292,7 @@ module.exports = {
 
                 // DEBUG(rob): 
                 if (session.message_buffer.length % 128 == 0) {
-                    console.log(`Session ${message.session_id} message buffer size: ${message_buffer.length}`)
+                    console.log(`Session ${message.session_id} message buffer size: ${message_buffer.byteLength} bytes`)
                 }
             }
         }
@@ -561,18 +582,6 @@ module.exports = {
     },
 
     handleInteraction: function (socket, data) {
-        // interaction event values
-        const INTERACTION_LOOK          = 0;
-        const INTERACTION_LOOK_END      = 1;
-        const INTERACTION_RENDER        = 2;
-        const INTERACTION_RENDER_END    = 3;
-        const INTERACTION_GRAB          = 4;
-        const INTERACTION_GRAB_END      = 5;
-        const INTERACTION_SCENE_CHANGE  = 6;
-        const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unused. 2020-12-1
-        const INTERACTION_LOCK          = 8;
-        const INTERACTION_LOCK_END      = 9;
-
         let session_id = data[1];
         let client_id = data[2];
 
@@ -930,25 +939,29 @@ module.exports = {
 
     writeEventToConnections: function (event, session_id, client_id) {
 
-        if (!this.pool) {
+        if (event && session_id && client_id) {
+            if (!this.pool) {
 
-            this.logErrorSessionClientSocketAction(session_id, client_id, null, "pool was null");
+                this.logErrorSessionClientSocketAction(session_id, client_id, null, "pool was null");
 
-            return;
-        }
-        
-        this.pool.query(
-            "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-
-            (err, res) => {
-
-                if (err != undefined) {
-
-                    this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
-
-                }
+                return;
             }
-        );
+            
+            this.pool.query(
+                "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+
+                (err, res) => {
+
+                    if (err != undefined) {
+
+                        this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
+
+                    }
+                }
+            );
+        } else {
+            this.logger.error(`Failed to log event to database: ${event}, ${session_id}, ${client_id}`)
+        }
     },
 
     getSessionIdFromSession: function (session) {
@@ -1194,7 +1207,7 @@ module.exports = {
         this.logInfoSessionClientSocketAction(session_id, null, null, `Creating session: ${session_id}`);
 
         this.sessions.set(session_id, {
-
+            id: session_id,
             sockets: {}, // socket.id -> client_id
             clients: [],
             entities: [],
@@ -1559,14 +1572,19 @@ module.exports = {
                         socket.to(session_id.toString()).emit('message', data);
 
                         // get reference to session and parse message payload for state updates, if needed. 
-                        let session = this.sessions.get(session_id)
+                        let session = self.sessions.get(session_id)
                         if (session) {
 
                             // DEBUG(rob): 
                             console.log(`message received for session: ${session.id}`)
-                            console.log(`message payload: ${message}`);
+                            console.log(`message packet: ${JSON.stringify(data)}`);
                             
-                            let message = JSON.parse(data.message);
+                            let message;
+                            try {
+                                message = JSON.parse(data.message);
+                            } catch (e) {
+                                console.log(`Error parsing message payload, dropping: ${e}`);
+                            }
                             if (!message) return;
                             if (!message.type) return;
 
@@ -1752,13 +1770,10 @@ module.exports = {
                 let didReconnect = self.handleDisconnect(socket, reason);
 
                 if (didReconnect) {
-
                     // log reconnect event with timestamp to db
                     self.writeEventToConnections("reconnect", session_id, client_id);
-
                     return;
                 }
-
                 // log reconnect event with timestamp to db
                 self.writeEventToConnections("disconnect", session_id, client_id);
             });
