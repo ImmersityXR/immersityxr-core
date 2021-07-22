@@ -231,22 +231,30 @@ module.exports = {
                 if (this.logger) this.logger.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
 
-                let pos_writer = session.writers.pos;
-                if (pos_writer.cursor > 0) {
-                    let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
-                    wstream.close();
-                    pos_writer.cursor = 0;
-                }
-                let int_writer = session.writers.int;
-                if (int_writer.cursor > 0) {
-                    let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
-                    wstream.close();
-                    int_writer.cursor = 0;
-                }
+                // NOTE(rob): deprecated, use messages. 
+                // let pos_writer = session.writers.pos;
+                // if (pos_writer.cursor > 0) {
+                //     let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
+                //     wstream.close();
+                //     pos_writer.cursor = 0;
+                // }
+                // let int_writer = session.writers.int;
+                // if (int_writer.cursor > 0) {
+                //     let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
+                //     wstream.close();
+                //     int_writer.cursor = 0;
+                // }
+
+                // write out message buffer. 
+                let path = this.getCapturePath(session_id, session.recordingStart, 'data')
+                fs.writeFile(path, JSON.stringify(session.message_buffer), (e) => { if (e) {console.log(`Error writing message buffer: ${e}`)} });
+                // reset the buffer.
+                console.log('resetting message buffer')
+                session.message_buffer = [];
                 
                 // write the capture end event to database
                 if (pool) {
@@ -289,6 +297,7 @@ module.exports = {
                 // } else
 
                 session.message_buffer.push(record);
+                console.log(`Message buffer: ${session.message_buffer}`);
 
                 // DEBUG(rob): 
                 if (session.message_buffer.length % 128 == 0) {
@@ -509,32 +518,34 @@ module.exports = {
             return;
         }
 
-        // calculate and write session sequence number using client timestamp
-        data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
+        // NOTE(rob): deprecated, use messages. 
 
-        // get reference to session writer (buffer and cursor)
-        let writer = session.writers.pos;
+        // // calculate and write session sequence number using client timestamp
+        // data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
 
-        if (positionChunkSize() + writer.cursor > writer.buffer.byteLength) {
+        // // get reference to session writer (buffer and cursor)
+        // let writer = session.writers.pos;
 
-            // if buffer is full, dump to disk and reset the cursor
-            let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+        // if (positionChunkSize() + writer.cursor > writer.buffer.byteLength) {
 
-            let wstream = fs.createWriteStream(path, { flags: 'a' });
+        //     // if buffer is full, dump to disk and reset the cursor
+        //     let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
 
-            wstream.write(writer.buffer.slice(0, writer.cursor));
+        //     let wstream = fs.createWriteStream(path, { flags: 'a' });
 
-            wstream.close();
+        //     wstream.write(writer.buffer.slice(0, writer.cursor));
 
-            writer.cursor = 0;
-        }
+        //     wstream.close();
 
-        for (let i = 0; i < data.length; i++) {
+        //     writer.cursor = 0;
+        // }
 
-            writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
-        }
+        // for (let i = 0; i < data.length; i++) {
 
-        writer.cursor += positionChunkSize();
+        //     writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
+        // }
+
+        // writer.cursor += positionChunkSize();
     },
 
     updateSessionState: function (data) {
@@ -675,24 +686,26 @@ module.exports = {
             // write to file as binary data
             if (session.isRecording) {
                 
-                // calculate and write session sequence number
-                data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
-                
-                // get reference to session writer (buffer and cursor)
-                let writer = session.writers.int;
+                // NOTE(rob): deprecated, use messages. 
 
-                if (interactionChunkSize() + writer.cursor > writer.buffer.byteLength) {
-                    // if buffer is full, dump to disk and reset the cursor
-                    let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(writer.buffer.slice(0, writer.cursor));
-                    wstream.close();
-                    writer.cursor = 0;
-                }
-                for (let i = 0; i < data.length; i++) {
-                    writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-                }
-                writer.cursor += interactionChunkSize();
+                // // calculate and write session sequence number
+                // data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
+                
+                // // get reference to session writer (buffer and cursor)
+                // let writer = session.writers.int;
+
+                // if (interactionChunkSize() + writer.cursor > writer.buffer.byteLength) {
+                //     // if buffer is full, dump to disk and reset the cursor
+                //     let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(writer.buffer.slice(0, writer.cursor));
+                //     wstream.close();
+                //     writer.cursor = 0;
+                // }
+                // for (let i = 0; i < data.length; i++) {
+                //     writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+                // }
+                // writer.cursor += interactionChunkSize();
             }
         }
     },
@@ -1709,7 +1722,7 @@ module.exports = {
                             
                             // data capture
                             if (session.isRecording) {
-                                record_message_data(data);
+                                self.record_message_data(data);
                             }
                         }
                     }
