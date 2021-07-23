@@ -41,37 +41,40 @@ const fs = require('fs');
 const path = require('path');
 
 const util = require('util');
+const { syslog } = require('winston/lib/winston/config');
 
 // event data globals
-// TODO(rob): deprecate. 
-const POS_FIELDS            = 14;
-const POS_BYTES_PER_FIELD   = 4;
-const POS_COUNT             = 10000;
-const INT_FIELDS            = 7;
-const INT_BYTES_PER_FIELD   = 4;
-const INT_COUNT             = 128;
+// NOTE(rob): deprecated. 
+// const POS_FIELDS            = 14;
+// const POS_BYTES_PER_FIELD   = 4;
+// const POS_COUNT             = 10000;
+// const INT_FIELDS            = 7;
+// const INT_BYTES_PER_FIELD   = 4;
+// const INT_COUNT             = 128;
+
 // interaction event values
-// TODO(rob): deprecate.
-const INTERACTION_LOOK          = 0;
-const INTERACTION_LOOK_END      = 1;
+// TODO(rob): finish deprecate.
+// const INTERACTION_LOOK          = 0;
+// const INTERACTION_LOOK_END      = 1;
 const INTERACTION_RENDER        = 2;
 const INTERACTION_RENDER_END    = 3;
-const INTERACTION_GRAB          = 4;
-const INTERACTION_GRAB_END      = 5;
+// const INTERACTION_GRAB          = 4;
+// const INTERACTION_GRAB_END      = 5;
 const INTERACTION_SCENE_CHANGE  = 6;
-const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unused. 2020-12-1
+// const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unused. 2020-12-1
 const INTERACTION_LOCK          = 8;
 const INTERACTION_LOCK_END      = 9;
 
-function positionChunkSize () {
+// NOTE(rob): deprecated. 
+// function positionChunkSize () {
 
-    return POS_FIELDS * POS_BYTES_PER_FIELD;
-}
+//     return POS_FIELDS * POS_BYTES_PER_FIELD;
+// }
 
-function interactionChunkSize () {
+// function interactionChunkSize () {
 
-    return INT_FIELDS * INT_BYTES_PER_FIELD;
-}
+//     return INT_FIELDS * INT_BYTES_PER_FIELD;
+// }
 
 //TODO refactor this.sessions into instances of the Session object.
 
@@ -88,17 +91,18 @@ function compareKeys(a, b) {
 
 module.exports = {
 
-    // write buffers are multiples of corresponding chunks
-    positionWriteBufferSize: function () {
+    // NOTE(rob): deprecated. sessions must use message_buffer. 
+    // // write buffers are multiples of corresponding chunks
+    // positionWriteBufferSize: function () {
     
-        return POS_COUNT * positionChunkSize();
-    },
+    //     return POS_COUNT * positionChunkSize();
+    // },
     
-    // write buffers are multiples of corresponding chunks
-    interactionWriteBufferSize: function () {
+    // // write buffers are multiples of corresponding chunks
+    // interactionWriteBufferSize: function () {
     
-        return INT_COUNT * interactionChunkSize();
-    },
+    //     return INT_COUNT * interactionChunkSize();
+    // },
 
     logInfoSessionClientSocketAction: function (session_id, client_id, socket_id, action) {
 
@@ -189,7 +193,6 @@ module.exports = {
 
         if (this.logger) this.logger.warn(` ${socket_id}    ${session_id}  ${client_id}    ${action}`);
     },
-    //TODO -- factor recording and playback out into a separate file
     
     // generate formatted path for session capture files
     getCapturePath: function (session_id, start, type) {
@@ -299,7 +302,6 @@ module.exports = {
                 // } else
 
                 session.message_buffer.push(record);
-                console.log(`Message buffer: ${session.message_buffer}`);
 
                 // DEBUG(rob): 
                 let mb_str = JSON.stringify(session.message_buffer);
@@ -336,139 +338,141 @@ module.exports = {
         let current_seq = 0;
         // let audioStarted = false;
 
+
+        // NOTE(rob): deprecated; playback data must use message system. 
         // check that all params are valid
-        if (capture_id && start) {
+        // if (capture_id && start) {
 
 
-            // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
-            // build audio file manifest
-            // if (this.logger) this.logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
-            // let audioManifest = [];
-            // let baseAudioPath = this.getCapturePath(capture_id, start, 'audio');
-            // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
-            //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
-            //     items.forEach(clientDir => {
-            //         let clientPath = path.join(baseAudioPath, clientDir)
-            //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
-            //         files.forEach(file => {
-            //             let client_id = clientDir;
-            //             let seq = file.split('.')[0];
-            //             let audioFilePath = path.join(clientPath, file);
-            //             let item = {
-            //                 seq: seq,
-            //                 client_id: client_id,
-            //                 path: audioFilePath,
-            //                 data: null
-            //             }
-            //             audioManifest.push(item);
-            //         });
-            //     });
-            // }
+        //     // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
+        //     // build audio file manifest
+        //     // if (this.logger) this.logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+        //     // let audioManifest = [];
+        //     // let baseAudioPath = this.getCapturePath(capture_id, start, 'audio');
+        //     // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
+        //     //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
+        //     //     items.forEach(clientDir => {
+        //     //         let clientPath = path.join(baseAudioPath, clientDir)
+        //     //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
+        //     //         files.forEach(file => {
+        //     //             let client_id = clientDir;
+        //     //             let seq = file.split('.')[0];
+        //     //             let audioFilePath = path.join(clientPath, file);
+        //     //             let item = {
+        //     //                 seq: seq,
+        //     //                 client_id: client_id,
+        //     //                 path: audioFilePath,
+        //     //                 data: null
+        //     //             }
+        //     //             audioManifest.push(item);
+        //     //         });
+        //     //     });
+        //     // }
 
-            // // emit audio manifest to connected clients
-            // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+        //     // // emit audio manifest to connected clients
+        //     // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
 
-            // // stream all audio files for caching and playback by client
-            // audioManifest.forEach((file) => {
-            //     fs.readFile(file.path, (err, data) => {
-            //         file.data = data;
-            //         if(err) if (this.logger) this.logger.error(`Error reading audio file: ${file.path}`);
-            //         // console.log('emitting audio packet:', file);
-            //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
-            //     });
-            // });
+        //     // // stream all audio files for caching and playback by client
+        //     // audioManifest.forEach((file) => {
+        //     //     fs.readFile(file.path, (err, data) => {
+        //     //         file.data = data;
+        //     //         if(err) if (this.logger) this.logger.error(`Error reading audio file: ${file.path}`);
+        //     //         // console.log('emitting audio packet:', file);
+        //     //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+        //     //     });
+        //     // });
 
 
-            // position streaming
-            let capturePath = this.getCapturePath(capture_id, start, 'pos');
-            let stream = fs.createReadStream(capturePath, { highWaterMark: positionChunkSize() });
+        //     // position streaming
+        //     let capturePath = this.getCapturePath(capture_id, start, 'pos');
+        //     let stream = fs.createReadStream(capturePath, { highWaterMark: positionChunkSize() });
 
-            // set actual playback start time
-            let playbackStart = Date.now();
+        //     // set actual playback start time
+        //     let playbackStart = Date.now();
 
-            // position data emit loop
-            stream.on('data', function(chunk) {
+        //     // position data emit loop
+        //     stream.on('data', function(chunk) {
 
-                stream.pause();
+        //         stream.pause();
 
-                // start data buffer loop
-                let buff = Buffer.from(chunk);
-                let farr = new Float32Array(chunk.byteLength / 4);
-                for (var i = 0; i < farr.length; i++) {
-                    farr[i] = buff.readFloatLE(i * 4);
-                }
-                var arr = Array.from(farr);
+        //         // start data buffer loop
+        //         let buff = Buffer.from(chunk);
+        //         let farr = new Float32Array(chunk.byteLength / 4);
+        //         for (var i = 0; i < farr.length; i++) {
+        //             farr[i] = buff.readFloatLE(i * 4);
+        //         }
+        //         var arr = Array.from(farr);
 
-                let timer = setInterval( () => {
-                    current_seq = Date.now() - playbackStart;
+        //         let timer = setInterval( () => {
+        //             current_seq = Date.now() - playbackStart;
 
-                    // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
+        //             // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
-                    if (arr[POS_FIELDS-1] <= current_seq) {
-                        // alias client and entity id with prefix if entity type is not an asset
-                        if (arr[4] != 3) {
-                            arr[2] = 90000 + arr[2];
-                            arr[3] = 90000 + arr[3];
-                        }
-                        // if (!audioStarted) {
-                        //     // HACK(rob): trigger clients to begin playing buffered audio 
-                        //     audioStarted = true;
-                        //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
-                        // }
-                        io.to(session_id.toString()).emit('relayUpdate', arr);
-                        stream.resume();
-                        clearInterval(timer);
-                    }
-                }, 1);
-            });
+        //             if (arr[POS_FIELDS-1] <= current_seq) {
+        //                 // alias client and entity id with prefix if entity type is not an asset
+        //                 if (arr[4] != 3) {
+        //                     arr[2] = 90000 + arr[2];
+        //                     arr[3] = 90000 + arr[3];
+        //                 }
+        //                 // if (!audioStarted) {
+        //                 //     // HACK(rob): trigger clients to begin playing buffered audio 
+        //                 //     audioStarted = true;
+        //                 //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
+        //                 // }
+        //                 io.to(session_id.toString()).emit('relayUpdate', arr);
+        //                 stream.resume();
+        //                 clearInterval(timer);
+        //             }
+        //         }, 1);
+        //     });
 
-            stream.on('error', function(err) {
-                if (this.logger) this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
-                io.to(session_id.toString()).emit('playbackEnd');
-            });
+        //     stream.on('error', function(err) {
+        //         if (this.logger) this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
+        //         io.to(session_id.toString()).emit('playbackEnd');
+        //     });
 
-            stream.on('end', function() {
-                if (this.logger) this.logger.info(`End of pos data for playback session: ${session_id}`);
-                io.to(session_id.toString()).emit('playbackEnd');
-            });
+        //     stream.on('end', function() {
+        //         if (this.logger) this.logger.info(`End of pos data for playback session: ${session_id}`);
+        //         io.to(session_id.toString()).emit('playbackEnd');
+        //     });
 
-            // interaction streaming
-            let ipath = this.getCapturePath(capture_id, start, 'int');
-            let istream = fs.createReadStream(ipath, { highWaterMark: interactionChunkSize() });
+        //     // interaction streaming
+        //     let ipath = this.getCapturePath(capture_id, start, 'int');
+        //     let istream = fs.createReadStream(ipath, { highWaterMark: interactionChunkSize() });
 
-            istream.on('data', function(chunk) {
-                istream.pause();
+        //     istream.on('data', function(chunk) {
+        //         istream.pause();
 
-                let buff = Buffer.from(chunk);
-                let farr = new Int32Array(chunk.byteLength / 4);
-                for (var i = 0; i < farr.length; i++) {
-                    farr[i] = buff.readInt32LE(i * 4);
-                }
-                var arr = Array.from(farr);
+        //         let buff = Buffer.from(chunk);
+        //         let farr = new Int32Array(chunk.byteLength / 4);
+        //         for (var i = 0; i < farr.length; i++) {
+        //             farr[i] = buff.readInt32LE(i * 4);
+        //         }
+        //         var arr = Array.from(farr);
 
-                let timer = setInterval( () => {
+        //         let timer = setInterval( () => {
 
-                    // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+        //             // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
-                    if (arr[INT_FIELDS-1] <= current_seq) {
-                        io.to(session_id.toString()).emit('interactionUpdate', arr);
-                        istream.resume();
-                        clearInterval(timer);
-                    }
-                }, 1);
+        //             if (arr[INT_FIELDS-1] <= current_seq) {
+        //                 io.to(session_id.toString()).emit('interactionUpdate', arr);
+        //                 istream.resume();
+        //                 clearInterval(timer);
+        //             }
+        //         }, 1);
 
-            });
+        //     });
 
-            istream.on('error', function(err) {
-                if (this.logger) this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-                io.to(session_id.toString()).emit('interactionpPlaybackEnd');
-            });
+        //     istream.on('error', function(err) {
+        //         if (this.logger) this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
+        //         io.to(session_id.toString()).emit('interactionpPlaybackEnd');
+        //     });
 
-            istream.on('end', function() {
-                if (this.logger) this.logger.info(`End of int data for playback session: ${session_id}`);
-                io.to(session_id.toString()).emit('interactionPlaybackEnd');
-            });
-        }
+        //     istream.on('end', function() {
+        //         if (this.logger) this.logger.info(`End of int data for playback session: ${session_id}`);
+        //         io.to(session_id.toString()).emit('interactionPlaybackEnd');
+        //     });
+        // }
     },
 
     isValidRelayPacket: function (data) {
@@ -554,7 +558,7 @@ module.exports = {
 
         if (!data) {
 
-            throw new ReferenceError ("data was null");
+            this.logger.warn("Attempted to update session state, but data was null.");
         }
 
         let session_id = data[1];
@@ -563,7 +567,7 @@ module.exports = {
 
         if (!session) {
 
-            throw new ReferenceError ("session was null");
+            this.logger.warn("Attempted to update session state, but session was not found");
         }
 
         // update session state with latest entity positions
@@ -685,11 +689,9 @@ module.exports = {
                 }
             }
 
+            // NOTE(rob): deprecated, use messages. 
             // write to file as binary data
-            if (session.isRecording) {
-                
-                // NOTE(rob): deprecated, use messages. 
-
+            // if (session.isRecording) {
                 // // calculate and write session sequence number
                 // data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
                 
@@ -708,7 +710,7 @@ module.exports = {
                 //     writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
                 // }
                 // writer.cursor += interactionChunkSize();
-            }
+            // }
         }
     },
 
@@ -1408,6 +1410,10 @@ module.exports = {
         }
 
         this.logger = logger;
+        if (!this.logger) {
+            console.error("Failed to init logger. Exiting.")
+            process.exit();
+        }
 
         this.logInfoSessionClientSocketAction("Session ID", "Client ID", "Socket ID", "Message");
 
