@@ -40,6 +40,8 @@ const fs = require('fs');
 
 const path = require('path');
 
+const util = require('util');
+
 // event data globals
 // TODO(rob): deprecate. 
 const POS_FIELDS            = 14;
@@ -300,9 +302,9 @@ module.exports = {
                 console.log(`Message buffer: ${session.message_buffer}`);
 
                 // DEBUG(rob): 
-                if (session.message_buffer.length % 128 == 0) {
-                    console.log(`Session ${message.session_id} message buffer size: ${message_buffer.byteLength} bytes`)
-                }
+                let mb_str = JSON.stringify(session.message_buffer);
+                let bytes = new util.TextEncoder().encode(mb_str).length
+                console.log(`Session ${message.session_id} message buffer size: ${bytes} bytes`)
             }
         }
     },
