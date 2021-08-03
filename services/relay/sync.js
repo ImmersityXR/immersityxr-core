@@ -210,14 +210,16 @@ module.exports = {
                     if(err) if (this.logger) this.logger.warn(`Error creating capture path: ${err}`);
                 });
                 let capture_id = session_id+'_'+session.recordingStart;
-                pool.query(
-                    "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
-                    (err, res) => {
-                        if (err != undefined) {
-                            if (this.logger) this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                if (pool) {
+                    pool.query(
+                        "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
+                        (err, res) => {
+                            if (err != undefined) {
+                                if (this.logger) this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                            }
                         }
-                    }
-                );
+                    );
+                }
                 if (this.logger) this.logger.info(`Capture started: ${session_id}`);
             } else if (session && session.isRecording) {
                 if (this.logger) this.logger.warn(`Requested session capture, but session is already recording: ${session_id}`);
@@ -1608,18 +1610,13 @@ module.exports = {
                             // console.log(`message received for session: ${session.id}`)
                             // console.log(`message packet: ${JSON.stringify(data)}`);
                             
-                            let message;
-                            try {
-                                message = JSON.parse(data.message);
-                            } catch (e) {
-                                console.log(`Error parsing message payload, dropping: ${e}`);
-                            }
+                            let message = data.message;
+
                             if (!message) return;
                             if (!message.type) return;
 
                             if (message.type == "interaction") {
                                 console.log("core interaction message received, handling...");
-                                let data = message.data;
 
                                 // `data` here will be in the legacy packed-array format. 
 
@@ -1636,9 +1633,21 @@ module.exports = {
 
                                 if (!joined) return;
 
-                                let source_id = data[3];
-                                let target_id = data[4];
-                                let interaction_type = data[5];
+                                let payload = message.data;
+
+                                // Check if message payload is pre-parsed. 
+                                if (typeof payload != `object`) {
+                                    try {
+                                        payload = JSON.parse(message.data);
+                                    } catch (e) {
+                                        this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
+                                        return;
+                                    }
+                                }
+
+                                let source_id = payload[3];
+                                let target_id = payload[4];
+                                let interaction_type = payload[5];
                                 
                                 // entity should be rendered
                                 if (interaction_type == INTERACTION_RENDER) {
@@ -1663,7 +1672,7 @@ module.exports = {
                                     } else {
                                         let entity = {
                                             id: target_id,
-                                            latest: data,
+                                            latest: payload,
                                             render: false,
                                             locked: false
                                         };
@@ -1708,24 +1717,35 @@ module.exports = {
 
                             if (message.type == "sync") {
                                 // update session state with latest entity positions
-                                let data = message.data;
-                                let entity_type = data[4];
+                                let payload = message.data;
+
+                                // Check if message payload is pre-parsed. 
+                                if (typeof payload != `object`) {
+                                    try {
+                                        payload = JSON.parse(message.data);
+                                    } catch (e) {
+                                        this.logger.warn(`Failed to parse 'sync' message payload: ${e}`);
+                                        return;
+                                    }
+                                }
+
+                                let entity_type = payload[4];
 
                                 if (entity_type == 3) {
 
-                                    let entity_id = data[3];
+                                    let entity_id = payload[3];
 
                                     let i = session.entities.findIndex(e => e.id == entity_id);
 
                                     if (i != -1) {
 
-                                        session.entities[i].latest = data;
+                                        session.entities[i].latest = payload;
 
                                     } else {
 
                                         let entity = {
                                             id: entity_id,
-                                            latest: data,
+                                            latest: payload,
                                             render: true,
                                             locked: false
                                         };
