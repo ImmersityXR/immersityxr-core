@@ -286,7 +286,14 @@ module.exports = {
         if (message) {
             let session = this.sessions.get(message.session_id);
 
-            // calculate a canonical session sequence number for this message from session start and message timestamp. 
+            // calculate a canonical session sequence number for this message from session start and message timestamp.
+            // NOTE(rob): investigate how we might timestamp incoming packets WHEN THEY ARE RECEIVED BY THE NETWORKING LAYER, ie. not
+            // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
+            // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
+
+            // DEBUG
+            console.log(`Message ts: ${message.ts}, session recording start: ${session.recordingStart}`)
+
             let seq =  message.ts - session.recordingStart;
 
             // create message record with sequence metadata
@@ -1233,16 +1240,17 @@ module.exports = {
             start: Date.now(),
             recordingStart: 0,
             seq: 0,
-            writers: {
-                pos: {
-                    buffer: Buffer.alloc(this.positionWriteBufferSize()),
-                    cursor: 0
-                },
-                int: {
-                    buffer: Buffer.alloc(this.interactionWriteBufferSize()),
-                    cursor: 0
-                }
-            },
+            // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
+            // writers: {
+            //     pos: {
+            //         buffer: Buffer.alloc(this.positionWriteBufferSize()),
+            //         cursor: 0
+            //     },
+            //     int: {
+            //         buffer: Buffer.alloc(this.interactionWriteBufferSize()),
+            //         cursor: 0
+            //     }
+            // },
             message_buffer: []
         });
 
@@ -1597,8 +1605,8 @@ module.exports = {
                         if (session) {
 
                             // DEBUG(rob): 
-                            console.log(`message received for session: ${session.id}`)
-                            console.log(`message packet: ${JSON.stringify(data)}`);
+                            // console.log(`message received for session: ${session.id}`)
+                            // console.log(`message packet: ${JSON.stringify(data)}`);
                             
                             let message;
                             try {
@@ -1716,7 +1724,6 @@ module.exports = {
                                     } else {
 
                                         let entity = {
-
                                             id: entity_id,
                                             latest: data,
                                             render: true,
