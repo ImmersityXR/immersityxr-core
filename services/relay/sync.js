@@ -260,7 +260,6 @@ module.exports = {
                 let path = this.getCapturePath(session_id, session.recordingStart, 'data')
                 fs.writeFile(path, JSON.stringify(session.message_buffer), (e) => { if (e) {console.log(`Error writing message buffer: ${e}`)} });
                 // reset the buffer.
-                console.log('resetting message buffer')
                 session.message_buffer = [];
                 
                 // write the capture end event to database
@@ -293,9 +292,6 @@ module.exports = {
             // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
             // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
 
-            // DEBUG
-            console.log(`Message ts: ${message.ts}, session recording start: ${session.recordingStart}`)
-
             let seq =  message.ts - session.recordingStart;
 
             // create message record with sequence metadata
@@ -313,9 +309,9 @@ module.exports = {
                 session.message_buffer.push(record);
 
                 // DEBUG(rob): 
-                let mb_str = JSON.stringify(session.message_buffer);
-                let bytes = new util.TextEncoder().encode(mb_str).length
-                console.log(`Session ${message.session_id} message buffer size: ${bytes} bytes`)
+                // let mb_str = JSON.stringify(session.message_buffer);
+                // let bytes = new util.TextEncoder().encode(mb_str).length
+                // console.log(`Session ${message.session_id} message buffer size: ${bytes} bytes`)
             }
         }
     },
@@ -513,27 +509,27 @@ module.exports = {
         }
     },
 
-    writeRecordedRelayData: function (data) {
+    // NOTE(rob): DEPRECATED. 8/5/21. 
+    // writeRecordedRelayData: function (data) {
 
-        if (!data) {
+    //     if (!data) {
 
-            throw new ReferenceError ("data was null");
-        }
+    //         throw new ReferenceError ("data was null");
+    //     }
 
-        let session_id = data[1];
+    //     let session_id = data[1];
 
-        let session = this.sessions.get(session_id);
+    //     let session = this.sessions.get(session_id);
 
-        if (!session) {
+    //     if (!session) {
 
-            throw new ReferenceError ("session was null");
-        }
+    //         throw new ReferenceError ("session was null");
+    //     }
 
-        if (!session.isRecording) {
-            return;
-        }
+    //     if (!session.isRecording) {
+    //         return;
+    //     }
 
-        // NOTE(rob): deprecated, use messages. 
 
         // // calculate and write session sequence number using client timestamp
         // data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
@@ -561,7 +557,7 @@ module.exports = {
         // }
 
         // writer.cursor += positionChunkSize();
-    },
+    // },
 
     updateSessionState: function (data) {
 
@@ -727,7 +723,8 @@ module.exports = {
 
         if (!data) {
             
-            throw new ReferenceError ("data was null");
+            this.logger.warn(`Attempting to update session state, but data is null.`)
+            // throw new ReferenceError ("data was null");
             
         }
             
@@ -801,7 +798,8 @@ module.exports = {
 
         if (session == null && !do_create_session) {
 
-            throw new ReferenceError ("session was null");
+            this.logger.warn(`Attempting to add client ${client_id} to session, but session is null.`)
+            // throw new ReferenceError ("session was null");
         }
 
         if (session == null && do_create_session) {
@@ -825,12 +823,14 @@ module.exports = {
 
         if (session == null) {
 
-            throw new ReferenceError ("session was null");
+            this.logger.warn(`Attempting to remove duplicate client ${client_id} from session, but session is null.`)
+            // throw new ReferenceError ("session was null");
         }
 
         if (session.clients == null) {
 
-            throw new Error ("session.clients was null");
+            this.logger.warn(`Attempting to remove duplicate client ${client_id} from session, but session.clients is null.`)
+            // throw new Error ("session.clients was null");
         }
 
         if (session.clients.length == 0) {
@@ -854,12 +854,14 @@ module.exports = {
 
         if (session == null) {
 
-            throw new ReferenceError("session was null");
+            this.logger.warn(`Attempting to remove client ${client_id} from session, but session is null.`)
+            // throw new ReferenceError("session was null");
         }
 
         if (session.clients == null) {
             
-            throw new ReferenceError("session.clients was null");
+            this.logger.warn(`Attempting to remove client ${client_id} from session, but session.clients is null.`)
+            // throw new ReferenceError("session.clients was null");
         }
 
         let index = session.clients.indexOf(client_id);
@@ -880,7 +882,8 @@ module.exports = {
 
         if (!session) {
 
-            throw new ReferenceError("session was null");
+            this.logger.warn(`Attempting to add socket ${socket} to session, but session is null.`)
+            // throw new ReferenceError("session was null");
         }
 
         session.sockets[socket.id] = { client_id: client_id, socket: socket };
@@ -890,6 +893,7 @@ module.exports = {
 
         if (!this.joinSessionAction) {
             
+            // NOTE(rob): Brandon, not sure what we are doing here. 
             throw new Error("this.disconnectAction was null");
         }
 
@@ -932,13 +936,15 @@ module.exports = {
 
         if (session == null) {
 
-            throw new ReferenceError("session was null");
+            this.logger.warn(`Attempting to bump duplicate socket ${socket_id} from session, but session is null.`)
+            // throw new ReferenceError("session was null");
         }
 
         let session_id = this.getSessionIdFromSession(session);
 
         if (this.bumpAction == null) {
 
+            // NOTE(rob): Brandon, not sure what we are doing here. 
             throw new Error("this.bumpAction was null");
         }
         
@@ -973,18 +979,20 @@ module.exports = {
                 return;
             }
             
-            this.pool.query(
-                "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+            if (pool) {
+                this.pool.query(
+                    "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
 
-                (err, res) => {
+                    (err, res) => {
 
-                    if (err != undefined) {
+                        if (err != undefined) {
 
-                        this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
+                            this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
 
+                        }
                     }
-                }
-            );
+                );
+            }
         } else {
             this.logger.error(`Failed to log event to database: ${event}, ${session_id}, ${client_id}`)
         }
@@ -994,22 +1002,26 @@ module.exports = {
 
         if (session == null || typeof session === "undefined") {
             
-            throw new Error("session was null or undefined.");
+            this.logger.warn(`Attempting to get session id from session, but session is null or undefined.`)
+            // throw new Error("session was null or undefined.");
         }
 
         if (typeof session !== "object") {
             
-            throw new Error("session was not an object.");
+            this.logger.warn(`Attempting to get session id from session, but session is not an object.`)
+            // throw new Error("session was not an object.");
         }
 
         if (session.clients == null || typeof session.clients === "undefined") {
             
-            throw new Error("session.clients was null or undefined.");
+            this.logger.warn(`Attempting to get session id from session, but session.clients is null or undefined.`)
+            // throw new Error("session.clients was null or undefined.");
         }
 
         if (session.sockets == null || typeof session.sockets === "undefined") {
             
-            throw new Error("session.sockets was null or undefined.");
+            this.logger.warn(`Attempting to get session id from session, but session.sockets is null or undefined.`)
+            // throw new Error("session.sockets was null or undefined.");
         }
 
         let result = -1;
@@ -1778,7 +1790,7 @@ module.exports = {
                 // relay packet if client is valid
                 socket.to(session_id.toString()).emit('relayUpdate', data);
 
-                self.writeRecordedRelayData(data);
+                // self.writeRecordedRelayData(data); NOTE(rob): DEPRECATED. 8/5/21. 
 
                 self.updateSessionState(data);
             
