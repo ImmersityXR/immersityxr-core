@@ -55,7 +55,6 @@ const printFormat = printf(({ level, message, timestamp }) => {
 });
 
 const logger = createLogger({
-
     format: combine(
 
         timestamp(),
@@ -73,10 +72,19 @@ const logger = createLogger({
 let pool;
 
 if (config.db.host && config.db.host != "") {
-
     pool = mysql.createPool(config.db);
-    logger.info(`Database pool created.`);
 
+    testQuery = pool.query(`SHOW TABLES;`, (err, res) => {
+        if (err) { 
+            logger.error(err);
+
+            process.exit();
+        }
+
+        else { logger.info(`Database initialized with ${res.length} tables.`); }
+    });
+
+    logger.info(`Database pool created: host: ${config.db.host}, database: ${config.db.database}.`);
 }
 
 // relay server
