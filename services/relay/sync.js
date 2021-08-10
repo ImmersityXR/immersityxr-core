@@ -854,7 +854,7 @@ module.exports = {
         }
 
         if (!this.joinSessionAction) {
-            this.logWarningSessionClientSocketAction(session_id, client_id, socket.id, `in handleJoin, joinSessionAction callback was not provided. Proceeding anyways.`)
+            this.logWarningSessionClientSocketAction(session_id, client_id, socket.id, `in handleJoin, joinSessionAction callback was not provided. Proceeding anyways.`);
         }
 
         if (err) {
@@ -1461,7 +1461,7 @@ module.exports = {
                     // emit versioned state data
                     io.to(session_id).emit('state', state);
                 } catch (err) {
-                    this.logErrorSessionClientSocketAction(session_id, null, socket.id, err.message)
+                    this.logErrorSessionClientSocketAction(session_id, null, socket.id, err.message);
                 }
             });
 
