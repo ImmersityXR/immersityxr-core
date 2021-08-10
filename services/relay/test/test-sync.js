@@ -80,16 +80,18 @@ describe("Sync Server: Sessions", function (done) {
             start: Date.now(),
             recordingStart: 0,
             seq: 0,
-            writers: {
-                pos: {
-                    buffer: Buffer.alloc(syncServer.positionWriteBufferSize()),
-                    cursor: 0
-                },
-                int: {
-                    buffer: Buffer.alloc(syncServer.interactionWriteBufferSize()),
-                    cursor: 0
-                }
-            }
+            // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
+            // writers: {
+            //     pos: {
+            //         buffer: Buffer.alloc(syncServer.positionWriteBufferSize()),
+            //         cursor: 0
+            //     },
+            //     int: {
+            //         buffer: Buffer.alloc(syncServer.interactionWriteBufferSize()),
+            //         cursor: 0
+            //     }
+            // },
+            message_buffer: []
         };
         
         assert.deepStrictEqual(singularEntry[1].sockets, expectedSession.sockets);
@@ -109,7 +111,11 @@ describe("Sync Server: Sessions", function (done) {
 
         assert.deepStrictEqual(singularEntry[1].seq, expectedSession.seq);
 
-        assert.deepStrictEqual(singularEntry[1].writers, expectedSession.writers);
+        // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
+        // assert.deepStrictEqual(singularEntry[1].writers, expectedSession.writers);
+
+        assert.deepStrictEqual(singularEntry[1].message_buffer, expectedSession.message_buffer);
+
     });   
 
     it("should return failure on getting a nonexistent session", function () {

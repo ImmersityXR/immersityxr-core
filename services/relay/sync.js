@@ -40,13 +40,30 @@ const fs = require('fs');
 
 const path = require('path');
 
-function positionChunkSize () {
-    return config.sync.POS_FIELDS * config.sync.POS_BYTES_PER_FIELD;
-}
+const util = require('util');
+const { syslog } = require('winston/lib/winston/config');
 
-function interactionChunkSize () {
-    return config.sync.INT_FIELDS * config.sync.INT_BYTES_PER_FIELD;
-}
+// event data globals
+// NOTE(rob): deprecated. 
+// const POS_FIELDS            = 14;
+// const POS_BYTES_PER_FIELD   = 4;
+// const POS_COUNT             = 10000;
+// const INT_FIELDS            = 7;
+// const INT_BYTES_PER_FIELD   = 4;
+// const INT_COUNT             = 128;
+
+// interaction event values
+// TODO(rob): finish deprecate.
+// const INTERACTION_LOOK          = 0;
+// const INTERACTION_LOOK_END      = 1;
+const INTERACTION_RENDER        = 2;
+const INTERACTION_RENDER_END    = 3;
+// const INTERACTION_GRAB          = 4;
+// const INTERACTION_GRAB_END      = 5;
+const INTERACTION_SCENE_CHANGE  = 6;
+// const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unused. 2020-12-1
+const INTERACTION_LOCK          = 8;
+const INTERACTION_LOCK_END      = 9;
 
 //TODO refactor this.sessions into instances of the Session object.
 
@@ -61,15 +78,16 @@ function compareKeys(a, b) {
 }
 
 module.exports = {
-    // write buffers are multiples of corresponding chunks
-    positionWriteBufferSize: function () {
-        return config.sync.POS_COUNT * positionChunkSize();
-    },
+    // NOTE(rob): deprecated. sessions must use message_buffer. 
+    // // write buffers are multiples of corresponding chunks
+    // positionWriteBufferSize: function () {
+    //     return POS_COUNT * positionChunkSize();
+    // },
     
-    // write buffers are multiples of corresponding chunks
-    interactionWriteBufferSize: function () {
-        return config.sync.INT_COUNT * interactionChunkSize();
-    },
+    // // write buffers are multiples of corresponding chunks
+    // interactionWriteBufferSize: function () {
+    //     return INT_COUNT * interactionChunkSize();
+    // },
 
     logInfoSessionClientSocketAction: function (session_id, client_id, socket_id, action) {
         if (session_id == null) {
@@ -154,7 +172,6 @@ module.exports = {
 
         if (this.logger) this.logger.warn(` ${socket_id}    ${session_id}  ${client_id}    ${action}`);
     },
-    //TODO -- factor recording and playback out into a separate file
     
     // generate formatted path for session capture files
     getCapturePath: function (session_id, start, type) {
@@ -172,14 +189,17 @@ module.exports = {
                     if(err) if (this.logger) this.logger.warn(`Error creating capture path: ${err}`);
                 });
                 let capture_id = session_id+'_'+session.recordingStart;
-                pool.query(
-                    "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
-                    (err, res) => {
-                        if (err != undefined) {
-                            if (this.logger) this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                if (pool) {
+                    pool.query(
+                        "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
+                        (err, res) => {
+                            if (err != undefined) {
+                                if (this.logger) this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                            }
                         }
-                    }
-                );
+                    );
+                }
+
                 if (this.logger) this.logger.info(`Capture started: ${session_id}`);
             } else if (session && session.isRecording) {
                 if (this.logger) this.logger.warn(`Requested session capture, but session is already recording: ${session_id}`);
@@ -198,23 +218,29 @@ module.exports = {
                 if (this.logger) this.logger.info(`Capture ended: ${session_id}`);                
                 // write out the buffers if not empty, but only up to where the cursor is
 
-                let pos_writer = session.writers.pos;
-                if (pos_writer.cursor > 0) {
-                    let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
-                    wstream.close();
-                    pos_writer.cursor = 0;
-                }
+                // NOTE(rob): deprecated, use messages. 
+                // let pos_writer = session.writers.pos;
+                // if (pos_writer.cursor > 0) {
+                //     let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
+                //     wstream.close();
+                //     pos_writer.cursor = 0;
+                // }
+                // let int_writer = session.writers.int;
+                // if (int_writer.cursor > 0) {
+                //     let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
+                //     wstream.close();
+                //     int_writer.cursor = 0;
+                // }
 
-                let int_writer = session.writers.int;
-                if (int_writer.cursor > 0) {
-                    let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
-                    wstream.close();
-                    int_writer.cursor = 0;
-                }
+                // write out message buffer. 
+                let path = this.getCapturePath(session_id, session.recordingStart, 'data');
+                fs.writeFile(path, JSON.stringify(session.message_buffer), (e) => { if (e) {console.log(`Error writing message buffer: ${e}`);} });
+                // reset the buffer.
+                session.message_buffer = [];
                 
                 // write the capture end event to database
                 if (pool) {
@@ -236,52 +262,49 @@ module.exports = {
         }
     },
 
-    record_message_data: function (data) {
-        if (!data) {
-            this.logErrorSessionClientSocketAction(null, null, null, `data was null`);
+    record_message_data: function (message) {
+        if (message) {
+            let session = this.sessions.get(message.session_id);
 
-            return;
+            // calculate a canonical session sequence number for this message from session start and message timestamp.
+            // NOTE(rob): investigate how we might timestamp incoming packets WHEN THEY ARE RECEIVED BY THE NETWORKING LAYER, ie. not
+            // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
+            // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
+
+            let seq =  message.ts - session.recordingStart;
+
+            let session_id = message.session_id;
+
+            let client_id = message.client_id;
+
+            if (!session_id || !client_id) {
+                this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to record message data. One of these properties is missing. session_id: ${session_id}, client_id: ${client_id}, message: ${message}`);
+
+                return;
+            }
+
+            // create message record with sequence metadata
+            let record = {
+                seq: seq,
+                message: message
+            };
+
+            if (session.message_buffer) {
+                // TODO(rob): find optimal buffer size
+                // if (session.message_buffer.length < MESSAGE_BUFFER_MAX_SIZE) {
+                //     this.session.message_buffer.push(record)
+                // } else
+
+                session.message_buffer.push(record);
+
+                // DEBUG(rob): 
+                // let mb_str = JSON.stringify(session.message_buffer);
+                // let bytes = new util.TextEncoder().encode(mb_str).length
+                // console.log(`Session ${message.session_id} message buffer size: ${bytes} bytes`)
+            }
+        } else {
+            this.logErrorSessionClientSocketAction(null, null, null, `message was null`);
         }
-
-        let session_id = data.session_id;
-
-        if (!session_id) {
-            this.logErrorSessionClientSocketAction(null, null, null, `Tried to record message data, but data.session_id was null`);
-
-            return;
-        }
-        
-        let client_id = data.client_id;
-
-        if (!client_id) {
-            this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to record message data, but data.session_id was null`);
-
-            return;
-        }
-
-        // TODO(rob): message data recording
-        // let session = this.sessions.get(session_id);
-        // // write to file
-        // if (session.isRecording) {
-        //     // calculate and write session sequence number
-        //     let sessionSeq =  data.message.ts - session.recordingStart; // TODO(rob): what is the actual layout for message data? 
-            
-        //     // get reference to session writer (buffer and cursor)
-        //     let writer = session.writers.int;
-
-        //     if (interactionChunkSize() + writer.cursor > writer.buffer.byteLength) {
-        //         // if buffer is full, dump to disk and reset the cursor
-        //         let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-        //         let wstream = fs.createWriteStream(path, { flags: 'a' });
-        //         wstream.write(writer.buffer.slice(0, writer.cursor));
-        //         wstream.close();
-        //         writer.cursor = 0;
-        //     }
-        //     for (let i = 0; i < data.length; i++) {
-        //         writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-        //     }
-        //     writer.cursor += interactionChunkSize();
-        // }
     },
 
     handlePlayback: function (io, data) {
@@ -311,136 +334,135 @@ module.exports = {
         let current_seq = 0;
         // let audioStarted = false;
 
+        // NOTE(rob): deprecated; playback data must use message system. 
         // check that all params are valid
-        if (capture_id && start) {
-            // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
-            // build audio file manifest
-            // if (this.logger) this.logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
-            // let audioManifest = [];
-            // let baseAudioPath = this.getCapturePath(capture_id, start, 'audio');
-            // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
-            //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
-            //     items.forEach(clientDir => {
-            //         let clientPath = path.join(baseAudioPath, clientDir)
-            //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
-            //         files.forEach(file => {
-            //             let client_id = clientDir;
-            //             let seq = file.split('.')[0];
-            //             let audioFilePath = path.join(clientPath, file);
-            //             let item = {
-            //                 seq: seq,
-            //                 client_id: client_id,
-            //                 path: audioFilePath,
-            //                 data: null
-            //             }
-            //             audioManifest.push(item);
-            //         });
-            //     });
-            // }
+        // if (capture_id && start) {
+        //     // TODO(rob): Mar 3 2021 -- audio playback on hold to focus on data. 
+        //     // build audio file manifest
+        //     // if (this.logger) this.logger.info(`Buiding audio file manifest for capture replay: ${playback_id}`)
+        //     // let audioManifest = [];
+        //     // let baseAudioPath = this.getCapturePath(capture_id, start, 'audio');
+        //     // if(fs.existsSync(baseAudioPath)) {              // TODO(rob): change this to async operation
+        //     //     let items = fs.readdirSync(baseAudioPath);  // TODO(rob): change this to async operation
+        //     //     items.forEach(clientDir => {
+        //     //         let clientPath = path.join(baseAudioPath, clientDir)
+        //     //         let files = fs.readdirSync(clientPath)  // TODO(rob): change this to async operation
+        //     //         files.forEach(file => {
+        //     //             let client_id = clientDir;
+        //     //             let seq = file.split('.')[0];
+        //     //             let audioFilePath = path.join(clientPath, file);
+        //     //             let item = {
+        //     //                 seq: seq,
+        //     //                 client_id: client_id,
+        //     //                 path: audioFilePath,
+        //     //                 data: null
+        //     //             }
+        //     //             audioManifest.push(item);
+        //     //         });
+        //     //     });
+        //     // }
 
-            // // emit audio manifest to connected clients
-            // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+        //     // // emit audio manifest to connected clients
+        //     // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
 
-            // // stream all audio files for caching and playback by client
-            // audioManifest.forEach((file) => {
-            //     fs.readFile(file.path, (err, data) => {
-            //         file.data = data;
-            //         if(err) if (this.logger) this.logger.error(`Error reading audio file: ${file.path}`);
-            //         // console.log('emitting audio packet:', file);
-            //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
-            //     });
-            // });
+        //     // // stream all audio files for caching and playback by client
+        //     // audioManifest.forEach((file) => {
+        //     //     fs.readFile(file.path, (err, data) => {
+        //     //         file.data = data;
+        //     //         if(err) if (this.logger) this.logger.error(`Error reading audio file: ${file.path}`);
+        //     //         // console.log('emitting audio packet:', file);
+        //     //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+        //     //     });
+        //     // });
 
-            // position streaming
-            let capturePath = this.getCapturePath(capture_id, start, 'pos');
-            let stream = fs.createReadStream(capturePath, { highWaterMark: positionChunkSize() });
+        //     // position streaming
+        //     let capturePath = this.getCapturePath(capture_id, start, 'pos');
+        //     let stream = fs.createReadStream(capturePath, { highWaterMark: positionChunkSize() });
 
-            // set actual playback start time
-            let playbackStart = Date.now();
+        //     // set actual playback start time
+        //     let playbackStart = Date.now();
 
-            // position data emit loop
-            stream.on('data', function(chunk) {
-                stream.pause();
+        //     // position data emit loop
+        //     stream.on('data', function(chunk) {
+        //         stream.pause();
 
-                // start data buffer loop
-                let buff = Buffer.from(chunk);
-                let farr = new Float32Array(chunk.byteLength / 4);
-                for (var i = 0; i < farr.length; i++) {
-                    farr[i] = buff.readFloatLE(i * 4);
-                }
+        //         // start data buffer loop
+        //         let buff = Buffer.from(chunk);
+        //         let farr = new Float32Array(chunk.byteLength / 4);
+        //         for (var i = 0; i < farr.length; i++) {
+        //             farr[i] = buff.readFloatLE(i * 4);
+        //         }
+        //         var arr = Array.from(farr);
 
-                var arr = Array.from(farr);
+        //         let timer = setInterval( () => {
+        //             current_seq = Date.now() - playbackStart;
 
-                let timer = setInterval( () => {
-                    current_seq = Date.now() - playbackStart;
+        //             // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
 
-                    // console.log(`=== POS === current seq ${current_seq}; arr seq ${arr[POS_FIELDS-1]}`);
+        //             if (arr[POS_FIELDS-1] <= current_seq) {
+        //                 // alias client and entity id with prefix if entity type is not an asset
+        //                 if (arr[4] != 3) {
+        //                     arr[2] = 90000 + arr[2];
+        //                     arr[3] = 90000 + arr[3];
+        //                 }
+        //                 // if (!audioStarted) {
+        //                 //     // HACK(rob): trigger clients to begin playing buffered audio 
+        //                 //     audioStarted = true;
+        //                 //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
+        //                 // }
+        //                 io.to(session_id.toString()).emit('relayUpdate', arr);
+        //                 stream.resume();
+        //                 clearInterval(timer);
+        //             }
+        //         }, 1);
+        //     });
 
-                    if (arr[POS_FIELDS-1] <= current_seq) {
-                        // alias client and entity id with prefix if entity type is not an asset
-                        if (arr[4] != 3) {
-                            arr[2] = 90000 + arr[2];
-                            arr[3] = 90000 + arr[3];
-                        }
+        //     stream.on('error', function(err) {
+        //         if (this.logger) this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
+        //         io.to(session_id.toString()).emit('playbackEnd');
+        //     });
 
-                        // if (!audioStarted) {
-                        //     // HACK(rob): trigger clients to begin playing buffered audio 
-                        //     audioStarted = true;
-                        //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
-                        // }
-                        io.to(session_id.toString()).emit('relayUpdate', arr);
-                        stream.resume();
-                        clearInterval(timer);
-                    }
-                }, 1);
-            });
+        //     stream.on('end', function() {
+        //         if (this.logger) this.logger.info(`End of pos data for playback session: ${session_id}`);
+        //         io.to(session_id.toString()).emit('playbackEnd');
+        //     });
 
-            stream.on('error', function(err) {
-                if (this.logger) this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
-                io.to(session_id.toString()).emit('playbackEnd');
-            });
+        //     // interaction streaming
+        //     let ipath = this.getCapturePath(capture_id, start, 'int');
+        //     let istream = fs.createReadStream(ipath, { highWaterMark: interactionChunkSize() });
 
-            stream.on('end', function() {
-                if (this.logger) this.logger.info(`End of pos data for playback session: ${session_id}`);
-                io.to(session_id.toString()).emit('playbackEnd');
-            });
+        //     istream.on('data', function(chunk) {
+        //         istream.pause();
 
-            // interaction streaming
-            let ipath = this.getCapturePath(capture_id, start, 'int');
-            let istream = fs.createReadStream(ipath, { highWaterMark: interactionChunkSize() });
+        //         let buff = Buffer.from(chunk);
+        //         let farr = new Int32Array(chunk.byteLength / 4);
+        //         for (var i = 0; i < farr.length; i++) {
+        //             farr[i] = buff.readInt32LE(i * 4);
+        //         }
+        //         var arr = Array.from(farr);
 
-            istream.on('data', function(chunk) {
-                istream.pause();
+        //         let timer = setInterval( () => {
+        //             // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
-                let buff = Buffer.from(chunk);
-                let farr = new Int32Array(chunk.byteLength / 4);
-                for (var i = 0; i < farr.length; i++) {
-                    farr[i] = buff.readInt32LE(i * 4);
-                }
+        //             if (arr[INT_FIELDS-1] <= current_seq) {
+        //                 io.to(session_id.toString()).emit('interactionUpdate', arr);
+        //                 istream.resume();
+        //                 clearInterval(timer);
+        //             }
+        //         }, 1);
 
-                var arr = Array.from(farr);
+        //     });
 
-                let timer = setInterval( () => {
-                    // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
+        //     istream.on('error', function(err) {
+        //         if (this.logger) this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
+        //         io.to(session_id.toString()).emit('interactionpPlaybackEnd');
+        //     });
 
-                    if (arr[INT_FIELDS-1] <= current_seq) {
-                        io.to(session_id.toString()).emit('interactionUpdate', arr);
-                        istream.resume();
-                        clearInterval(timer);
-                    }
-                }, 1);
-            });
-
-            istream.on('error', function(err) {
-                if (this.logger) this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-                io.to(session_id.toString()).emit('interactionpPlaybackEnd');
-            });
-
-            istream.on('end', function() {
-                if (this.logger) this.logger.info(`End of int data for playback session: ${session_id}`);
-                io.to(session_id.toString()).emit('interactionPlaybackEnd');
-            });
-        }
+        //     istream.on('end', function() {
+        //         if (this.logger) this.logger.info(`End of int data for playback session: ${session_id}`);
+        //         io.to(session_id.toString()).emit('interactionPlaybackEnd');
+        //     });
+        // }
     },
 
     isValidRelayPacket: function (data) {
@@ -467,52 +489,49 @@ module.exports = {
         }
     },
 
-    writeRecordedRelayData: function (data) {
-        if (!data) {
-            this.logErrorSessionClientSocketAction(null, null, null, `Tried to write recorded relay data, but data was null`);
-            
-            return;
-        }
+    // NOTE(rob): DEPRECATED. 8/5/21. 
+    // writeRecordedRelayData: function (data) {
+    //     if (!data) {
+    //         throw new ReferenceError ("data was null");
+    //     }
 
-        let session_id = data[1];
+    //     let session_id = data[1];
 
-        let session = this.sessions.get(session_id);
+    //     let session = this.sessions.get(session_id);
 
-        if (!session) {
-            this.logErrorSessionClientSocketAction(null, null, null, `Tried to write recorded relay data, but data was null`);
+    //     if (!session) {
+    //         throw new ReferenceError ("session was null");
+    //     }
 
-            return;
-        }
+    //     if (!session.isRecording) {
+    //         return;
+    //     }
 
-        if (!session.isRecording) {
-            return;
-        }
+        // // calculate and write session sequence number using client timestamp
+        // data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
 
-        // calculate and write session sequence number using client timestamp
-        data[POS_FIELDS-1] = data[POS_FIELDS-1] - session.recordingStart;
+        // // get reference to session writer (buffer and cursor)
+        // let writer = session.writers.pos;
 
-        // get reference to session writer (buffer and cursor)
-        let writer = session.writers.pos;
+        // if (positionChunkSize() + writer.cursor > writer.buffer.byteLength) {
+        //     // if buffer is full, dump to disk and reset the cursor
+        //     let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
 
-        if (positionChunkSize() + writer.cursor > writer.buffer.byteLength) {
-            // if buffer is full, dump to disk and reset the cursor
-            let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
+        //     let wstream = fs.createWriteStream(path, { flags: 'a' });
 
-            let wstream = fs.createWriteStream(path, { flags: 'a' });
+        //     wstream.write(writer.buffer.slice(0, writer.cursor));
 
-            wstream.write(writer.buffer.slice(0, writer.cursor));
+        //     wstream.close();
 
-            wstream.close();
+        //     writer.cursor = 0;
+        // }
 
-            writer.cursor = 0;
-        }
+        // for (let i = 0; i < data.length; i++) {
+        //     writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
+        // }
 
-        for (let i = 0; i < data.length; i++) {
-            writer.buffer.writeFloatLE(data[i], (i*POS_BYTES_PER_FIELD) + writer.cursor);
-        }
-
-        writer.cursor += positionChunkSize();
-    },
+        // writer.cursor += positionChunkSize();
+    // },
 
     updateSessionState: function (data) {
         if (!data || data.length < 5) {
@@ -555,18 +574,6 @@ module.exports = {
     },
 
     handleInteraction: function (socket, data) {
-        // interaction event values
-        const INTERACTION_LOOK          = 0;
-        const INTERACTION_LOOK_END      = 1;
-        const INTERACTION_RENDER        = 2;
-        const INTERACTION_RENDER_END    = 3;
-        const INTERACTION_GRAB          = 4;
-        const INTERACTION_GRAB_END      = 5;
-        const INTERACTION_SCENE_CHANGE  = 6;
-        const INTERACTION_UNSET         = 7; // NOTE(rob): this value is currently unused. 2020-12-1
-        const INTERACTION_LOCK          = 8;
-        const INTERACTION_LOCK_END      = 9;
-
         let session_id = data[1];
         let client_id = data[2];
 
@@ -661,29 +668,28 @@ module.exports = {
                 }
             }
 
+            // NOTE(rob): deprecated, use messages. 
             // write to file as binary data
-            if (session.isRecording) {
-                // calculate and write session sequence number
-                data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
+            // if (session.isRecording) {
+                // // calculate and write session sequence number
+                // data[INT_FIELDS-1] = data[INT_FIELDS-1] - session.recordingStart;
                 
-                // get reference to session writer (buffer and cursor)
-                let writer = session.writers.int;
+                // // get reference to session writer (buffer and cursor)
+                // let writer = session.writers.int;
 
-                if (interactionChunkSize() + writer.cursor > writer.buffer.byteLength) {
-                    // if buffer is full, dump to disk and reset the cursor
-                    let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-                    let wstream = fs.createWriteStream(path, { flags: 'a' });
-                    wstream.write(writer.buffer.slice(0, writer.cursor));
-                    wstream.close();
-                    writer.cursor = 0;
-                }
-
-                for (let i = 0; i < data.length; i++) {
-                    writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
-                }
-
-                writer.cursor += interactionChunkSize();
-            }
+                // if (interactionChunkSize() + writer.cursor > writer.buffer.byteLength) {
+                //     // if buffer is full, dump to disk and reset the cursor
+                //     let path = this.getCapturePath(session_id, session.recordingStart, 'int');
+                //     let wstream = fs.createWriteStream(path, { flags: 'a' });
+                //     wstream.write(writer.buffer.slice(0, writer.cursor));
+                //     wstream.close();
+                //     writer.cursor = 0;
+                // }
+                // for (let i = 0; i < data.length; i++) {
+                //     writer.buffer.writeInt32LE(data[i], (i*INT_BYTES_PER_FIELD) + writer.cursor);
+                // }
+                // writer.cursor += interactionChunkSize();
+            // }
         }
     },
 
@@ -930,24 +936,31 @@ module.exports = {
     },
 
     writeEventToConnections: function (event, session_id, client_id) {
-        if (!this.pool) {
-            this.logErrorSessionClientSocketAction(session_id, client_id, null, "pool was null");
+        if (event && session_id && client_id) {
+            if (!this.pool) {
+                this.logErrorSessionClientSocketAction(session_id, client_id, null, "pool was null");
 
-            return;
-        }
-        
-        this.pool.query(
-            "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
-
-            (err, res) => {
-                if (err != undefined) {
-                    this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
-                }
+                return;
             }
-        );
+            
+            if (pool) {
+                this.pool.query(
+                    "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
+
+                    (err, res) => {
+                        if (err != undefined) {
+                            this.logErrorSessionClientSocketAction(session_id, client_id, null, `Error writing ${event} event to database: ${err} ${res}`);
+                        }
+                    }
+                );
+            }
+        } else {
+            this.logger.error(`Failed to log event to database: ${event}, ${session_id}, ${client_id}`);
+        }
     },
 
     // returns session ID on success; returns -1 on failure
+    // TODO(Brandon): deprecate and remove 8/10/21
     getSessionIdFromSession: function (session) {
         let result = -1;
 
@@ -1170,6 +1183,7 @@ module.exports = {
         this.logInfoSessionClientSocketAction(session_id, null, null, `Creating session: ${session_id}`);
 
         this.sessions.set(session_id, {
+            id: session_id,
             sockets: {}, // socket.id -> client_id
             clients: [],
             entities: [],
@@ -1178,16 +1192,18 @@ module.exports = {
             start: Date.now(),
             recordingStart: 0,
             seq: 0,
-            writers: {
-                pos: {
-                    buffer: Buffer.alloc(this.positionWriteBufferSize()),
-                    cursor: 0
-                },
-                int: {
-                    buffer: Buffer.alloc(this.interactionWriteBufferSize()),
-                    cursor: 0
-                }
-            }
+            // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
+            // writers: {
+            //     pos: {
+            //         buffer: Buffer.alloc(this.positionWriteBufferSize()),
+            //         cursor: 0
+            //     },
+            //     int: {
+            //         buffer: Buffer.alloc(this.interactionWriteBufferSize()),
+            //         cursor: 0
+            //     }
+            // },
+            message_buffer: []
         });
 
         session = this.sessions.get(session_id);
@@ -1344,6 +1360,10 @@ module.exports = {
         }
 
         this.logger = logger;
+        if (!this.logger) {
+            console.error("Failed to init logger. Exiting.");
+            process.exit();
+        }
 
         this.logInfoSessionClientSocketAction("Session ID", "Client ID", "Socket ID", "Message");
 
@@ -1482,14 +1502,174 @@ module.exports = {
             // in order to update the session state accordingly. we will probably need to protect against
             // garbage values that might be passed by devs who are overwriting reserved message events.  
             socket.on('message', function(data) {
-                let session_id = data.session_id;
+                if (data) {
+                    let session_id = data.session_id;
+                    let client_id = data.client_id;
 
-                let client_id = data.client_id;
+                    if (session_id && client_id) {
+                        // relay the message
+                        socket.to(session_id.toString()).emit('message', data);
 
-                if (session_id && client_id) {
-                    socket.to(session_id.toString()).emit('message', data);
+                        // get reference to session and parse message payload for state updates, if needed. 
+                        let session = self.sessions.get(session_id);
+                        if (session) {
+                            // DEBUG(rob): 
+                            // console.log(`message received for session: ${session.id}`)
+                            // console.log(`message packet: ${JSON.stringify(data)}`);
+                            
+                            let message = data.message;
 
-                    record_message_data(data);
+                            if (!message) return;
+                            if (!message.type) return;
+
+                            if (message.type == "interaction") {
+                                console.log("core interaction message received, handling...");
+
+                                // `data` here will be in the legacy packed-array format. 
+
+                                // NOTE(rob): the following code is copypasta from the old interactionUpdate handler. 7/21/2021
+
+                                // check if the incoming packet is from a client who is valid for this session
+                                let joined = false;
+                                for (let i=0; i < session.clients.length; i++) {
+                                    if (client_id == session.clients[i]) {
+                                        joined = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!joined) return;
+
+                                let payload = message.data;
+
+                                // Check if message payload is pre-parsed. 
+                                // TODO(Brandon): evaluate whether to unpack here or keep as a string.
+                                if (typeof payload != `object`) {
+                                    try {
+                                        payload = JSON.parse(message.data);
+                                    } catch (e) {
+                                        this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
+                                        return;
+                                    }
+                                }
+
+                                let source_id = payload[3];
+                                let target_id = payload[4];
+                                let interaction_type = payload[5];
+                                
+                                // entity should be rendered
+                                if (interaction_type == INTERACTION_RENDER) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].render = true;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: [],
+                                            render: true,
+                                            locked: false
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+
+                                // entity should stop being rendered
+                                if (interaction_type == INTERACTION_RENDER_END) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].render = false;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: payload,
+                                            render: false,
+                                            locked: false
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+
+                                // scene has changed
+                                if (interaction_type == INTERACTION_SCENE_CHANGE) {
+                                    session.scene = target_id;
+                                }
+
+                                // entity is locked
+                                if (interaction_type == INTERACTION_LOCK) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].locked = true;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: [],
+                                            render: false,
+                                            locked: true
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+
+                                // entity is unlocked
+                                if (interaction_type == INTERACTION_LOCK_END) {
+                                    let i = session.entities.findIndex(e => e.id == target_id);
+                                    if (i != -1) {
+                                        session.entities[i].locked = false;
+                                    } else {
+                                        let entity = {
+                                            id: target_id,
+                                            latest: [],
+                                            render: false,
+                                            locked: false
+                                        };
+                                        session.entities.push(entity);
+                                    }
+                                }
+                            }
+
+                            if (message.type == "sync") {
+                                // update session state with latest entity positions
+                                let payload = message.data;
+
+                                // Check if message payload is pre-parsed. 
+                                // TODO(Brandon): evaluate whether to unpack here or keep as a string.
+                                if (typeof payload != `object`) {
+                                    try {
+                                        payload = JSON.parse(message.data);
+                                    } catch (e) {
+                                        this.logger.warn(`Failed to parse 'sync' message payload: ${e}`);
+                                        return;
+                                    }
+                                }
+
+                                let entity_type = payload[4];
+
+                                if (entity_type == 3) {
+                                    let entity_id = payload[3];
+
+                                    let i = session.entities.findIndex(e => e.id == entity_id);
+
+                                    if (i != -1) {
+                                        session.entities[i].latest = payload;
+                                    } else {
+                                        let entity = {
+                                            id: entity_id,
+                                            latest: payload,
+                                            render: true,
+                                            locked: false
+                                        };
+
+                                        session.entities.push(entity);
+                                    }
+                                }
+                            }
+                            
+                            // data capture
+                            if (session.isRecording) {
+                                self.record_message_data(data);
+                            }
+                        }
+                    }
                 }
             });
 
@@ -1504,7 +1684,7 @@ module.exports = {
                 // relay packet if client is valid
                 socket.to(session_id.toString()).emit('relayUpdate', data);
 
-                self.writeRecordedRelayData(data);
+                // self.writeRecordedRelayData(data); NOTE(rob): DEPRECATED. 8/5/21. 
 
                 self.updateSessionState(data);
             });
@@ -1536,7 +1716,6 @@ module.exports = {
                 if (didReconnect) {
                     // log reconnect event with timestamp to db
                     self.writeEventToConnections("reconnect", session_id, client_id);
-
                     return;
                 }
 

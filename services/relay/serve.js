@@ -75,6 +75,7 @@ let pool;
 if (config.db.host && config.db.host != "") {
 
     pool = mysql.createPool(config.db);
+    logger.info(`Database pool created.`);
 
 }
 
