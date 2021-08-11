@@ -22,39 +22,29 @@ const DUMMY_SOCKET_B = { "dummy": "socketB", "id": "LIVEBEEF" };
 const DUMMY_SOCKET_C = { "dummy": "socketC", "id": "SCHRBEEF" };
 
 describe("Sync Server: Sessions", function (done) {
-
     beforeEach(function () {
-
         syncServer.initGlobals();
         
         syncServer.bumpAction = function () { 
-
             throw Error("An unexpected bump occurred.");
-        
         };
         
         syncServer.reconnectAction = function () { 
-
             throw Error("An unexpected reconnect occurred.");
-        
         };
         
         syncServer.disconnectAction = function () { 
-
             throw Error("An unexpected disconnect occurred.");
-        
         };
     });
 
     it("should have 0 sessions on startup", function () {
-        
         let sessions = syncServer.getSessions();
 
         sessions.size.should.equal(0);
     });
 
     it("should create one singular, correct sessions object", function () {
-
         const session_id = 123;
         
         let sessions = syncServer.getSessions();
@@ -72,7 +62,6 @@ describe("Sync Server: Sessions", function (done) {
         // TODO(Brandon) - are we supposed to dip into the syncServer.sessions variable directly like this? 
 
         for (let entry of sessions) {
-
             count += 1;
 
             singularEntry = entry;
@@ -83,7 +72,6 @@ describe("Sync Server: Sessions", function (done) {
         singularEntry[0].should.equal(session_id);
 
         const expectedSession = {
-
             sockets: {}, // socket.id -> client_id
             clients: [],
             entities: [],
@@ -92,16 +80,18 @@ describe("Sync Server: Sessions", function (done) {
             start: Date.now(),
             recordingStart: 0,
             seq: 0,
-            writers: {
-                pos: {
-                    buffer: Buffer.alloc(syncServer.positionWriteBufferSize()),
-                    cursor: 0
-                },
-                int: {
-                    buffer: Buffer.alloc(syncServer.interactionWriteBufferSize()),
-                    cursor: 0
-                }
-            }
+            // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
+            // writers: {
+            //     pos: {
+            //         buffer: Buffer.alloc(syncServer.positionWriteBufferSize()),
+            //         cursor: 0
+            //     },
+            //     int: {
+            //         buffer: Buffer.alloc(syncServer.interactionWriteBufferSize()),
+            //         cursor: 0
+            //     }
+            // },
+            message_buffer: []
         };
         
         assert.deepStrictEqual(singularEntry[1].sockets, expectedSession.sockets);
@@ -121,11 +111,14 @@ describe("Sync Server: Sessions", function (done) {
 
         assert.deepStrictEqual(singularEntry[1].seq, expectedSession.seq);
 
-        assert.deepStrictEqual(singularEntry[1].writers, expectedSession.writers);
+        // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
+        // assert.deepStrictEqual(singularEntry[1].writers, expectedSession.writers);
+
+        assert.deepStrictEqual(singularEntry[1].message_buffer, expectedSession.message_buffer);
+
     });   
 
     it("should return failure on getting a nonexistent session", function () {
-
         let { success, session } = syncServer.getSession(SESSION_ID);
 
         success.should.equal(false);
@@ -134,7 +127,6 @@ describe("Sync Server: Sessions", function (done) {
     });
 
     it("should return success for getting an existing session", function () {
-
         let inputSession = {
             clients: [ CLIENT_ID ],
             sockets: { 
@@ -155,29 +147,20 @@ describe("Sync Server: Sessions", function (done) {
 });
 
 describe("Sync Server: Clients and Sockets", function (done) {
-
     beforeEach(function () {
-
         syncServer.bumpAction = function () { 
-
             throw Error("An unexpected bump occurred.");
-        
         };
         
         syncServer.reconnectAction = function () { 
-
             throw Error("An unexpected reconnect occurred.");
-        
         };
         
         syncServer.disconnectAction = function () { 
-
             throw Error("An unexpected disconnect occurred.");
-        
         };
 
         syncServer.joinSessionAction = function (session_id, client_id) {
-
             session_id.should.equal(SESSION_ID);
 
             client_id.should.equal(CLIENT_ID);
@@ -190,16 +173,13 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
     /*
     it("should have 0 clients on startup", function () {
-        
     });
     */
 
     it("should append a valid client to an empty session", function () {
-
         let sessions = new Map ();
 
         let session = {
-
             clients: [ ]
         };
 
@@ -215,7 +195,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should create a session when appending a valid client to a null session, appropriately", function () {
-
         let sessions = new Map ();
 
         syncServer.sessions = sessions;
@@ -228,31 +207,19 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should return an error when appending a valid client to a null session, appropriately", function () {
-
         let sessions = new Map ();
 
         syncServer.sessions = sessions;
+        
+        let success = syncServer.addClientToSession(null, CLIENT_ID, false);
 
-        try {
-
-            syncServer.addClientToSession(null, CLIENT_ID, false);
-
-        } catch (err) {
-
-            assert(err.message == "session was null");
-
-            return;
-        }
-
-        assert(false);
+        success.should.eql(false);
     });
 
     it("should append a duplicate client to a session", function () {
-
         let sessions = new Map ();
 
         let session = {
-
             clients: [ CLIENT_ID ]
         };
 
@@ -268,7 +235,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should be able to bump an existing socket", function () {
-
         let session = {
             clients: [ CLIENT_ID, CLIENT_ID, CLIENT_ID ],
             sockets: { }
@@ -289,7 +255,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
         let bumpCount = 0;
 
         syncServer.bumpAction = function (session_id, socket) {
-
             session_id.should.equal(SESSION_ID);
 
             socket.should.be.oneOf(DUMMY_SOCKET_A, DUMMY_SOCKET_B);
@@ -300,7 +265,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
         let disconnectCount = 0;
 
         syncServer.disconnectAction = function (socket, session_id, client_id) {
-
             session_id.should.equal(SESSION_ID);
 
             client_id.should.equal(CLIENT_ID);
@@ -322,7 +286,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should reduce two duplicate clients to one client", function () {
-        
         syncServer.createSession(SESSION_ID);
 
         let { success, session } = syncServer.getSession(SESSION_ID);
@@ -347,7 +310,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should return all session sockets for a given client ID", function () {
-
         syncServer.sessions = new Map ();
 
         let session =  {
@@ -364,7 +326,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
         sockets.should.eql([ DUMMY_SOCKET_A ]);
         
         syncServer.bumpAction = function (session_id, socket) {
-            
             session_id.should.equal(SESSION_ID);
 
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
@@ -386,7 +347,6 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should exclude a socket when requesting session sockets", function () {
-
         let session = {
             clients: [ CLIENT_ID, CLIENT_ID, CLIENT_ID ],
             sockets: {
@@ -405,29 +365,20 @@ describe("Sync Server: Clients and Sockets", function (done) {
 });
 
 describe("Sync Server: Integration", function (done) {
-
     beforeEach(function () {
-
         syncServer.bumpAction = function () { 
-
             throw Error("An unexpected bump occurred.");
-        
         };
         
         syncServer.reconnectAction = function () { 
-
             throw Error("An unexpected reconnect occurred.");
-        
         };
         
         syncServer.disconnectAction = function () { 
-
             throw Error("An unexpected disconnect occurred.");
-        
         };
 
         syncServer.joinSessionAction = function (session_id, client_id) {
-
             session_id.should.equal(SESSION_ID);
 
             client_id.should.equal(CLIENT_ID);
@@ -437,7 +388,6 @@ describe("Sync Server: Integration", function (done) {
     });
     
     it("should create a correct session object when a client joins", function () {
-
         let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         success.should.equal(true); // we passed in err = null, so it should succeed.
@@ -451,7 +401,6 @@ describe("Sync Server: Integration", function (done) {
         // TODO(Brandon) - are we supposed to dip into the syncServer.sessions variable directly like this? 
 
         for (let entry of sessions) {
-
             singularEntry = entry;
         }
 
@@ -490,7 +439,6 @@ describe("Sync Server: Integration", function (done) {
     });
 
     it("should perform a bump properly", function () {
-
         let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         sessions = syncServer.getSessions();
@@ -500,7 +448,6 @@ describe("Sync Server: Integration", function (done) {
         // TODO(Brandon) - are we supposed to dip into the syncServer.sessions variable directly like this? 
 
         for (let entry of sessions) {
-
             singularEntry = entry;
         }
 
@@ -525,14 +472,12 @@ describe("Sync Server: Integration", function (done) {
         // duplicated here
         
         syncServer.bumpAction = function (session_id, socket) {
-            
             session_id.should.equal(SESSION_ID);
 
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
         };
         
         syncServer.disconnectAction = function (socket, session_id, client_id) {
-
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
             
             session_id.should.equal(SESSION_ID);
@@ -549,7 +494,6 @@ describe("Sync Server: Integration", function (done) {
         // TODO(Brandon) - are we supposed to dip into the syncServer.sessions variable directly like this? 
 
         for (let entry of sessions) {
-
             singularEntry = entry;
         }
 
