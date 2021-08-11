@@ -943,7 +943,7 @@ module.exports = {
                 return;
             }
             
-            if (pool) {
+            if (this.pool) {
                 this.pool.query(
                     "INSERT INTO connections(timestamp, session_id, client_id, event) VALUES(?, ?, ?, ?)", [Date.now(), session_id, client_id, event],
 
