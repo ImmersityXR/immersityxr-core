@@ -180,9 +180,11 @@ module.exports = {
 
     start_recording: function (pool, session_id) {// TODO(rob): require client id and token
         console.log(`start_recording called with pool: ${pool}, session: ${session_id}`)
-        let session = this.sessions.get(session_id.toString());
+        let session = this.sessions.get(session_id);
         if (!session) {
             this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to start recording, but session was null`);
+
+            logger.info("DEBUG" + Object.keys(this.sessions));
 
             return;
         }
