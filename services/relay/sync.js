@@ -179,33 +179,36 @@ module.exports = {
     },
 
     start_recording: function (pool, session_id) {// TODO(rob): require client id and token
-        if (session_id) {
-            let session = this.sessions.get(session_id);
-            if (session && !session.isRecording) {
-                session.isRecording = true;
-                session.recordingStart = Date.now();
-                let path = this.getCapturePath(session_id, session.recordingStart, '');
-                fs.mkdir(path, { recursive: true }, (err) => {
-                    if(err) if (this.logger) this.logger.warn(`Error creating capture path: ${err}`);
-                });
-                let capture_id = session_id+'_'+session.recordingStart;
-                if (pool) {
-                    pool.query(
-                        "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
-                        (err, res) => {
-                            if (err != undefined) {
-                                if (this.logger) this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
-                            }
-                        }
-                    );
-                }
+        console.log(`start_recording called with pool: ${pool}, session: ${session_id}`)
+        let session = this.sessions.get(session_id.toString());
+        if (!session) {
+            this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to start recording, but session was null`);
 
-                if (this.logger) this.logger.info(`Capture started: ${session_id}`);
-            } else if (session && session.isRecording) {
-                if (this.logger) this.logger.warn(`Requested session capture, but session is already recording: ${session_id}`);
-            } else {
-                if (this.logger) this.logger.warn(`Error starting capture for session: ${session_id}`);
+            return;
+        }
+
+        if (session && !session.isRecording) {
+            session.isRecording = true;
+            session.recordingStart = Date.now();
+            let path = this.getCapturePath(session_id, session.recordingStart, '');
+            fs.mkdir(path, { recursive: true }, (err) => {
+                if(err) if (this.logger) this.logger.warn(`Error creating capture path: ${err}`);
+            });
+            let capture_id = session_id+'_'+session.recordingStart;
+            if (pool) {
+                pool.query(
+                    "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
+                    (err, res) => {
+                        if (err != undefined) {
+                            if (this.logger) this.logger.error(`Error writing recording start event to database: ${err} ${res}`);
+                        }
+                    }
+                );
             }
+
+            if (this.logger) this.logger.info(`Capture started: ${session_id}`);
+        } else if (session && session.isRecording) {
+            if (this.logger) this.logger.warn(`Requested session capture, but session is already recording: ${session_id}`);
         }
     }, 
 
