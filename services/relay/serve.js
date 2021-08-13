@@ -35,7 +35,7 @@
 
 const io = require('socket.io')();
 
-const mysql = require('mysql');
+const mysql = require('mysql2');
 
 const syncServer = require('./sync');
 

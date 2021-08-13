@@ -184,8 +184,6 @@ module.exports = {
         if (!session) {
             this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to start recording, but session was null`);
 
-            logger.info("DEBUG" + Object.keys(this.sessions));
-
             return;
         }
 
@@ -276,7 +274,7 @@ module.exports = {
             // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
             // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
 
-            let seq =  message.ts - session.recordingStart;
+            message.seq =  message.ts - session.recordingStart;
 
             let session_id = message.session_id;
 
@@ -288,19 +286,13 @@ module.exports = {
                 return;
             }
 
-            // create message record with sequence metadata
-            let record = {
-                seq: seq,
-                message: message
-            };
-
             if (session.message_buffer) {
                 // TODO(rob): find optimal buffer size
                 // if (session.message_buffer.length < MESSAGE_BUFFER_MAX_SIZE) {
                 //     this.session.message_buffer.push(record)
                 // } else
 
-                session.message_buffer.push(record);
+                session.message_buffer.push(message);
 
                 // DEBUG(rob): 
                 // let mb_str = JSON.stringify(session.message_buffer);
@@ -1518,14 +1510,11 @@ module.exports = {
                         // get reference to session and parse message payload for state updates, if needed. 
                         let session = self.sessions.get(session_id);
                         if (session) {
-                            // DEBUG(rob): 
-                            // console.log(`message received for session: ${session.id}`)
-                            // console.log(`message packet: ${JSON.stringify(data)}`);
                             
                             let message = data.message;
 
                             if (!message) return;
-                            if (!message.type) return;
+                            if (!message.type) return; // NOTE(rob): this requires that the message payload is pre-parsed by the client. 
 
                             if (message.type == "interaction") {
                                 console.log("core interaction message received, handling...");
