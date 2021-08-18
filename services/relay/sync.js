@@ -184,7 +184,7 @@ module.exports = {
         if (!session) {
             this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to start recording, but session was null`);
 
-            logger.info("DEBUG" + Object.keys(this.sessions));
+            if (this.logger) this.logger.info("DEBUG" + Object.keys(this.sessions));
 
             return;
         }

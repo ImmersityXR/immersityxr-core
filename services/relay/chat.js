@@ -45,7 +45,7 @@ module.exports = {
         var chat = io.of('/chat');
 
         chat.on('connection', function(socket) {
-            logger.info(`Chat connection: ${socket.id}`);
+            if (logger) logger.info(`Chat connection: ${socket.id}`);
 
             // setup text chat relay
             socket.on('micText', function(data) {
@@ -67,10 +67,11 @@ module.exports = {
                         // empty chat state tracker
                         chats.set(session_id, { sockets: {} });
                     }
+
                     socket.join(session_id.toString(), function (err) {
                         if (err) { console.log(err); }
                         else {
-                            logger.info(`Client joined chat: ${data}`);
+                            if (logger) logger.info(`Client joined chat: ${data}`);
                             io.of('chat').to(session_id.toString()).emit('joined', data);
                             let chat = chats.get(session_id);
                             chat.sockets[socket.id] = client_id;
@@ -91,13 +92,13 @@ module.exports = {
                     }
 
                     // remove socket -> client mapping
-                    logger.info(`Client disconnected from chat: ${chat.sockets[socket.id]}`);
+                    if (logger) logger.info(`Client disconnected from chat: ${chat.sockets[socket.id]}`);
 
                     delete chat.sockets[socket.id];
 
                     // remove chat session if empty
                     if (Object.keys(chat.sockets).length <= 0) {
-                        logger.info(`Chat session is empty, removing: ${session_id}`);
+                        if (logger) logger.info(`Chat session is empty, removing: ${session_id}`);
 
                         delete chat;
                     }
@@ -105,7 +106,7 @@ module.exports = {
                     return;
                 }
 
-                logger.error(`tried disconnecting chat socket ${socket.id}, but it was not found.`);
+                if (logger) logger.error(`tried disconnecting chat socket ${socket.id}, but it was not found.`);
             });
 
             // client audio processing
@@ -119,11 +120,10 @@ module.exports = {
                     if (session) {
                         // speech-to-text
                         try {
-                            speechToTextServer.processSpeech(data.blob, session_id, client_id, data.client_name);
+                            speechToTextServer.processSpeech(data.blob, session_id, client_id, data.client_name, logger);
                         } catch (error) {
-                            logger.error(`Error processing speech-to-text: ${client_id}, session: ${session_id}, error: ${error}`);
+                            if (logger) logger.error(`Error processing speech-to-text: ${client_id}, session: ${session_id}, error: ${error}`);
                         }
-
 
                         // TODO(rob): Mar 3 2021 -- audio recording on hold to focus on data playback. 
                         // if (session.isRecording) {
@@ -144,4 +144,3 @@ module.exports = {
         });
     }
 };
-

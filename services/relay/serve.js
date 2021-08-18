@@ -76,15 +76,15 @@ if (config.db.host && config.db.host != "") {
 
     testQuery = pool.query(`SHOW TABLES;`, (err, res) => {
         if (err) { 
-            logger.error(err);
+            if (logger) logger.error(err);
 
             process.exit();
         }
 
-        else { logger.info(`Database initialized with ${res.length} tables.`); }
+        else { if (logger) logger.info(`Database initialized with ${res.length} tables.`); }
     });
 
-    logger.info(`Database pool created: host: ${config.db.host}, database: ${config.db.database}.`);
+    if (logger) logger.info(`Database pool created: host: ${config.db.host}, database: ${config.db.database}.`);
 }
 
 // relay server
@@ -95,7 +95,7 @@ io.listen(PORT, {
     pingTimeout: 30000
 });
 
-logger.info(`Komodo relay is running on :${PORT}`);
+if (logger) logger.info(`Komodo relay is running on :${PORT}`);
 
 syncServer.init(io, pool, logger);
 
