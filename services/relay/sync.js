@@ -265,23 +265,32 @@ module.exports = {
         }
     },
 
-    record_message_data: function (message) {
-        if (message) {
-            let session = this.sessions.get(message.session_id);
+    record_message_data: function (data) {
+        if (data) {
+            let session = this.sessions.get(data.session_id);
 
             // calculate a canonical session sequence number for this message from session start and message timestamp.
             // NOTE(rob): investigate how we might timestamp incoming packets WHEN THEY ARE RECEIVED BY THE NETWORKING LAYER, ie. not
             // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
             // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
 
-            message.seq =  message.ts - session.recordingStart;
+            data.seq =  data.ts - session.recordingStart;
 
-            let session_id = message.session_id;
+            let session_id = data.session_id;
 
-            let client_id = message.client_id;
+            let client_id = data.client_id;
+
+            if (typeof data.message != `object`) {
+                try {
+                    data.message = JSON.parse(message);
+                } catch (e) {
+                    this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
+                    return;
+                }
+            }
 
             if (!session_id || !client_id) {
-                this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to record message data. One of these properties is missing. session_id: ${session_id}, client_id: ${client_id}, message: ${message}`);
+                this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to record message data. One of these properties is missing. session_id: ${session_id}, client_id: ${client_id}, message: ${data}`);
 
                 return;
             }
@@ -289,15 +298,15 @@ module.exports = {
             if (session.message_buffer) {
                 // TODO(rob): find optimal buffer size
                 // if (session.message_buffer.length < MESSAGE_BUFFER_MAX_SIZE) {
-                //     this.session.message_buffer.push(record)
+                //     this.session.message_buffer.push(data)
                 // } else
 
-                session.message_buffer.push(message);
+                session.message_buffer.push(data);
 
                 // DEBUG(rob): 
                 // let mb_str = JSON.stringify(session.message_buffer);
                 // let bytes = new util.TextEncoder().encode(mb_str).length
-                // console.log(`Session ${message.session_id} message buffer size: ${bytes} bytes`)
+                // console.log(`Session ${data.session_id} message buffer size: ${bytes} bytes`)
             }
         } else {
             this.logErrorSessionClientSocketAction(null, null, null, `message was null`);
