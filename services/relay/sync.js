@@ -1502,8 +1502,10 @@ module.exports = {
                 if (data) {
                     let session_id = data.session_id;
                     let client_id = data.client_id;
+                    let type = data.type;
+                    let message = data.message;
 
-                    if (session_id && client_id) {
+                    if (session_id && client_id && type && message) {
                         // relay the message
                         socket.to(session_id.toString()).emit('message', data);
 
@@ -1511,15 +1513,10 @@ module.exports = {
                         let session = self.sessions.get(session_id);
                         if (session) {
                             
-                            let message = data.message;
-
-                            if (!message) return;
-                            if (!message.type) return; // NOTE(rob): this requires that the message payload is pre-parsed by the client. 
-
-                            if (message.type == "interaction") {
+                            if (type == "interaction") {
                                 console.log("core interaction message received, handling...");
 
-                                // `data` here will be in the legacy packed-array format. 
+                                // `message` here will be in the legacy packed-array format. 
 
                                 // NOTE(rob): the following code is copypasta from the old interactionUpdate handler. 7/21/2021
 
@@ -1534,22 +1531,20 @@ module.exports = {
 
                                 if (!joined) return;
 
-                                let payload = message.data;
-
                                 // Check if message payload is pre-parsed. 
                                 // TODO(Brandon): evaluate whether to unpack here or keep as a string.
-                                if (typeof payload != `object`) {
+                                if (typeof message != `object`) {
                                     try {
-                                        payload = JSON.parse(message.data);
+                                        message = JSON.parse(message);
                                     } catch (e) {
                                         this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
                                         return;
                                     }
                                 }
 
-                                let source_id = payload[3];
-                                let target_id = payload[4];
-                                let interaction_type = payload[5];
+                                let source_id = message[3];
+                                let target_id = message[4];
+                                let interaction_type = message[5];
                                 
                                 // entity should be rendered
                                 if (interaction_type == INTERACTION_RENDER) {
@@ -1575,7 +1570,7 @@ module.exports = {
                                     } else {
                                         let entity = {
                                             id: target_id,
-                                            latest: payload,
+                                            latest: message,
                                             render: false,
                                             locked: false
                                         };
@@ -1623,32 +1618,31 @@ module.exports = {
 
                             if (message.type == "sync") {
                                 // update session state with latest entity positions
-                                let payload = message.data;
 
                                 // Check if message payload is pre-parsed. 
                                 // TODO(Brandon): evaluate whether to unpack here or keep as a string.
-                                if (typeof payload != `object`) {
+                                if (typeof message != `object`) {
                                     try {
-                                        payload = JSON.parse(message.data);
+                                        message = JSON.parse(message);
                                     } catch (e) {
                                         this.logger.warn(`Failed to parse 'sync' message payload: ${e}`);
                                         return;
                                     }
                                 }
 
-                                let entity_type = payload[4];
+                                let entity_type = message[4];
 
                                 if (entity_type == 3) {
-                                    let entity_id = payload[3];
+                                    let entity_id = message[3];
 
                                     let i = session.entities.findIndex(e => e.id == entity_id);
 
                                     if (i != -1) {
-                                        session.entities[i].latest = payload;
+                                        session.entities[i].latest = message;
                                     } else {
                                         let entity = {
                                             id: entity_id,
-                                            latest: payload,
+                                            latest: message,
                                             render: true,
                                             locked: false
                                         };
