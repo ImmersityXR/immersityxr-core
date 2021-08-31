@@ -9,8 +9,6 @@
   "author": "Grainger IDEA Lab",
   "license": "NCSA",
   "dependencies": {
-    "async": "^3.1.1",
-    "graceful-fs": "^4.2.3",
     "microsoft-cognitiveservices-speech-sdk": "^1.10.1",
     "mkdirp": "^1.0.4",
     "mysql2": "^2.3.0",
