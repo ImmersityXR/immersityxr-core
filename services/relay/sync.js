@@ -183,7 +183,6 @@ module.exports = {
         let session = this.sessions.get(session_id);
         if (!session) {
             this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to start recording, but session was null`);
-
             return;
         }
 
