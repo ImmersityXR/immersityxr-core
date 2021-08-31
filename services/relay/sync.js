@@ -273,7 +273,6 @@ module.exports = {
             // NOTE(rob): investigate how we might timestamp incoming packets WHEN THEY ARE RECEIVED BY THE NETWORKING LAYER, ie. not
             // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
             // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
-
             data.seq =  data.ts - session.recordingStart;
 
             let session_id = data.session_id;
@@ -284,7 +283,7 @@ module.exports = {
                 try {
                     data.message = JSON.parse(message);
                 } catch (e) {
-                    this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
+                    if (this.logger) this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`); 
                     return;
                 }
             }
@@ -305,8 +304,8 @@ module.exports = {
 
                 // DEBUG(rob): 
                 // let mb_str = JSON.stringify(session.message_buffer);
-                // let bytes = new util.TextEncoder().encode(mb_str).length
-                // console.log(`Session ${data.session_id} message buffer size: ${bytes} bytes`)
+                // let bytes = new util.TextEncoder().encode(mb_str).length;
+                // console.log(`Session ${data.session_id} message buffer size: ${bytes} bytes`);
             }
         } else {
             this.logErrorSessionClientSocketAction(null, null, null, `message was null`);
@@ -1512,9 +1511,8 @@ module.exports = {
                     let session_id = data.session_id;
                     let client_id = data.client_id;
                     let type = data.type;
-                    let message = data.message;
 
-                    if (session_id && client_id && type && message) {
+                    if (session_id && client_id && type && data.message) {
                         // relay the message
                         socket.to(session_id.toString()).emit('message', data);
 
@@ -1523,8 +1521,6 @@ module.exports = {
                         if (session) {
                             
                             if (type == "interaction") {
-                                console.log("core interaction message received, handling...");
-
                                 // `message` here will be in the legacy packed-array format. 
 
                                 // NOTE(rob): the following code is copypasta from the old interactionUpdate handler. 7/21/2021
@@ -1542,18 +1538,19 @@ module.exports = {
 
                                 // Check if message payload is pre-parsed. 
                                 // TODO(Brandon): evaluate whether to unpack here or keep as a string.
-                                if (typeof message != `object`) {
+                                if (typeof data.message != `object`) {
                                     try {
-                                        message = JSON.parse(message);
+                                        // parse and replace message payload
+                                        data.message = JSON.parse(message);
                                     } catch (e) {
                                         this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
                                         return;
                                     }
                                 }
 
-                                let source_id = message[3];
-                                let target_id = message[4];
-                                let interaction_type = message[5];
+                                let source_id = data.message[3];
+                                let target_id = data.message[4];
+                                let interaction_type = data.message[5];
                                 
                                 // entity should be rendered
                                 if (interaction_type == INTERACTION_RENDER) {
@@ -1579,7 +1576,7 @@ module.exports = {
                                     } else {
                                         let entity = {
                                             id: target_id,
-                                            latest: message,
+                                            latest: data.message,
                                             render: false,
                                             locked: false
                                         };
@@ -1625,33 +1622,33 @@ module.exports = {
                                 }
                             }
 
-                            if (message.type == "sync") {
+                            if (type == "sync") {
                                 // update session state with latest entity positions
 
                                 // Check if message payload is pre-parsed. 
                                 // TODO(Brandon): evaluate whether to unpack here or keep as a string.
-                                if (typeof message != `object`) {
+                                if (typeof data.message != `object`) {
                                     try {
-                                        message = JSON.parse(message);
+                                        data.message = JSON.parse(data.message);
                                     } catch (e) {
                                         this.logger.warn(`Failed to parse 'sync' message payload: ${e}`);
                                         return;
                                     }
                                 }
 
-                                let entity_type = message[4];
+                                let entity_type = data.message[4];
 
                                 if (entity_type == 3) {
-                                    let entity_id = message[3];
+                                    let entity_id = data.message[3];
 
                                     let i = session.entities.findIndex(e => e.id == entity_id);
 
                                     if (i != -1) {
-                                        session.entities[i].latest = message;
+                                        session.entities[i].latest = data.message;
                                     } else {
                                         let entity = {
                                             id: entity_id,
-                                            latest: message,
+                                            latest: data.message,
                                             render: true,
                                             locked: false
                                         };
