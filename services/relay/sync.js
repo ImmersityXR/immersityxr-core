@@ -195,6 +195,7 @@ module.exports = {
                 if(err) if (this.logger) this.logger.warn(`Error creating capture path: ${err}`);
             });
             let capture_id = session_id+'_'+session.recordingStart;
+            session.capture_id = capture_id;
             if (pool) {
                 pool.query(
                     "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)", [capture_id, session_id, session.recordingStart],
@@ -247,7 +248,7 @@ module.exports = {
                 
                 // write the capture end event to database
                 if (pool) {
-                    let capture_id = session_id+'_'+session.recordingStart;
+                    let capture_id = session.capture_id;
                     pool.query(
                         "UPDATE captures SET end = ? WHERE capture_id = ?", [Date.now(), capture_id],
                         (err, res) => {
@@ -256,9 +257,11 @@ module.exports = {
                             }
                         }
                     );
+                    session.capture_id = null;
                 }
             } else if (session && !session.isRecording) {
                 if (this.logger) this.logger.warn(`Requested to end session capture, but capture is already ended: ${session_id}`);
+                session.capture_id = null;
             } else {
                 if (this.logger) this.logger.warn(`Error ending capture for session: ${session_id}`);
             }
@@ -275,15 +278,19 @@ module.exports = {
             // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
             data.seq =  data.ts - session.recordingStart;
 
+            data.capture_id = session.capture_id; // copy capture id session property and attach it to the message data. 
+
             let session_id = data.session_id;
 
             let client_id = data.client_id;
 
             if (typeof data.message != `object`) {
                 try {
-                    data.message = JSON.parse(message);
+                    data.message = JSON.parse(data.message);
                 } catch (e) {
-                    if (this.logger) this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`); 
+                    // if (this.logger) this.logger.warn(`Failed to parse message payload: ${message} ${e}`); 
+                    console.log(`Failed to parse message payload: ${data.message}; ${e}`); 
+
                     return;
                 }
             }
@@ -1541,9 +1548,9 @@ module.exports = {
                                 if (typeof data.message != `object`) {
                                     try {
                                         // parse and replace message payload
-                                        data.message = JSON.parse(message);
+                                        data.message = JSON.parse(data.message);
                                     } catch (e) {
-                                        this.logger.warn(`Failed to parse 'interaction' message payload: ${e}`);
+                                        console.log(`Failed to parse 'interaction' message payload: ${data.message}; ${e}`);
                                         return;
                                     }
                                 }
@@ -1631,7 +1638,7 @@ module.exports = {
                                     try {
                                         data.message = JSON.parse(data.message);
                                     } catch (e) {
-                                        this.logger.warn(`Failed to parse 'sync' message payload: ${e}`);
+                                        console.log(`Failed to parse 'sync' message payload: ${data.message}; ${e}`);
                                         return;
                                     }
                                 }
