@@ -271,6 +271,12 @@ module.exports = {
         if (data) {
             let session = this.sessions.get(data.session_id);
 
+            if (!session) {
+                this.logErrorSessionClientSocketAction(data.session_id, null, null, `Tried to record message data, but session was null`);
+    
+                return;
+            }
+
             // calculate a canonical session sequence number for this message from session start and message timestamp.
             // NOTE(rob): investigate how we might timestamp incoming packets WHEN THEY ARE RECEIVED BY THE NETWORKING LAYER, ie. not
             // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
@@ -1542,6 +1548,8 @@ module.exports = {
 
                                 if (!joined) return;
 
+                                if (!data.message.length) return; // no message payload, nothing to do. 
+
                                 // Check if message payload is pre-parsed. 
                                 // TODO(Brandon): evaluate whether to unpack here or keep as a string.
                                 if (typeof data.message != `object`) {
@@ -1630,6 +1638,8 @@ module.exports = {
 
                             if (type == "sync") {
                                 // update session state with latest entity positions
+
+                                if (!data.message.length) return; // no message payload, nothing to do.
 
                                 // Check if message payload is pre-parsed. 
                                 // TODO(Brandon): evaluate whether to unpack here or keep as a string.
