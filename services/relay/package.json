@@ -4,7 +4,7 @@
   "description": "Relay server for Komodo VR client application",
   "main": "serve.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "nyc mocha --exit"
   },
   "author": "Grainger IDEA Lab",
   "license": "NCSA",
@@ -14,7 +14,13 @@
     "microsoft-cognitiveservices-speech-sdk": "^1.10.1",
     "mkdirp": "^1.0.4",
     "mysql": "^2.18.1",
+    "object.fromentries": "^2.0.4",
     "socket.io": "^2.3.0",
     "winston": "^3.3.3"
+  },
+  "devDependencies": {
+    "mocha": "^9.0.0",
+    "nyc": "^15.1.0",
+    "should": "^13.2.3"
   }
 }

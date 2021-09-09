@@ -1,0 +1,11 @@
+#allSessions, #allSockets {
+    white-space: pre-wrap;
+}
+
+#sessions, #sockets {
+    border: 1px solid black;
+    display: inline-block;
+    width: 25em;
+    padding: 0 1em;
+    vertical-align: top;
+}
