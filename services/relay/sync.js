@@ -244,6 +244,7 @@ module.exports = {
                 // write out message buffer. 
                 let path = this.getCapturePath(session_id, session.recordingStart, 'data');
                 fs.writeFile(path, JSON.stringify(session.message_buffer), (e) => { if (e) {console.log(`Error writing message buffer: ${e}`);} });
+                //TODO(Brandon): add success event here. Possibly notify Unity client.
                 // reset the buffer.
                 session.message_buffer = [];
                 
