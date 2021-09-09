@@ -51,11 +51,12 @@ function convertFloat32ToInt16(buffer) {
     while (l--) {
       buf[l] = Math.min(1, buffer[l])*0x7FFF;
     }
+
     return buf;
 }
 
 module.exports = {
-    processSpeech: function (audioBuffer, session_id, client_id, client_name) {
+    processSpeech: function (audioBuffer, session_id, client_id, client_name, logger) {
         // create the push stream we need for the speech sdk.
         var pushStream = sdk.AudioInputStream.createPushStream();
     
@@ -88,14 +89,14 @@ module.exports = {
                     });
                     let session = sessions.get(session_id);
                     if (session) {
-                        if (session.isRecording)
-                        {
+                        if (session.isRecording) {
                             let sttObj = {
                                 ts: Date.now(),
                                 session_id: session_id,
                                 client_id: client_id,
                                 text: result.privText
                             }
+
                             let path = getCapturePath(session_id, session.recordingStart, 'stt');
                             let wstream = fs.createWriteStream(path, { flags: 'a' })
                             wstream.write(JSON.stringify(sttObj)+'\n');
@@ -103,18 +104,19 @@ module.exports = {
                         }
                     }
                 }
+
                 try {
                     recognizer.close();            
                 } catch (error) {
-                    logger.error(`Error closing SpeechRecognizer: ${error}`);
+                    if (logger) logger.error(`Error closing SpeechRecognizer: ${error}`);
                 }
             },
             function(err) {
-                logger.error(`Error recognizing speech-to-text: ${err}`);
+                if (logger) logger.error(`Error recognizing speech-to-text: ${err}`);
                 try {
                     recognizer.close();
                 } catch (error) {
-                    logger.error(`Error closing SpeechRecognizer: ${error}`);
+                    if (logger) logger.error(`Error closing SpeechRecognizer: ${error}`);
                 }
             }
         );
