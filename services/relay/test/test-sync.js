@@ -115,7 +115,6 @@ describe("Sync Server: Sessions", function (done) {
         // assert.deepStrictEqual(singularEntry[1].writers, expectedSession.writers);
 
         assert.deepStrictEqual(singularEntry[1].message_buffer, expectedSession.message_buffer);
-
     });   
 
     it("should return failure on getting a nonexistent session", function () {
@@ -438,28 +437,34 @@ describe("Sync Server: Integration", function (done) {
         //this.joinSessionAction(session_id, client_id);
     });
 
-    it("should perform a bump properly", function () {
+    it("should create a correct clients array", function () {
         let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         sessions = syncServer.getSessions();
 
         let singularEntry;
 
-        // TODO(Brandon) - are we supposed to dip into the syncServer.sessions variable directly like this? 
-
         for (let entry of sessions) {
             singularEntry = entry;
         }
-
-        //TODO - factor this out into a separate test? - it("should create a correct clients array"
 
         const expectedClients = [ CLIENT_ID ];
 
         singularEntry[1].clients.length.should.equal(expectedClients.length);
 
         singularEntry[1].clients[0].should.equal(expectedClients[0]);
+    });
 
-        //TODO - factor this out into a separate test? - it("should create a correct sockets object"
+    it("should create a correct sockets object", function () {
+        let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
+
+        sessions = syncServer.getSessions();
+
+        let singularEntry;
+
+        for (let entry of sessions) {
+            singularEntry = entry;
+        }
 
         const socketA = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A };
 
@@ -468,9 +473,9 @@ describe("Sync Server: Integration", function (done) {
         numSockets.should.equal(1);
 
         singularEntry[1].sockets[DUMMY_SOCKET_A.id].should.eql(socketA);
-        
-        // duplicated here
-        
+    });
+
+    it("should perform a bump properly", function () {
         syncServer.bumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
@@ -484,6 +489,8 @@ describe("Sync Server: Integration", function (done) {
 
             client_id.should.equal(CLIENT_ID);
         };
+        
+        let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         success = syncServer.handleJoin(null, DUMMY_SOCKET_B, SESSION_ID, CLIENT_ID, true);
 
@@ -497,13 +504,11 @@ describe("Sync Server: Integration", function (done) {
             singularEntry = entry;
         }
 
-        //TODO - factor this out into a separate test? - it("should create a correct clients array"
+        const expectedClients = [ CLIENT_ID ];
 
         singularEntry[1].clients.length.should.equal(expectedClients.length);
 
         singularEntry[1].clients[0].should.equal(expectedClients[0]);
-
-        //TODO - factor this out into a separate test? - it("should create a correct sockets object"
 
         numSockets = Object.keys(singularEntry[1].sockets).length;
 
@@ -514,5 +519,7 @@ describe("Sync Server: Integration", function (done) {
         assert(singularEntry[1].sockets[DUMMY_SOCKET_B.id] != null);
 
         singularEntry[1].sockets[DUMMY_SOCKET_B.id].should.eql(socketB);
+
+        assert(singularEntry[1].sockets[DUMMY_SOCKET_A.id] == null);
     });
 });
