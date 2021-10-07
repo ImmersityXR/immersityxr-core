@@ -1486,6 +1486,7 @@ module.exports = {
                 });
             });
 
+            // When a client requests a state catch-up, send the current session state. Supports versioning.
             socket.on('state', function(data) {
                 let { session_id, state } = self.handleState(socket, data);
 
@@ -1497,7 +1498,7 @@ module.exports = {
 
                 try {
                     // emit versioned state data
-                    io.to(session_id).emit('state', state);
+                    io.to(socket.id).emit('state', state); // Behavior as of 10/7/21: Sends the state only to the client who requested it.
                 } catch (err) {
                     this.logErrorSessionClientSocketAction(session_id, null, socket.id, err.message);
                 }
@@ -1532,7 +1533,6 @@ module.exports = {
                         // get reference to session and parse message payload for state updates, if needed. 
                         let session = self.sessions.get(session_id);
                         if (session) {
-                            
                             if (type == "interaction") {
                                 // `message` here will be in the legacy packed-array format. 
 

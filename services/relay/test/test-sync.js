@@ -233,7 +233,56 @@ describe("Sync Server: Clients and Sockets", function (done) {
         session.clients.should.eql(expectedClients);
     });
 
-    it("should be able to bump an existing socket", function () {
+    it("should be able to bump one existing socket", function () {
+        let session = {
+            clients: [ CLIENT_ID, CLIENT_ID ],
+            sockets: { }
+        };
+
+        session.sockets[DUMMY_SOCKET_A.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A };
+
+        session.sockets[DUMMY_SOCKET_B.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_B };
+
+        syncServer.sessions.set(SESSION_ID, session);
+
+        let outputSession = syncServer.sessions.get(SESSION_ID);
+
+        Object.keys(outputSession.sockets).should.eql( [ DUMMY_SOCKET_A.id, DUMMY_SOCKET_B.id ] );
+
+        let bumpCount = 0;
+
+        syncServer.bumpAction = function (session_id, socket) {
+            session_id.should.equal(SESSION_ID);
+
+            socket.should.equal(DUMMY_SOCKET_A);
+
+            bumpCount += 1;
+        };
+
+        let disconnectCount = 0;
+
+        syncServer.disconnectAction = function (socket, session_id, client_id) {
+            session_id.should.equal(SESSION_ID);
+
+            client_id.should.equal(CLIENT_ID);
+
+            socket.should.equal(DUMMY_SOCKET_A);
+
+            disconnectCount += 1;
+        };
+
+        syncServer.bumpDuplicateSockets(session, CLIENT_ID, true, DUMMY_SOCKET_B.id);
+
+        bumpCount.should.eql(1);
+
+        disconnectCount.should.eql(1);
+
+        outputSession = syncServer.sessions.get(SESSION_ID);
+
+        Object.keys(outputSession.sockets).should.eql( [ DUMMY_SOCKET_B.id ] );
+    });
+
+    it("should be able to bump two existing sockets", function () {
         let session = {
             clients: [ CLIENT_ID, CLIENT_ID, CLIENT_ID ],
             sockets: { }
