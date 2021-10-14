@@ -77,6 +77,35 @@ function compareKeys(a, b) {
     return JSON.stringify(aKeys) === JSON.stringify(bKeys);
 }
 
+const SocketIOEvents = {
+    disconnect: 'disconnect',
+};
+
+const KomodoReceiveEvents = {
+    join: 'join',
+    sessionInfo: 'sessionInfo',
+    state: 'state',
+    draw: 'draw',
+    message: 'message',
+    update: 'update',
+    interact: 'interact',
+    start_recording: 'start_recording',
+    end_recording: 'end_recording',
+    playback: 'playback',
+};
+
+const KomodoSendEvents = {
+    connectionError: 'connectionError',
+    interactionUpdate: 'interactionUpdate',
+    joined: 'joined',
+    disconnected: 'disconnected',
+    sessionInfo: 'sessionInfo',
+    state: 'state',
+    draw: 'draw',
+    message: 'message',
+    relayUpdate: 'relayUpdate',
+};
+
 module.exports = {
     // NOTE(rob): deprecated. sessions must use message_buffer. 
     // // write buffers are multiples of corresponding chunks
@@ -179,7 +208,7 @@ module.exports = {
     },
 
     start_recording: function (pool, session_id) {// TODO(rob): require client id and token
-        console.log(`start_recording called with pool: ${pool}, session: ${session_id}`)
+        console.log(`start_recording called with pool: ${pool}, session: ${session_id}`);
         let session = this.sessions.get(session_id);
         if (!session) {
             this.logErrorSessionClientSocketAction(session_id, null, null, `Tried to start recording, but session was null`);
@@ -381,7 +410,7 @@ module.exports = {
         //     // }
 
         //     // // emit audio manifest to connected clients
-        //     // io.of('chat').to(session_id.toString()).emit('playbackAudioManifest', audioManifest);
+        //     // io.of('chat').to(session_id.toString()).emit(KomodoSendEvents.playbackAudioManifest', audioManifest);
 
         //     // // stream all audio files for caching and playback by client
         //     // audioManifest.forEach((file) => {
@@ -389,7 +418,7 @@ module.exports = {
         //     //         file.data = data;
         //     //         if(err) if (this.logger) this.logger.error(`Error reading audio file: ${file.path}`);
         //     //         // console.log('emitting audio packet:', file);
-        //     //         io.of('chat').to(session_id.toString()).emit('playbackAudioData', file);
+        //     //         io.of('chat').to(session_id.toString()).emit(KomodoSendEvents.playbackAudioData', file);
         //     //     });
         //     // });
 
@@ -401,7 +430,7 @@ module.exports = {
         //     let playbackStart = Date.now();
 
         //     // position data emit loop
-        //     stream.on('data', function(chunk) {
+        //     stream.on(KomodoReceiveEvents.data, function(chunk) {
         //         stream.pause();
 
         //         // start data buffer loop
@@ -426,30 +455,30 @@ module.exports = {
         //                 // if (!audioStarted) {
         //                 //     // HACK(rob): trigger clients to begin playing buffered audio 
         //                 //     audioStarted = true;
-        //                 //     io.of('chat').to(session_id.toString()).emit('startPlaybackAudio');
+        //                 //     io.of('chat').to(session_id.toString()).emit(KomodoSendEvents.startPlaybackAudio');
         //                 // }
-        //                 io.to(session_id.toString()).emit('relayUpdate', arr);
+        //                 io.to(session_id.toString()).emit(KomodoSendEvents.relayUpdate', arr);
         //                 stream.resume();
         //                 clearInterval(timer);
         //             }
         //         }, 1);
         //     });
 
-        //     stream.on('error', function(err) {
+        //     stream.on(KomodoReceiveEvents.error, function(err) {
         //         if (this.logger) this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
-        //         io.to(session_id.toString()).emit('playbackEnd');
+        //         io.to(session_id.toString()).emit(KomodoSendEvents.playbackEnd');
         //     });
 
-        //     stream.on('end', function() {
+        //     stream.on(KomodoReceiveEvents.end, function() {
         //         if (this.logger) this.logger.info(`End of pos data for playback session: ${session_id}`);
-        //         io.to(session_id.toString()).emit('playbackEnd');
+        //         io.to(session_id.toString()).emit(KomodoSendEvents.playbackEnd');
         //     });
 
         //     // interaction streaming
         //     let ipath = this.getCapturePath(capture_id, start, 'int');
         //     let istream = fs.createReadStream(ipath, { highWaterMark: interactionChunkSize() });
 
-        //     istream.on('data', function(chunk) {
+        //     istream.on(KomodoReceiveEvents.data, function(chunk) {
         //         istream.pause();
 
         //         let buff = Buffer.from(chunk);
@@ -463,7 +492,7 @@ module.exports = {
         //             // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
         //             if (arr[INT_FIELDS-1] <= current_seq) {
-        //                 io.to(session_id.toString()).emit('interactionUpdate', arr);
+        //                 io.to(session_id.toString()).emit(KomodoSendEvents.interactionUpdate', arr);
         //                 istream.resume();
         //                 clearInterval(timer);
         //             }
@@ -471,14 +500,14 @@ module.exports = {
 
         //     });
 
-        //     istream.on('error', function(err) {
+        //     istream.on(KomodoReceiveEvents.error, function(err) {
         //         if (this.logger) this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-        //         io.to(session_id.toString()).emit('interactionpPlaybackEnd');
+        //         io.to(session_id.toString()).emit(KomodoSendEvents.interactionpPlaybackEnd');
         //     });
 
-        //     istream.on('end', function() {
+        //     istream.on(KomodoReceiveEvents.end, function() {
         //         if (this.logger) this.logger.info(`End of int data for playback session: ${session_id}`);
-        //         io.to(session_id.toString()).emit('interactionPlaybackEnd');
+        //         io.to(session_id.toString()).emit(KomodoSendEvents.interactionPlaybackEnd');
         //     });
         // }
     },
@@ -597,7 +626,7 @@ module.exports = {
 
         if (session_id && client_id) {
             // relay interaction events to all connected clients
-            socket.to(session_id.toString()).emit('interactionUpdate', data);
+            socket.to(session_id.toString()).emit(KomodoSendEvents.interactionUpdate, data);
 
             // do session state update if needed
             let source_id = data[3];
@@ -1422,16 +1451,16 @@ module.exports = {
         };
 
         this.joinSessionAction = function (session_id, client_id) {
-            io.to(session_id.toString()).emit('joined', client_id);
+            io.to(session_id.toString()).emit(KomodoSendEvents.joined, client_id);
         };
 
         this.disconnectAction = function (socket, session_id, client_id) {
             // notify and log event
-            socket.to(session_id.toString()).emit('disconnected', client_id);
+            socket.to(session_id.toString()).emit(KomodoSendEvents.disconnected, client_id);
         };
 
         this.stateErrorAction = function (socket, message) {
-            socket.emit('stateError', message);
+            socket.emit(KomodoSendEvents.stateError, message);
         };
 
         // returns true for successful reconnection
@@ -1444,10 +1473,10 @@ module.exports = {
         };
 
         // main relay handler
-        io.on('connection', function(socket) {
+        io.on(KomodoReceiveEvents.connection, function(socket) {
             self.logInfoSessionClientSocketAction(null, null, socket.id, `Session connection`);
 
-            socket.on('sessionInfo', function (session_id) {
+            socket.on(KomodoReceiveEvents.sessionInfo, function (session_id) {
                 let session = self.sessions.get(session_id);
 
                 if (!session) {
@@ -1456,11 +1485,11 @@ module.exports = {
                     return;
                 }
 
-                socket.to(session_id.toString()).emit('sessionInfo', session);
+                socket.to(session_id.toString()).emit(KomodoSendEvents.sessionInfo, session);
             });
 
             //Note: "join" is our own event name, and should not be confused with socket.join. (It does not automatically listen for socket.join either.)
-            socket.on('join', function(data) {
+            socket.on(KomodoReceiveEvents.join, function(data) {
                 let session_id = data[0];
 
                 let client_id = data[1];
@@ -1487,7 +1516,7 @@ module.exports = {
             });
 
             // When a client requests a state catch-up, send the current session state. Supports versioning.
-            socket.on('state', function(data) {
+            socket.on(KomodoReceiveEvents.state, function(data) {
                 let { session_id, state } = self.handleState(socket, data);
 
                 if (session_id == -1 || !state) {
@@ -1498,19 +1527,19 @@ module.exports = {
 
                 try {
                     // emit versioned state data
-                    io.to(socket.id).emit('state', state); // Behavior as of 10/7/21: Sends the state only to the client who requested it.
+                    io.to(socket.id).emit(KomodoSendEvents.state, state); // Behavior as of 10/7/21: Sends the state only to the client who requested it.
                 } catch (err) {
                     this.logErrorSessionClientSocketAction(session_id, null, socket.id, err.message);
                 }
             });
 
-            socket.on('draw', function(data) {
+            socket.on(KomodoReceiveEvents.draw, function(data) {
                 let session_id = data[1];
 
                 let client_id = data[2];
 
                 if (session_id && client_id) {
-                    socket.to(session_id.toString()).emit('draw', data);
+                    socket.to(session_id.toString()).emit(KomodoSendEvents.draw, data);
                 }
             });
 
@@ -1520,7 +1549,7 @@ module.exports = {
             // of the various interactions we care about, eg. grab, drop, start/end recording, etc.
             // in order to update the session state accordingly. we will probably need to protect against
             // garbage values that might be passed by devs who are overwriting reserved message events.  
-            socket.on('message', function(data) {
+            socket.on(KomodoReceiveEvents.message, function(data) {
                 if (data) {
                     let session_id = data.session_id;
                     let client_id = data.client_id;
@@ -1528,7 +1557,7 @@ module.exports = {
 
                     if (session_id && client_id && type && data.message) {
                         // relay the message
-                        socket.to(session_id.toString()).emit('message', data);
+                        socket.to(session_id.toString()).emit(KomodoSendEvents.message, data);
 
                         // get reference to session and parse message payload for state updates, if needed. 
                         let session = self.sessions.get(session_id);
@@ -1685,7 +1714,7 @@ module.exports = {
             });
 
             // client position update handler
-            socket.on('update', function(data) {
+            socket.on(KomodoReceiveEvents.update, function(data) {
                 if (!self.isValidRelayPacket(data)) {  
                     return;
                 }
@@ -1693,7 +1722,7 @@ module.exports = {
                 let session_id = data[1];
 
                 // relay packet if client is valid
-                socket.to(session_id.toString()).emit('relayUpdate', data);
+                socket.to(session_id.toString()).emit(KomodoSendEvents.relayUpdate, data);
 
                 // self.writeRecordedRelayData(data); NOTE(rob): DEPRECATED. 8/5/21. 
 
@@ -1702,24 +1731,24 @@ module.exports = {
 
             // handle interaction events
             // see `INTERACTION_XXX` declarations for type values
-            socket.on('interact', function(data) {
+            socket.on(KomodoReceiveEvents.interact, function(data) {
                 self.handleInteraction(socket, data);
             });
         
             // session capture handler
-            socket.on('start_recording', function (session_id) {
+            socket.on(KomodoReceiveEvents.start_recording, function (session_id) {
                 self.start_recording(pool, session_id);
             });
                 
-            socket.on('end_recording', function (session_id) {
+            socket.on(KomodoReceiveEvents.end_recording, function (session_id) {
                 self.end_recording(pool, session_id);
             });
 
-            socket.on('playback', function(data) {
+            socket.on(KomodoReceiveEvents.playback, function(data) {
                 self.handlePlayback(io, data);
             });
 
-            socket.on('disconnect', function (reason) {
+            socket.on(SocketIOEvents.disconnect, function (reason) {
                 const { session_id, client_id } = self.whoDisconnected(socket);
 
                 let didReconnect = self.handleDisconnect(socket, reason);
