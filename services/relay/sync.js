@@ -1216,7 +1216,7 @@ module.exports = {
   },
 
   writeEventToConnections: function (event, session_id, client_id) {
-    if (event && session_id && client_id) {
+    if (event && session_id && client_id) { //TODO(Brandon): support session_id = null and client_id = null
       if (!this.pool) {
         this.logErrorSessionClientSocketAction(
           session_id,
@@ -1988,7 +1988,7 @@ module.exports = {
         self.applyObjectsSyncToState(session, data);
     }
   },
-  
+
   processMessage: function (data, socket) {
     if (data == null) {
       this.logErrorSessionClientSocketAction(
