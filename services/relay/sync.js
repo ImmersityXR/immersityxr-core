@@ -85,6 +85,7 @@ const SocketIOEvents = {
 
 const KomodoReceiveEvents = {
   join: "join",
+  leave: "leave",
   sessionInfo: "sessionInfo",
   state: "state",
   draw: "draw",
@@ -100,6 +101,11 @@ const KomodoSendEvents = {
   connectionError: "connectionError",
   interactionUpdate: "interactionUpdate",
   joined: "joined",
+  failedToJoin: "failedToJoin",
+  successfullyJoined: "successfullyJoined",
+  left: "left",
+  failedToLeave: "failedToLeave",
+  successfullyLeft: "successfullyLeft",
   disconnected: "disconnected",
   sessionInfo: "sessionInfo",
   state: "state",
@@ -127,6 +133,33 @@ const KomodoMessages = {
         },
     }
 };
+
+// see https://socket.io/docs/v2/server-api/index.html
+
+const DisconnectKnownReasons = {
+  // the disconnection was initiated by the server
+  "server namespace disconnect": {
+    doReconnect: false,
+  },
+  // The socket was manually disconnected using socket.disconnect()
+  "client namespace disconnect": {
+    doReconnect: false,
+  },
+  // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)
+  "transport close": {
+    doReconnect: true,
+  },
+  // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
+  "transport error": {
+    doReconnect: true,
+  },
+  // The server did not send a PING within the pingInterval + pingTimeout range.
+  "ping timeout": {
+    doReconnect: true,
+  },
+};
+
+const doReconnectOnUnknownReason = true;
 
 module.exports = {
   // NOTE(rob): deprecated. sessions must use message_buffer.
@@ -1022,7 +1055,7 @@ module.exports = {
         `tried to remove client from session, but session was null`
       );
 
-      return;
+      return false;
     }
 
     if (session.clients == null) {
@@ -1033,7 +1066,7 @@ module.exports = {
         `tried to remove client from session, but session.clients was null`
       );
 
-      return;
+      return false;
     }
 
     let index = session.clients.indexOf(client_id);
@@ -1047,13 +1080,22 @@ module.exports = {
         null,
         null,
         client_id,
-        `Tried removing client from session.clients, but it was not there. Proceeding anyways.`
+        `Tried removing client from session.clients, but it was not there.`
       );
 
-      return;
+      return false;
     }
 
     session.clients.splice(index, 1);
+
+    this.logInfoSessionClientSocketAction(
+      session_id,
+      client_id,
+      socket.id,
+      `Removed client from session.`
+    );
+
+    return true;
   },
 
   addSocketToSession: function (session, socket, client_id) {
@@ -1072,42 +1114,52 @@ module.exports = {
   },
 
   // returns true iff socket was successfully joined to session
-  handleJoin: function (
+  makeSocketAndClientJoinSession: function (
     err,
     socket,
     session_id,
     client_id,
     do_bump_duplicates
   ) {
+    var reason;
+
+    if (!this.failedToJoinAction) {
+      this.logWarningSessionClientSocketAction(
+        session_id,
+        client_id,
+        null,
+        `in makeSocketAndClientJoinSession, failedToJoinAction callback was not provided. Proceeding anyways.`
+      );
+    }
+
     if (!socket) {
+      reason = `tried to handle join, but socket was null`;
+
       this.logErrorSessionClientSocketAction(
         session_id,
         client_id,
         null,
-        `tried to handle join, but socket was null`
+        reason
       );
 
-      return false;
-    }
+      // don't call failedToJoinAction here because we don't have a socket.
 
-    if (!this.joinSessionAction) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        client_id,
-        socket.id,
-        `in handleJoin, joinSessionAction callback was not provided. Proceeding anyways.`
-      );
+      return;
     }
 
     if (err) {
+      reason = `Error joining client to session: ${err}`;
+
       this.logErrorSessionClientSocketAction(
         session_id,
         client_id,
         socket.id,
-        `Error joining client to session: ${err}`
+        reason
       );
 
-      return false;
+      this.failedToJoinAction(session_id, reason);
+
+      return;
     }
 
     let { success, session } = this.getSession(session_id);
@@ -1126,12 +1178,16 @@ module.exports = {
     success = this.addClientToSession(session, client_id);
 
     if (!success) {
+      reason = `tried to handle join, but adding client to session failed.`;
+
       this.logErrorSessionClientSocketAction(
         session_id,
         client_id,
         socket.id,
-        `tried to handle join, but adding client to session failed.`
+        reason
       );
+      
+      this.failedToJoinAction(session_id, reason);
 
       return;
     }
@@ -1150,10 +1206,104 @@ module.exports = {
     // socket to client mapping
     this.addSocketToSession(session, socket, client_id);
 
-    this.joinSessionAction(session_id, client_id);
+    if (!self.successfullyJoinedAction) {
+      self.logWarningSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        `in makeSocketAndClientJoinSession, successfullyJoinedAction callback was not provided. Skipping.`
+      );
 
-    // socket successfully joined to session
-    return true;
+      return;
+    }
+
+    self.successfullyJoinedAction(session_id, client_id);
+  },
+
+  makeSocketAndClientLeaveSession: function (err, session_id, client_id, socket) {
+    var success;
+    var reason;
+    
+    if (!this.failedToLeaveAction) {
+      self.logWarningSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        `in makeSocketAndClientLeaveSession, failedToLeaveAction callback was not provided. Skipping.`
+      );
+
+      return;
+    }
+
+    if (!socket) {
+      reason = `makeSocketAndClientLeaveSession: socket was null`;
+
+      this.logErrorSessionClientSocketAction(
+        session_id,
+        client_id,
+        null,
+        reason
+      );
+
+      // don't call failedToLeaveAction here because we don't have a socket.
+
+      return;
+    }
+
+    if (err) {
+      reason = `Error joining client to session: ${err}`;
+  
+      this.logErrorSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        err
+      );
+
+      this.failedToLeaveAction(session_id, reason);
+
+      return;
+    }
+
+    success = this.removeSocketFromSession(socket, session_id);
+
+    if (!success) {
+      reason = `removeSocketFromSession failed`;
+
+      this.failedToLeaveAction(session_id, reason);
+
+      return;
+    }
+
+    success = this.removeClientFromSession(session, client_id);
+
+    if (!success) {
+      reason = `removeClientFromSession failed`;
+
+      this.failedToLeaveAction(session_id, reason);
+
+      return;
+    }
+
+    if (!self.successfullyLeftAction) {
+      self.logWarningSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        `in makeSocketAndClientLeaveSession, successfullyLeftAction callback was not provided. Skipping.`
+      );
+
+      return;
+    }
+
+    self.successfullyLeftAction(session_id, client_id);
+    
+    self.logInfoSessionClientSocketAction(
+      session_id,
+      null,
+      socket.id,
+      `Left.`
+    );
   },
 
   //TODO rewrite this so that do_bump_duplicates and socket_id become ids_to_keep
@@ -1211,7 +1361,7 @@ module.exports = {
     sockets.forEach((socket) => {
       self.bumpAction(session_id, socket);
 
-      self.removeSocketFromSession(socket, session_id, client_id);
+      self.removeSocketAndClientFromSessionThenDisconnectSocket(socket, session_id, client_id);
     });
   },
 
@@ -1328,6 +1478,54 @@ module.exports = {
     return result;
   },
 
+  getClientIdFromSessionSocket: function (socket) {
+    if (session == null) {
+      this.logErrorSessionClientSocketAction(
+        null,
+        client_id,
+        null,
+        `tried to get client ID from session socket, but session was null`
+      );
+
+      return null;
+    }
+
+    if (session.sockets == null) {
+      this.logErrorSessionClientSocketAction(
+        session.id,
+        client_id,
+        null,
+        `tried to get client ID from session socket, but session.sockets was null`
+      );
+
+      return null;
+    }
+
+    if (socket.id == null) {
+      this.logErrorSessionClientSocketAction(
+        session.id,
+        client_id,
+        null,
+      `tried to get client ID from session socket, but socket.id was null`
+      );
+
+      return null;
+    }
+
+    if (session.sockets[socket.id] == null) {
+      this.logErrorSessionClientSocketAction(
+        session.id,
+        client_id,
+        null,
+      `tried to get client ID from session socket, but session.sockets[socket.id] was null`
+      );
+
+      return null;
+    }
+
+    return session.sockets[socket.id].client_id;
+  },
+
   getSessionSocketsFromClientId: function (
     session,
     client_id,
@@ -1382,6 +1580,34 @@ module.exports = {
     return false;
   },
 
+  isSocketInSession: function (socket, session_id) {
+    if (!socket) {
+      this.logErrorSessionClientSocketAction(
+        session_id,
+        null,
+        null,
+        `isSocketInSession: socket was null`
+      );
+
+      return;
+    }
+
+    let session = this.sessions.get(session_id);
+
+    if (!session) {
+      this.logWarningSessionClientSocketAction(
+        session_id,
+        null,
+        socket.id,
+        `isSocketInSession: could not find session`
+      );
+
+      return;
+    }
+
+    return (socket.id in session.sockets);
+  },
+
   // returns number of client instances of the same ID on success; returns -1 on failure;
   getNumClientInstancesForClient: function (session_id, client_id) {
     let session = this.sessions.get(session_id);
@@ -1408,8 +1634,38 @@ module.exports = {
     return count;
   },
 
+  removeSocketFromSession: function (socket, session_id) {
+    let session = this.sessions.get(session_id);
+
+    if (!session) {
+      this.logWarningSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        `Could not find session when trying to remove a socket from it.`
+      );
+
+      return false;
+    }
+
+    if (this.isSocketInSession(socket, session_id)) {
+      this.logErrorSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        `tried removing socket from session.sockets, but it was not found.`
+      );
+
+      return false;
+    }
+
+    delete session.sockets[socket.id];
+
+    return true;
+  },
+
   // cleanup socket and client references in session state if reconnect fails
-  removeSocketFromSession: function (socket, session_id, client_id) {
+  removeSocketAndClientFromSessionThenDisconnectSocket: function (socket, session_id, client_id) {
     if (!socket) {
       this.logErrorSessionClientSocketAction(
         session_id,
@@ -1426,46 +1682,13 @@ module.exports = {
         null,
         client_id,
         socket.id,
-        `in removeSocketFromSession, disconnectAction callback was not provided`
+        `in removeSocketAndClientFromSessionThenDisconnectSocket, disconnectAction callback was not provided`
       );
     }
 
     this.disconnectAction(socket, session_id, client_id);
 
-    // clean up
     let session = this.sessions.get(session_id);
-
-    if (!session) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        client_id,
-        socket.id,
-        `Could not find session when trying to remove a socket from it.`
-      );
-
-      return;
-    }
-
-    if (!(socket.id in session.sockets)) {
-      this.logErrorSessionClientSocketAction(
-        session_id,
-        client_id,
-        socket.id,
-        `tried removing socket from session.sockets, but it was not found.`
-      );
-
-      return;
-    }
-
-    // remove socket->client mapping
-    delete session.sockets[socket.id];
-
-    this.logInfoSessionClientSocketAction(
-      session_id,
-      client_id,
-      socket.id,
-      `Removed client from session.`
-    );
 
     this.removeClientFromSession(session, client_id);
   },
@@ -1614,7 +1837,7 @@ module.exports = {
   },
 
   processReconnectionAttempt: function (err, socket, session_id, client_id) {
-    let success = this.handleJoin(err, socket, session_id, client_id, true);
+    let success = this.makeSocketAndClientJoinSession(err, socket, session_id, client_id, true);
 
     if (!success) {
       this.logInfoSessionClientSocketAction(
@@ -1624,7 +1847,7 @@ module.exports = {
         "failed to reconnect"
       );
 
-      this.removeSocketFromSession(socket, session_id, client_id);
+      this.removeSocketAndClientFromSessionThenDisconnectSocket(socket, session_id, client_id);
 
       this.cleanUpSessionIfEmpty(session_id);
 
@@ -1649,7 +1872,7 @@ module.exports = {
 
       let session = s[1];
 
-      if (!(socket.id in session.sockets)) {
+      if (!this.isSocketInSession(socket, session)) {
         // This isn't the right session, so keep looking.
         continue;
       }
@@ -1659,7 +1882,7 @@ module.exports = {
       return {
         session_id: session_id,
 
-        client_id: client_id,
+        client_id: this.getClientIdFromSessionSocket(socket),
       };
     }
 
@@ -1670,7 +1893,7 @@ module.exports = {
     };
   },
 
-  // returns true if socket is still connected
+  // Returns true if socket is still connected
   handleDisconnect: function (socket, reason) {
     if (!socket) {
       this.logErrorSessionClientSocketAction(
@@ -1695,87 +1918,52 @@ module.exports = {
     }
 
     // Check disconnect event reason and handle
-    // see https://socket.io/docs/v2/server-api/index.html
+  
+    const { session_id, client_id } = self.whoDisconnected(socket);
 
-    let knownReasons = {
-      // the disconnection was initiated by the server
-      "server namespace disconnect": {
-        doReconnect: false,
-      },
-      // The socket was manually disconnected using socket.disconnect()
-      "client namespace disconnect": {
-        doReconnect: false,
-      },
-      // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)
-      "transport close": {
-        doReconnect: false,
-      },
-      // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
-      "transport error": {
-        doReconnect: false,
-      },
-      // The server did not send a PING within the pingInterval + pingTimeout range.
-      "ping timeout": {
-        doReconnect: true,
-      },
-    };
-
-    let doReconnectOnUnknownReason = true;
-
-    // find which session this socket is in
-    for (var s of this.sessions) {
-      let session_id = s[0];
-
-      let session = s[1];
-
-      if (!(socket.id in session.sockets)) {
-        // This isn't the right session, so keep looking.
-        continue;
-      }
-
-      // We found the right session.
-
-      let client_id = session.sockets[socket.id].client_id;
-
-      if (
-        (knownReasons.hasOwnProperty(reason) &&
-          knownReasons[reason].doReconnect) ||
-        doReconnectOnUnknownReason
-      ) {
-        return this.reconnectAction(
-          reason,
-          socket,
-          session_id,
-          client_id,
-          session
-        );
-      }
-
-      //Disconnect the socket
-
+    if (session_id == null || client_id == null) {
+      //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
       this.logInfoSessionClientSocketAction(
-        session_id,
-        client_id,
+        null,
+        null,
         socket.id,
-        `Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, clients: ${JSON.stringify(
-          session.clients
-        )}`
+        `disconnected. Not found in sessions. Probably ok. Skipping reconnectAction or removeSocketAndClientFromSessionThenDisconnectSocket.)`
       );
 
-      this.removeSocketFromSession(socket, session_id, client_id);
-
-      this.cleanUpSessionIfEmpty(session_id);
-
-      return false; // Don't continue to check other sessions.
+      return true;
     }
 
-    //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
+    if (
+      (DisconnectKnownReasons.hasOwnProperty(reason) &&
+        DisconnectKnownReasons[reason].doReconnect) ||
+      doReconnectOnUnknownReason
+    ) {
+      // Try to reconnect the socket
+
+      return this.reconnectAction(
+        reason,
+        socket,
+        session_id,
+        client_id,
+        session
+      );
+    }
+
+    // Disconnect the socket
     this.logInfoSessionClientSocketAction(
-      null,
-      null,
+      session_id,
+      client_id,
       socket.id,
-      `disconnected. Not found in sessions. Probably ok.)`
+      `Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, clients: ${JSON.stringify(
+        session.clients
+      )}`
     );
+
+    this.removeSocketAndClientFromSessionThenDisconnectSocket(socket, session_id, client_id);
+
+    this.cleanUpSessionIfEmpty(session_id);
+
+    return false;
   },
 
   createCapturesDirectory: function () {
@@ -2205,7 +2393,43 @@ module.exports = {
     };
 
     this.joinSessionAction = function (session_id, client_id) {
+      socket.join(session_id.toString(), (err) => {
+        self.makeSocketAndClientJoinSession(
+          err,
+          socket,
+          session_id,
+          client_id,
+          true
+        );
+      });
+    };
+
+    this.failedToJoinAction = function (session_id, reason) {
+      socket.emit(KomodoSendEvents.joinFailed, session_id,  reason);
+    };
+
+    this.successfullyJoinedAction = function (session_id, client_id) {
+      // write join event to database
+      self.writeEventToConnections("connect", session_id, client_id);
+
+      // tell other clients that a client joined
       io.to(session_id.toString()).emit(KomodoSendEvents.joined, client_id);
+    };
+
+    this.leaveSessionAction = function (session_id, client_id) {
+      socket.leave(session_id.toString(), (err) => {
+        this.makeSocketAndClientLeaveSession(err, session_id, client_id, socket);
+      });
+    };
+
+    this.failedToLeaveAction = function (session_id, reason) {
+      // notify others the client has left
+      socket.emit(KomodoSendEvents.failedToLeave, session_id, reason);
+    };
+
+    this.successfullyLeftAction = function (session_id, client_id) {
+      // notify others the client has left
+      io.to(session_id.toString()).emit(KomodoSendEvents.left, client_id);
     };
 
     this.disconnectAction = function (socket, session_id, client_id) {
@@ -2293,21 +2517,18 @@ module.exports = {
 
         //TODO does this need to be called here???? self.bumpOldSockets(session_id, client_id, socket.id);
 
-        // relay server joins connecting client to session room
-        socket.join(session_id.toString(), (err) => {
-          let success = self.handleJoin(
-            err,
-            socket,
+        if (!this.joinSessionAction) {
+          self.logErrorSessionClientSocketAction(
             session_id,
             client_id,
-            true
+            socket.id,
+            `in socket.on(${KomodoReceiveEvents.join}), joinSessionAction callback was not provided`
           );
 
-          if (success) {
-            // write join event to database
-            self.writeEventToConnections("connect", session_id, client_id);
-          }
-        });
+          return;
+        }
+
+        this.joinSessionAction(session_id, client_id);
       });
 
       // When a client requests a state catch-up, send the current session state. Supports versioning.
