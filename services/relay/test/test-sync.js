@@ -69,6 +69,10 @@ describe("Sync Server: Sessions", function (done) {
 
         count.should.equal(1);
 
+        let sessionType = typeof singularEntry;
+
+        sessionType.should.not.equal("undefined");
+
         singularEntry[0].should.equal(session_id);
 
         const expectedSession = {
@@ -122,6 +126,10 @@ describe("Sync Server: Sessions", function (done) {
 
         success.should.equal(false);
 
+        let sessionType = typeof session;
+
+        sessionType.should.not.equal("undefined");
+
         assert.strictEqual(session, null);
     });
 
@@ -138,6 +146,10 @@ describe("Sync Server: Sessions", function (done) {
         let { success, session } = syncServer.getSession(SESSION_ID);
 
         success.should.equal(true);
+
+        let sessionType = typeof session;
+
+        sessionType.should.not.equal("undefined");
 
         assert(session !== null);
 
@@ -357,6 +369,43 @@ describe("Sync Server: Clients and Sockets", function (done) {
         session.clients.length.should.equal(1);
     });
 
+    it("should be able to remove a socket", function () {
+        let inputSession = {
+            clients: [CLIENT_ID, CLIENT_ID],
+            sockets: { }
+        };
+
+        inputSession.sockets[DUMMY_SOCKET_A.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A };
+
+        inputSession.sockets[DUMMY_SOCKET_B.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_B };
+
+        syncServer.createSession(SESSION_ID);
+
+        syncServer.sessions.set(SESSION_ID, inputSession);
+
+        Object.keys(inputSession.sockets).length.should.equal(2);
+
+        let removeSuccess = syncServer.removeSocketFromSession(DUMMY_SOCKET_A, SESSION_ID);
+
+        removeSuccess.should.equal(true);
+        
+        let { success, session } = syncServer.getSession(SESSION_ID);
+
+        Object.keys(session.sockets).length.should.equal(1);
+    });
+
+    it("should return true if it found a socket", function () {
+        throw Error("unimplemented");
+    });
+
+    it("should return false if it couldn't find a socket", function () {
+        throw Error("unimplemented");
+    });
+
+    it("should be able to remove a socket and client from a session then disconnect the socket", function () {
+        throw Error("unimplemented");
+    });
+
     it("should return all session sockets for a given client ID", function () {
         syncServer.sessions = new Map ();
 
@@ -436,7 +485,7 @@ describe("Sync Server: Integration", function (done) {
     });
     
     it("should create a correct session object when a client joins", function () {
-        let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
+        let success = syncServer.makeSocketAndClientJoinSession(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         success.should.equal(true); // we passed in err = null, so it should succeed.
 
@@ -487,7 +536,7 @@ describe("Sync Server: Integration", function (done) {
     });
 
     it("should create a correct clients array", function () {
-        let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
+        let success = syncServer.makeSocketAndClientJoinSession(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         sessions = syncServer.getSessions();
 
@@ -505,7 +554,7 @@ describe("Sync Server: Integration", function (done) {
     });
 
     it("should create a correct sockets object", function () {
-        let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
+        let success = syncServer.makeSocketAndClientJoinSession(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
         sessions = syncServer.getSessions();
 
@@ -539,9 +588,9 @@ describe("Sync Server: Integration", function (done) {
             client_id.should.equal(CLIENT_ID);
         };
         
-        let success = syncServer.handleJoin(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
+        let success = syncServer.makeSocketAndClientJoinSession(null, DUMMY_SOCKET_A, SESSION_ID, CLIENT_ID, true);
 
-        success = syncServer.handleJoin(null, DUMMY_SOCKET_B, SESSION_ID, CLIENT_ID, true);
+        success = syncServer.makeSocketAndClientJoinSession(null, DUMMY_SOCKET_B, SESSION_ID, CLIENT_ID, true);
 
         success.should.equal(true); // we passed in err = null, so it should succeed.
 

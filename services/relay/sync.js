@@ -81,6 +81,8 @@ function compareKeys(a, b) {
 
 const SocketIOEvents = {
   disconnect: "disconnect",
+  disconnecting: "disconnecting",
+  error: "error"
 };
 
 const KomodoReceiveEvents = {
@@ -1088,10 +1090,12 @@ module.exports = {
 
     session.clients.splice(index, 1);
 
+    let session_id = this.getSessionIdFromSession(session);
+
     this.logInfoSessionClientSocketAction(
       session_id,
       client_id,
-      socket.id,
+      null,
       `Removed client from session.`
     );
 
@@ -1144,7 +1148,7 @@ module.exports = {
 
       // don't call failedToJoinAction here because we don't have a socket.
 
-      return;
+      return false;
     }
 
     if (err) {
@@ -1159,7 +1163,7 @@ module.exports = {
 
       this.failedToJoinAction(session_id, reason);
 
-      return;
+      return false;
     }
 
     let { success, session } = this.getSession(session_id);
@@ -1189,7 +1193,7 @@ module.exports = {
       
       this.failedToJoinAction(session_id, reason);
 
-      return;
+      return false;
     }
 
     this.bumpDuplicateSockets(
@@ -1206,18 +1210,20 @@ module.exports = {
     // socket to client mapping
     this.addSocketToSession(session, socket, client_id);
 
-    if (!self.successfullyJoinedAction) {
-      self.logWarningSessionClientSocketAction(
+    if (!this.successfullyJoinedAction) {
+      this.logWarningSessionClientSocketAction(
         session_id,
         client_id,
         socket.id,
         `in makeSocketAndClientJoinSession, successfullyJoinedAction callback was not provided. Skipping.`
       );
 
-      return;
+      return true;
     }
 
-    self.successfullyJoinedAction(session_id, client_id);
+    this.successfullyJoinedAction(session_id, client_id);
+    
+    return true;
   },
 
   makeSocketAndClientLeaveSession: function (err, session_id, client_id, socket) {
@@ -1225,7 +1231,7 @@ module.exports = {
     var reason;
     
     if (!this.failedToLeaveAction) {
-      self.logWarningSessionClientSocketAction(
+      this.logWarningSessionClientSocketAction(
         session_id,
         client_id,
         socket.id,
@@ -1285,8 +1291,8 @@ module.exports = {
       return;
     }
 
-    if (!self.successfullyLeftAction) {
-      self.logWarningSessionClientSocketAction(
+    if (!this.successfullyLeftAction) {
+      this.logWarningSessionClientSocketAction(
         session_id,
         client_id,
         socket.id,
@@ -1296,9 +1302,9 @@ module.exports = {
       return;
     }
 
-    self.successfullyLeftAction(session_id, client_id);
+    this.successfullyLeftAction(session_id, client_id);
     
-    self.logInfoSessionClientSocketAction(
+    this.logInfoSessionClientSocketAction(
       session_id,
       null,
       socket.id,
@@ -1328,7 +1334,7 @@ module.exports = {
 
     if (this.bumpAction == null) {
       this.logWarningSessionClientSocketAction(
-        session.id,
+        session_id,
         client_id,
         socket_id,
         `in bumpDuplicateSockets, bumpAction callback was not provided`
@@ -1351,7 +1357,7 @@ module.exports = {
 
     if (!sockets) {
       this.logWarningSessionClientSocketAction(
-        session.id,
+        session_id,
         client_id,
         socket_id,
         `tried to bump duplicate sockets, but result of getSessionSocketsFromClientId was null. Proceeding anyways.`
@@ -1580,16 +1586,21 @@ module.exports = {
     return false;
   },
 
+  // Returns success = true if operation succeeded or false if socket or session with session_id were null.
+  // Returns isInSession if socket is in session.sockets.
   isSocketInSession: function (socket, session_id) {
     if (!socket) {
-      this.logErrorSessionClientSocketAction(
+      this.logWarningSessionClientSocketAction(
         session_id,
         null,
         null,
-        `isSocketInSession: socket was null`
+        `removeSocketFromSession: socket was null.`
       );
 
-      return;
+      return {
+        success: false,
+        isInSession: null
+      };
     }
 
     let session = this.sessions.get(session_id);
@@ -1599,13 +1610,19 @@ module.exports = {
         session_id,
         null,
         socket.id,
-        `isSocketInSession: could not find session`
+        `Could not find session when trying to remove a socket from it.`
       );
 
-      return;
+      return {
+        success: false,
+        isInSession: null
+      };
     }
 
-    return (socket.id in session.sockets);
+    return {
+      success: true,
+      isInSession: (socket.id in session.sockets)
+    };
   },
 
   // returns number of client instances of the same ID on success; returns -1 on failure;
@@ -1634,30 +1651,33 @@ module.exports = {
     return count;
   },
 
+  // Return true iff removing the socket succeeded.
   removeSocketFromSession: function (socket, session_id) {
-    let session = this.sessions.get(session_id);
+    let { success, isInSession } = this.isSocketInSession(socket, session_id);
 
-    if (!session) {
-      this.logWarningSessionClientSocketAction(
+    if (!success || isInSession == null) {
+      this.logErrorSessionClientSocketAction(
         session_id,
-        client_id,
+        null,
         socket.id,
-        `Could not find session when trying to remove a socket from it.`
+        `tried removing socket from session.sockets, but there was an error.`
       );
 
       return false;
     }
 
-    if (this.isSocketInSession(socket, session_id)) {
-      this.logErrorSessionClientSocketAction(
+    if (!isInSession) {
+      this.logWarningSessionClientSocketAction(
         session_id,
-        client_id,
+        null,
         socket.id,
         `tried removing socket from session.sockets, but it was not found.`
       );
 
       return false;
     }
+
+    let session = this.sessions.get(session_id);
 
     delete session.sockets[socket.id];
 
@@ -1691,6 +1711,8 @@ module.exports = {
     let session = this.sessions.get(session_id);
 
     this.removeClientFromSession(session, client_id);
+
+    this.removeSocketFromSession(socket, session_id);
   },
 
   getNumClientInstances: function (session_id) {
@@ -1872,13 +1894,14 @@ module.exports = {
 
       let session = s[1];
 
-      if (!this.isSocketInSession(socket, session)) {
+      let { success, isInSession } = this.isSocketInSession(socket, session_id);
+
+      if (!success || !isInSession) {
         // This isn't the right session, so keep looking.
         continue;
       }
 
       // We found the right session.
-
       return {
         session_id: session_id,
 
@@ -1919,7 +1942,7 @@ module.exports = {
 
     // Check disconnect event reason and handle
   
-    const { session_id, client_id } = self.whoDisconnected(socket);
+    const { session_id, client_id } = this.whoDisconnected(socket);
 
     if (session_id == null || client_id == null) {
       //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
@@ -2022,10 +2045,10 @@ module.exports = {
   },
 
   applyShowInteractionToState: function (session, target_id) {
-    let foundEntity = self.getEntityFromState(session, target_id);
+    let foundEntity = this.getEntityFromState(session, target_id);
 
     if (foundEntity == null) {
-        self.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply show interaction to state: no entity with target_id ${target_id} found. Creating one.`);
+      this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply show interaction to state: no entity with target_id ${target_id} found. Creating one.`);
         
         let entity = {
             id: target_id,
@@ -2043,10 +2066,10 @@ module.exports = {
   },
 
   applyHideInteractionToState: function (session, target_id) {
-    let foundEntity = self.getEntityFromState(session, target_id);
+    let foundEntity = this.getEntityFromState(session, target_id);
 
     if (foundEntity == null) {
-        self.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply hide interaction to state: no entity with target_id ${target_id} found. Creating one.`);
+      this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply hide interaction to state: no entity with target_id ${target_id} found. Creating one.`);
         
         let entity = {
             id: target_id,
@@ -2064,7 +2087,7 @@ module.exports = {
   },
 
   applyLockInteractionToState: function (session, target_id) {
-    let foundEntity = self.getEntityFromState(session, target_id);
+    let foundEntity = this.getEntityFromState(session, target_id);
 
     if (foundEntity == null) {
         self.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply lock interaction to state: no entity with target_id ${target_id} found. Creating one.`);
@@ -2085,10 +2108,10 @@ module.exports = {
   },
 
   applyUnlockInteractionToState: function (session, target_id) {
-    let foundEntity = self.getEntityFromState(session, target_id);
+    let foundEntity = this.getEntityFromState(session, target_id);
 
     if (foundEntity == null) {
-        self.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply unlock interaction to state: no entity with target_id ${target_id} found. Creating one.`);
+      this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply unlock interaction to state: no entity with target_id ${target_id} found. Creating one.`);
         
         let entity = {
             id: target_id,
@@ -2120,12 +2143,12 @@ module.exports = {
   applyInteractionMessageToState: function (session, target_id, interaction_type) {
     // entity should be rendered
     if (interaction_type == INTERACTION_RENDER) {
-        self.applyShowInteractionToState(session, target_id);
+      this.applyShowInteractionToState(session, target_id);
     }
 
     // entity should stop being rendered
     if (interaction_type == INTERACTION_RENDER_END) {
-        self.applyHideInteractionToState(session, target_id);
+      this.applyHideInteractionToState(session, target_id);
     }
 
     // scene has changed
@@ -2135,12 +2158,12 @@ module.exports = {
 
     // entity is locked
     if (interaction_type == INTERACTION_LOCK) {
-        self.applyLockInteractionToState(session, target_id);
+      this.applyLockInteractionToState(session, target_id);
     }
 
     // entity is unlocked
     if (interaction_type == INTERACTION_LOCK_END) {
-        self.applyUnlockInteractionToState(session, target_id);
+      this.applyUnlockInteractionToState(session, target_id);
     }
   },
 
@@ -2150,7 +2173,7 @@ module.exports = {
     let foundEntity = self.getEntityFromState(session, entity_id);
 
     if (foundEntity == null) {
-        self.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply sync message to state: no entity with target_id ${target_id} found. Creating one.`);
+      this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply sync message to state: no entity with target_id ${target_id} found. Creating one.`);
         
         let entity = {
             id: entity_id,
@@ -2173,7 +2196,7 @@ module.exports = {
     let entity_type = data.message[KomodoMessages.sync.indices.entityType];
 
     if (entity_type == SYNC_OBJECTS) {
-        self.applyObjectsSyncToState(session, data);
+      this.applyObjectsSyncToState(session, data);
     }
   },
 
@@ -2255,7 +2278,7 @@ module.exports = {
     // NOTE(rob): the following code is copypasta from the old interactionUpdate handler. 7/21/2021
 
     // check if the incoming packet is from a client who is valid for this session
-    if (!self.isClientInSession(session_id, client_id)) {
+    if (!this.isClientInSession(session_id, client_id)) {
         this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "tried to process message, but client was not in session.");
 
         return;
@@ -2268,9 +2291,9 @@ module.exports = {
     }
     
     // relay the message
-    self.messageAction(socket, session_id, data);
+    this.messageAction(socket, session_id, data);
 
-    data.message = self.parseMessageIfNeeded(data, session_id, client_id);
+    data.message = this.parseMessageIfNeeded(data, session_id, client_id);
 
     // get reference to session and parse message payload for state updates, if needed.
     if (type == KomodoMessages.interaction.type) {
@@ -2298,16 +2321,16 @@ module.exports = {
             this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: interaction_type was null");
         }
 
-        self.applyInteractionMessageToState(session, target_id, interaction_type);
+        this.applyInteractionMessageToState(session, target_id, interaction_type);
     }
 
     if (type == KomodoMessages.sync.type) {
-      self.applySyncMessageToState(e, id, latest, render, locked);
+      this.applySyncMessageToState(e, id, latest, render, locked);
     }
 
     // data capture
     if (session.isRecording) {
-      self.record_message_data(data);
+      this.record_message_data(data);
     }
   },
   init: function (io, pool, logger) {
@@ -2405,7 +2428,7 @@ module.exports = {
     };
 
     this.failedToJoinAction = function (session_id, reason) {
-      socket.emit(KomodoSendEvents.joinFailed, session_id,  reason);
+      socket.emit(KomodoSendEvents.failedToJoin, session_id,  reason);
     };
 
     this.successfullyJoinedAction = function (session_id, client_id) {
@@ -2418,7 +2441,7 @@ module.exports = {
 
     this.leaveSessionAction = function (session_id, client_id) {
       socket.leave(session_id.toString(), (err) => {
-        this.makeSocketAndClientLeaveSession(err, session_id, client_id, socket);
+        self.makeSocketAndClientLeaveSession(err, session_id, client_id, socket);
       });
     };
 
@@ -2429,7 +2452,7 @@ module.exports = {
 
     this.successfullyLeftAction = function (session_id, client_id) {
       // notify others the client has left
-      io.to(session_id.toString()).emit(KomodoSendEvents.left, client_id);
+      io.to(session_id.toString()).emit(KomodoSendEvents.successfullyLeft, client_id);
     };
 
     this.disconnectAction = function (socket, session_id, client_id) {
@@ -2460,6 +2483,7 @@ module.exports = {
         )}`
       );
 
+      //TODO -- do we need to rejoin it manually?
       socket.join(session_id.toString(), (err) => {
         self.processReconnectionAttempt(err, socket, session_id, client_id);
       });
@@ -2658,6 +2682,13 @@ module.exports = {
 
         // log reconnect event with timestamp to db
         self.writeEventToConnections("disconnect", session_id, client_id);
+      });
+
+      socket.on(SocketIOEvents.disconnecting, function (reason) {
+      });
+
+      socket.on(SocketIOEvents.error, function (err) {
+        self.logErrorSessionClientSocketAction(null, null, socket.id || "null", err);
       });
     });
   },
