@@ -1,6 +1,6 @@
 class Session {
-  constructor(session_id) {
-    this.id = session_id;
+  constructor(id) {
+    this.id = id;
     this.sockets = {}; // socket.id -> client_id
     this.clients = [];
     this.entities = [];
@@ -35,67 +35,16 @@ class Session {
     this.sockets[socket.id] = { client_id: client_id, socket: socket };
   }
 
-  // Returns success = true if operation succeeded or false if socket or session with session_id were null.
+  // Returns success = true if operation succeeded or false if socket or session with id were null.
   // Returns isInSession if socket is in this.sockets.
   hasSocket(socket) {
-    if (!socket) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        null,
-        null,
-        `hasSocket: socket was null.`
-      );
-
-      return {
-        success: false,
-        isInSession: null,
-      };
-    }
-
-    let session = this.sessions.get(session_id);
-
-    if (!session) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        null,
-        socket.id,
-        `Could not find session when trying to remove a socket from it.`
-      );
-
-      return {
-        success: false,
-        isInSession: null,
-      };
-    }
-
-    return {
-      success: true,
-      isInSession: socket.id in this.sockets,
-    };
+    return socket.id in this.sockets;
   }
 
   removeSocket(socket) {
-    let { success, isInSession } = this.hasSocket(socket);
-
-    if (!success || isInSession == null) {
-      this.logErrorSessionClientSocketAction(
-        session_id,
-        null,
-        socket.id,
-        `tried removing socket from this.sockets, but there was an error.`
-      );
-
-      return false;
-    }
+    let isInSession = this.hasSocket(socket);
 
     if (!isInSession) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        null,
-        socket.id,
-        `tried removing socket from this.sockets, but it was not found.`
-      );
-
       return false;
     }
 
@@ -208,7 +157,7 @@ class Session {
   }
 
   hasClient (client_id) {
-    const numInstances = this.getNumClientInstances(session_id, client_id);
+    const numInstances = this.getNumClientInstances(client_id);
 
     if (numInstances >= 1) {
         return true;
@@ -220,7 +169,7 @@ class Session {
   getNumClientInstances(client_id) {
     if (this.clients == null) {
         this.logErrorSessionClientSocketAction(
-            session_id,
+            this.id,
             client_id,
             null,
             `Could not get number of client instances -- session was null or session.clients was null.`
@@ -243,7 +192,7 @@ class Session {
   getTotalNumInstancesForAllClients () {
     if (this.clients == null) {
       this.logWarningSessionClientSocketAction(
-        session_id,
+        this.id,
         null,
         null,
         `the session's session.clients was null.`
@@ -293,4 +242,4 @@ class Session {
   }
 }
 
-export default Session;
+module.exports = Session;

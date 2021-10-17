@@ -970,33 +970,18 @@ module.exports = {
   },
 
   // returns true on success and false on failure
-  addClientToSession: function (session_id, client_id, do_create_session) {
+  addClientToSession: function (session_id, client_id) {
     let { success, session } = this.getSession(session_id);
 
-    if (!success || !session) {
+    if (!success) {
       this.logWarningSessionClientSocketAction(
         session_id,
         client_id,
-        socket.id,
-        "session was null when making socket and client join session. Creating a session for you."
-      );
-
-      session = this.createSession(session_id);
-    }
-
-    if (session == null && !do_create_session) {
-      this.logErrorSessionClientSocketAction(
         null,
-        client_id,
-        null,
-        `tried to add client to session, but session was null and do_create_session was false`
+        `failed to get session when adding client to session. Not proceeding.`
       );
 
       return false;
-    }
-
-    if (session == null && do_create_session) {
-      session = this.createSession();
     }
 
     session.addClient(client_id);
@@ -1033,9 +1018,9 @@ module.exports = {
   },
 
   removeClientFromSession: function (session_id, client_id) {
-    let session = this.getSession(session_id);
+    let { success, session } = this.getSession(session_id);
 
-    if (session == null) {
+    if ( !success || session == null ) {
       this.logErrorSessionClientSocketAction(
         null,
         client_id,
@@ -1261,8 +1246,8 @@ module.exports = {
     if (this.notifyBumpAction == null) {
       this.logWarningSessionClientSocketAction(
         session_id,
-        client_id,
-        socket_id,
+        null,
+        socket.id,
         `notifyBumpAction callback was not provided`
       );
     }
@@ -1274,8 +1259,8 @@ module.exports = {
     if (this.makeSocketLeaveSessionAction == null) {
       this.logWarningSessionClientSocketAction(
         session_id,
-        client_id,
-        socket_id,
+        null,
+        socket.id,
         `makeSocketLeaveSessionAction callback was not provided`
       );
     }
@@ -1290,7 +1275,7 @@ module.exports = {
     do_bump_duplicates,
     socket_id
   ) {
-    let session = this.getSession(session_id);
+    let { success, session } = this.getSession(session_id);
 
     if (session == null) {
       this.logErrorSessionClientSocketAction(
@@ -1375,7 +1360,7 @@ module.exports = {
   },
 
   getClientIdFromSessionSocket: function (session_id, socket) {
-    let session = this.getSession(session_id);
+    let { success, session } = this.getSession(session_id);
 
     if (session == null) {
       this.logErrorSessionClientSocketAction(
@@ -1394,7 +1379,7 @@ module.exports = {
     client_id,
     excluded_socket_id
   ) {
-    let session = this.getSession(session_id);
+    let { success, session } = this.getSession(session_id);
 
     if (session == null) {
       this.logErrorSessionClientSocketAction(
@@ -1411,14 +1396,14 @@ module.exports = {
   },
 
   isClientInSession: function (session_id, client_id) {
-    let session = this.getSession(session_id);
+    let { success, session } = this.getSession(session_id);
 
     return session.hasClient(client_id);
   },
 
   // returns number of client instances of the same ID on success; returns -1 on failure;
   getNumClientInstancesForSession: function (session_id, client_id) {
-    let session = this.getSession(session_id);
+    let { success, session } = this.getSession(session_id);
 
     if (session == null) {
       this.logErrorSessionClientSocketAction(
@@ -1607,7 +1592,9 @@ module.exports = {
   },
 
   processReconnectionAttempt: function (err, socket, session_id, client_id) {
-    let success = this.addSocketAndClientToSession(err, socket, session_id, client_id, true);
+    this.getOrCreateSession(session_id);
+
+    let success = this.addSocketAndClientToSession(err, socket, session_id, client_id);
 
     if (!success) {
       this.logInfoSessionClientSocketAction(
@@ -1638,13 +1625,50 @@ module.exports = {
     return true;
   },
 
+  isSocketInSession: function (session_id, socket) {
+    if (!socket) {
+      this.logWarningSessionClientSocketAction(
+        session_id,
+        null,
+        null,
+        `hasSocket: socket was null.`
+      );
+
+      return {
+        success: false,
+        isInSession: null,
+      };
+    }
+
+    let session = this.sessions.get(session_id);
+
+    if (!session) {
+      this.logWarningSessionClientSocketAction(
+        session_id,
+        null,
+        socket.id,
+        `Could not find session when trying to remove a socket from it.`
+      );
+
+      return {
+        success: false,
+        isInSession: null,
+      };
+    }
+
+    return {
+      success: true,
+      isInSession: session.hasSocket(socket),
+    };
+  },
+
   whoDisconnected: function (socket) {
     for (var s in this.sessions) {
       const session_id = s[0];
 
       let session = s[1];
 
-      let { success, isInSession } = session.hasSocket(socket);
+      let { success, isInSession } = isSocketInSession(session_id, socket);
 
       if (!success || !isInSession) {
         // This isn't the right session, so keep looking.

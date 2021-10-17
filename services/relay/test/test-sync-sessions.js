@@ -44,7 +44,7 @@ describe("Sync Server: Sessions", function (done) {
         sessions.size.should.equal(0);
     });
 
-    it("should create one singular, correct sessions object", function () {
+    it("should create one singular sessions object", function () {
         const session_id = 123;
         
         let sessions = syncServer.getSessions();
@@ -74,51 +74,6 @@ describe("Sync Server: Sessions", function (done) {
         sessionType.should.not.equal("undefined");
 
         singularEntry[0].should.equal(session_id);
-
-        const expectedSession = {
-            sockets: {}, // socket.id -> client_id
-            clients: [],
-            entities: [],
-            scene: null,
-            isRecording: false,
-            start: Date.now(),
-            recordingStart: 0,
-            seq: 0,
-            // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
-            // writers: {
-            //     pos: {
-            //         buffer: Buffer.alloc(syncServer.positionWriteBufferSize()),
-            //         cursor: 0
-            //     },
-            //     int: {
-            //         buffer: Buffer.alloc(syncServer.interactionWriteBufferSize()),
-            //         cursor: 0
-            //     }
-            // },
-            message_buffer: []
-        };
-        
-        assert.deepStrictEqual(singularEntry[1].sockets, expectedSession.sockets);
-        
-        assert.deepStrictEqual(singularEntry[1].clients, expectedSession.clients);
-
-        assert.deepStrictEqual(singularEntry[1].entities, expectedSession.entities);
-
-        assert.deepStrictEqual(singularEntry[1].scene, expectedSession.scene);
-
-        assert.deepStrictEqual(singularEntry[1].isRecording, expectedSession.isRecording);
-
-        // Do not check start time for strict equality.
-        assert(Math.abs(singularEntry[1].start - expectedSession.start) < 1000);
-
-        assert.deepStrictEqual(singularEntry[1].recordingStart, expectedSession.recordingStart);
-
-        assert.deepStrictEqual(singularEntry[1].seq, expectedSession.seq);
-
-        // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
-        // assert.deepStrictEqual(singularEntry[1].writers, expectedSession.writers);
-
-        assert.deepStrictEqual(singularEntry[1].message_buffer, expectedSession.message_buffer);
     });   
 
     it("should return failure on getting a nonexistent session", function () {

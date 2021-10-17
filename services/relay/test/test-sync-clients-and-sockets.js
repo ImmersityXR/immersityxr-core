@@ -10,6 +10,8 @@ var should = require("should");
 const { debug } = require("winston");
 
 const syncServer = require("../sync");
+
+const Session = require("../session");
     
 const SESSION_ID = 123;
 
@@ -23,7 +25,7 @@ const DUMMY_SOCKET_C = { "dummy": "socketC", "id": "SCHRBEEF" };
 
 describe("Sync Server: Clients and Sockets", function (done) {
     beforeEach(function () {
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function () { 
+        syncServer.notifyBumpAction = function () { 
             throw Error("An unexpected bump occurred.");
         };
         
@@ -51,69 +53,22 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
     */
 
-    it("should append a valid client to an empty session", function () {
-        let sessions = new Map ();
-
-        let session = {
-            clients: [ ]
-        };
-
-        sessions.set(SESSION_ID, session);
-
-        syncServer.sessions = sessions;
-
-        syncServer.addClientToSession(session, CLIENT_ID);
-
-        let expectedClients = [ CLIENT_ID ];
-
-        session.clients.should.eql(expectedClients);
-    });
-
-    it("should create a session when appending a valid client to a null session, appropriately", function () {
-        let sessions = new Map ();
-
-        syncServer.sessions = sessions;
-
-        syncServer.addClientToSession(null, CLIENT_ID, true);
-
-        let expectedClients = [ CLIENT_ID ];
-
-        session.clients.should.eql(expectedClients);
-    });
-
-    it("should return an error when appending a valid client to a null session, appropriately", function () {
+    it("should return an error when appending a valid client to a null session", function () {
         let sessions = new Map ();
 
         syncServer.sessions = sessions;
         
-        let success = syncServer.addClientToSession(null, CLIENT_ID, false);
+        let success = syncServer.addClientToSession(null, CLIENT_ID);
 
         success.should.eql(false);
     });
 
-    it("should append a duplicate client to a session", function () {
-        let sessions = new Map ();
-
-        let session = {
-            clients: [ CLIENT_ID ]
-        };
-
-        sessions.set(SESSION_ID, session);
-
-        syncServer.sessions = sessions;
-
-        syncServer.addClientToSession(session, CLIENT_ID);
-
-        let expectedClients = [ CLIENT_ID, CLIENT_ID ];
-
-        session.clients.should.eql(expectedClients);
-    });
-
     it("should be able to bump one existing socket", function () {
-        let session = {
-            clients: [ CLIENT_ID, CLIENT_ID ],
-            sockets: { }
-        };
+        let session = new Session();
+        
+        session.clients = [ CLIENT_ID, CLIENT_ID ];
+
+        session.sockets = { };
 
         session.sockets[DUMMY_SOCKET_A.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A };
 
@@ -127,12 +82,22 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let bumpCount = 0;
 
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
+        syncServer.notifyBumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.equal(DUMMY_SOCKET_A);
 
             bumpCount += 1;
+        };
+
+        let leaveCount = 0;
+
+        syncServer.makeSocketLeaveSessionAction = function (session_id, socket) {
+            session_id.should.equal(SESSION_ID);
+
+            socket.should.equal(DUMMY_SOCKET_A);
+
+            leaveCount += 1;
         };
 
         let disconnectCount = 0;
@@ -151,6 +116,8 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         bumpCount.should.eql(1);
 
+        leaveCount.should.eql(1);
+
         disconnectCount.should.eql(1);
 
         outputSession = syncServer.sessions.get(SESSION_ID);
@@ -159,10 +126,11 @@ describe("Sync Server: Clients and Sockets", function (done) {
     });
 
     it("should be able to bump two existing sockets", function () {
-        let session = {
-            clients: [ CLIENT_ID, CLIENT_ID, CLIENT_ID ],
-            sockets: { }
-        };
+        let session = new Session(); 
+
+        session.clients = [ CLIENT_ID, CLIENT_ID, CLIENT_ID ];
+
+        session.sockets = { };
 
         session.sockets[DUMMY_SOCKET_A.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A };
 
@@ -178,12 +146,22 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let bumpCount = 0;
 
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
+        syncServer.notifyBumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.be.oneOf(DUMMY_SOCKET_A, DUMMY_SOCKET_B);
 
             bumpCount += 1;
+        };
+
+        let leaveCount = 0;
+
+        syncServer.makeSocketLeaveSessionAction = function (session_id, socket) {
+            session_id.should.equal(SESSION_ID);
+
+            socket.should.be.oneOf(DUMMY_SOCKET_A, DUMMY_SOCKET_B);
+
+            leaveCount += 1;
         };
 
         let disconnectCount = 0;
@@ -202,125 +180,12 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         bumpCount.should.eql(2);
 
+        leaveCount.should.eql(2);
+
         disconnectCount.should.eql(2);
 
         outputSession = syncServer.sessions.get(SESSION_ID);
 
         Object.keys(outputSession.sockets).should.eql( [ DUMMY_SOCKET_C.id ] );
-    });
-
-    it("should reduce two duplicate clients to one client", function () {
-        syncServer.createSession(SESSION_ID);
-
-        let { success, session } = syncServer.getSession(SESSION_ID);
-
-        session.should.not.eql(null);
-
-        session.clients.should.not.eql(null);
-
-        session.clients.length.should.equal(0);
-
-        syncServer.addClientToSession(session, CLIENT_ID);
-
-        session.clients.length.should.equal(1);
-
-        syncServer.addClientToSession(session, CLIENT_ID);
-
-        session.clients.length.should.equal(2);
-
-        syncServer.removeDuplicateClientsFromSession(session, CLIENT_ID);
-
-        session.clients.length.should.equal(1);
-    });
-
-    it("should be able to remove a socket", function () {
-        let inputSession = {
-            clients: [CLIENT_ID, CLIENT_ID],
-            sockets: { }
-        };
-
-        inputSession.sockets[DUMMY_SOCKET_A.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A };
-
-        inputSession.sockets[DUMMY_SOCKET_B.id] = { client_id: CLIENT_ID, socket: DUMMY_SOCKET_B };
-
-        syncServer.createSession(SESSION_ID);
-
-        syncServer.sessions.set(SESSION_ID, inputSession);
-
-        Object.keys(inputSession.sockets).length.should.equal(2);
-
-        let removeSuccess = syncServer.removeSocketFromSession(DUMMY_SOCKET_A, SESSION_ID);
-
-        removeSuccess.should.equal(true);
-        
-        let { success, session } = syncServer.getSession(SESSION_ID);
-
-        Object.keys(session.sockets).length.should.equal(1);
-    });
-
-    it("should return true if it found a socket", function () {
-        throw Error("unimplemented");
-    });
-
-    it("should return false if it couldn't find a socket", function () {
-        throw Error("unimplemented");
-    });
-
-    it("should be able to remove a socket and client from a session then disconnect the socket", function () {
-        throw Error("unimplemented");
-    });
-
-    it("should return all session sockets for a given client ID", function () {
-        syncServer.sessions = new Map ();
-
-        let session =  {
-                clients: [CLIENT_ID],
-                sockets: {
-                    socketA: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A }
-                }
-        };
-
-        syncServer.sessions.set(SESSION_ID, session);
-
-        let sockets = session.getSocketsFromClientId(CLIENT_ID, null);
-
-        sockets.should.eql([ DUMMY_SOCKET_A ]);
-        
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
-            session_id.should.equal(SESSION_ID);
-
-            socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
-        };
-
-        syncServer.sessions.set(SESSION_ID, {
-            clients: [CLIENT_ID, CLIENT_ID],
-            sockets: {
-                socketA: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A },
-                socketB: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_B }
-            }
-        });
-
-        session = syncServer.sessions.get(SESSION_ID);
-
-        sockets = session.getSocketsFromClientId(CLIENT_ID, null);
-
-        sockets.should.eql([ DUMMY_SOCKET_A, DUMMY_SOCKET_B ]);
-    });
-
-    it("should exclude a socket when requesting session sockets", function () {
-        let session = {
-            clients: [ CLIENT_ID, CLIENT_ID, CLIENT_ID ],
-            sockets: {
-                socketA: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_A },
-                socketB: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_B },
-                socketC: { client_id: CLIENT_ID, socket: DUMMY_SOCKET_C },
-            }
-        };
-
-        syncServer.sessions.set(SESSION_ID, session);
-
-        let sockets = session.getSocketsFromClientId(CLIENT_ID, DUMMY_SOCKET_C.id);
-
-        sockets.should.eql( [ DUMMY_SOCKET_A, DUMMY_SOCKET_B ] );
     });
 });
