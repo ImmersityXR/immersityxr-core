@@ -25,7 +25,7 @@ describe("Sync Server: Sessions", function (done) {
     beforeEach(function () {
         syncServer.initGlobals();
         
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function () { 
+        syncServer.notifyBumpAction = function () { 
             throw Error("An unexpected bump occurred.");
         };
         

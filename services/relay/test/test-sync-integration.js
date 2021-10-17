@@ -23,7 +23,7 @@ const DUMMY_SOCKET_C = { "dummy": "socketC", "id": "SCHRBEEF" };
 
 describe("Sync Server: Integration", function (done) {
     beforeEach(function () {
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function () { 
+        syncServer.notifyBumpAction = function () { 
             throw Error("An unexpected bump occurred.");
         };
         
@@ -134,7 +134,7 @@ describe("Sync Server: Integration", function (done) {
     });
 
     it("should perform a bump properly", function () {
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
+        syncServer.notifyBumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );

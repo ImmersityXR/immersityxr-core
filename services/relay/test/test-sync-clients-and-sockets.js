@@ -23,7 +23,7 @@ const DUMMY_SOCKET_C = { "dummy": "socketC", "id": "SCHRBEEF" };
 
 describe("Sync Server: Clients and Sockets", function (done) {
     beforeEach(function () {
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function () { 
+        syncServer.notifyBumpAction = function () { 
             throw Error("An unexpected bump occurred.");
         };
         
@@ -127,7 +127,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let bumpCount = 0;
 
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
+        syncServer.notifyBumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.equal(DUMMY_SOCKET_A);
@@ -178,7 +178,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let bumpCount = 0;
 
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
+        syncServer.notifyBumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.be.oneOf(DUMMY_SOCKET_A, DUMMY_SOCKET_B);
@@ -286,7 +286,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         sockets.should.eql([ DUMMY_SOCKET_A ]);
         
-        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
+        syncServer.notifyBumpAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
