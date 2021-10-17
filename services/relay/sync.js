@@ -42,6 +42,7 @@ const path = require("path");
 
 const util = require("util");
 const { syslog } = require("winston/lib/winston/config");
+const Session = require("./session");
 
 // event data globals
 // NOTE(rob): deprecated.
@@ -661,14 +662,7 @@ module.exports = {
       }
 
       // check if the incoming packet is from a client who is valid for this session
-
-      for (let i = 0; i < session.clients.length; i += 1) {
-        if (client_id == session.clients[i]) {
-          return true;
-        }
-      }
-
-      return false;
+      return session.hasClient(client_id);
     }
   },
 
@@ -784,15 +778,9 @@ module.exports = {
       if (!session) return;
 
       // check if the incoming packet is from a client who is valid for this session
-      let joined = false;
-      for (let i = 0; i < session.clients.length; i++) {
-        if (client_id == session.clients[i]) {
-          joined = true;
-          break;
-        }
+      if (!session.hasClient(client_id)) {
+        return;
       }
-
-      if (!joined) return;
 
       // entity should be rendered
       if (interaction_type == INTERACTION_RENDER) {
@@ -949,7 +937,7 @@ module.exports = {
     // check requested api version
     if (version === 2) {
       state = {
-        clients: session.clients,
+        clients: session.getClients(),
         entities: session.entities,
         scene: session.scene,
         isRecording: session.isRecording,
@@ -970,7 +958,7 @@ module.exports = {
       }
 
       state = {
-        clients: session.clients,
+        clients: session.getClients(),
         entities: entities,
         locked: locked,
         scene: session.scene,
@@ -982,7 +970,20 @@ module.exports = {
   },
 
   // returns true on success and false on failure
-  addClientToSession: function (session, client_id, do_create_session) {
+  addClientToSession: function (session_id, client_id, do_create_session) {
+    let { success, session } = this.getSession(session_id);
+
+    if (!success || !session) {
+      this.logWarningSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        "session was null when making socket and client join session. Creating a session for you."
+      );
+
+      session = this.createSession(session_id);
+    }
+
     if (session == null && !do_create_session) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -998,22 +999,25 @@ module.exports = {
       session = this.createSession();
     }
 
-    if (
-      session.clients == null ||
-      typeof session.clients === "undefined" ||
-      session.clients.length == 0
-    ) {
-      session.clients = [client_id];
-
-      return true;
-    }
-
-    session.clients.push(client_id);
+    session.addClient(client_id);
 
     return true;
   },
 
-  removeDuplicateClientsFromSession: function (session, client_id) {
+  removeDuplicateClientsFromSession: function (session_id, client_id) {
+    let { success, session } = this.getSession(session_id);
+
+    if (!success) {
+      this.logErrorSessionClientSocketAction(
+        null,
+        client_id,
+        null,
+        `tried to remove duplicate client from session, but failed to get session`
+      );
+
+      return;
+    }
+
     if (session == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -1025,31 +1029,12 @@ module.exports = {
       return;
     }
 
-    if (session.clients == null) {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        client_id,
-        null,
-        `tried to remove duplicate client from session, but session.clients was null`
-      );
-
-      return;
-    }
-
-    if (session.clients.length == 0) {
-      return;
-    }
-
-    const first_instance = session.clients.indexOf(client_id);
-
-    for (let i = 0; i < session.clients.length; i += 1) {
-      if (i != first_instance && session.clients[i] == client_id) {
-        session.clients.splice(i, 1);
-      }
-    }
+    session.removeDuplicateClients(client_id);
   },
 
-  removeClientFromSession: function (session, client_id) {
+  removeClientFromSession: function (session_id, client_id) {
+    let session = this.getSession(session_id);
+
     if (session == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -1061,37 +1046,7 @@ module.exports = {
       return false;
     }
 
-    if (session.clients == null) {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        client_id,
-        null,
-        `tried to remove client from session, but session.clients was null`
-      );
-
-      return false;
-    }
-
-    let index = session.clients.indexOf(client_id);
-
-    if (
-      session.clients.length == 0 ||
-      session.clients.indexOf(client_id) == -1
-    ) {
-      //client_id is not in the array, so we don't need to remove it.
-      this.logWarningSessionClientSocketAction(
-        null,
-        null,
-        client_id,
-        `Tried removing client from session.clients, but it was not there.`
-      );
-
-      return false;
-    }
-
-    session.clients.splice(index, 1);
-
-    let session_id = this.getSessionIdFromSession(session);
+    session.removeClient(client_id);
 
     this.logInfoSessionClientSocketAction(
       session_id,
@@ -1101,21 +1056,6 @@ module.exports = {
     );
 
     return true;
-  },
-
-  addSocketToSession: function (session, socket, client_id) {
-    if (!session) {
-      this.logErrorSessionClientSocketAction(
-        null,
-        client_id,
-        socket.id,
-        `tried to add socket to session, but session was null`
-      );
-
-      return;
-    }
-
-    session.sockets[socket.id] = { client_id: client_id, socket: socket };
   },
 
   // returns true iff socket was successfully joined to session
@@ -1167,20 +1107,9 @@ module.exports = {
       return false;
     }
 
-    let { success, session } = this.getSession(session_id);
+    let session = this.getOrCreateSession(session_id);
 
-    if (!success || !session) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        client_id,
-        socket.id,
-        "session was null when making socket and client join session. Creating a session for you."
-      );
-
-      session = this.createSession(session_id);
-    }
-
-    success = this.addClientToSession(session, client_id);
+    success = session.addClient(client_id);
 
     if (!success) {
       reason = `tried to make socket and client join session, but adding client to session failed.`;
@@ -1198,18 +1127,18 @@ module.exports = {
     }
 
     this.bumpDuplicateSockets(
-      session,
+      session_id,
       client_id,
       do_bump_duplicates,
       socket.id
     );
 
     if (do_bump_duplicates) {
-      this.removeDuplicateClientsFromSession(session, client_id);
+      session.removeDuplicateClients(client_id);
     }
 
     // socket to client mapping
-    this.addSocketToSession(session, socket, client_id);
+    session.addSocket(socket, client_id);
 
     if (!this.successfullyJoinedAction) {
       this.logWarningSessionClientSocketAction(
@@ -1287,7 +1216,7 @@ module.exports = {
       return;
     }
 
-    success = this.removeSocketFromSession(socket, session_id);
+    success = session.removeSocket(socket);
 
     if (!success) {
       reason = `removeSocketFromSession failed`;
@@ -1297,10 +1226,10 @@ module.exports = {
       return;
     }
 
-    success = this.removeClientFromSession(session, client_id);
+    success = session.removeClient(client_id);
 
     if (!success) {
-      reason = `removeClientFromSession failed`;
+      reason = `session.removeClient failed`;
 
       this.failedToLeaveAction(session_id, reason);
 
@@ -1356,11 +1285,13 @@ module.exports = {
 
   //TODO rewrite this so that do_bump_duplicates and socket_id become ids_to_keep
   bumpDuplicateSockets: function (
-    session,
+    session_id,
     client_id,
     do_bump_duplicates,
     socket_id
   ) {
+    let session = this.getSession(session_id);
+
     if (session == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -1372,18 +1303,15 @@ module.exports = {
       return;
     }
 
-    let session_id = this.getSessionIdFromSession(session);
-
     let sockets;
 
     if (do_bump_duplicates) {
-      sockets = this.getSessionSocketsFromClientId(
-        session,
+      sockets = session.getSocketsFromClientId(
         client_id,
         socket_id
       );
     } else {
-      sockets = this.getSessionSocketsFromClientId(session, client_id, null);
+      sockets = session.getSocketsFromClientId(client_id, null);
     }
 
     let self = this;
@@ -1393,7 +1321,7 @@ module.exports = {
         session_id,
         client_id,
         socket_id,
-        `tried to bump duplicate sockets, but result of getSessionSocketsFromClientId was null. Proceeding anyways.`
+        `tried to bump duplicate sockets, but result of getSocketsFromClientId was null. Proceeding anyways.`
       );
     }
 
@@ -1446,83 +1374,9 @@ module.exports = {
     }
   },
 
-  // returns session ID on success; returns -1 on failure
-  // TODO(Brandon): deprecate and remove 8/10/21
-  getSessionIdFromSession: function (session) {
-    let result = -1;
+  getClientIdFromSessionSocket: function (session_id, socket) {
+    let session = this.getSession(session_id);
 
-    if (session == null || typeof session === "undefined") {
-      this.logErrorSessionClientSocketAction(
-        null,
-        null,
-        null,
-        `tried to get session ID from session, but session was null or undefined`
-      );
-
-      return result;
-    }
-
-    if (typeof session !== "object") {
-      this.logErrorSessionClientSocketAction(
-        null,
-        null,
-        null,
-        `tried to get session ID from session, but session was not an object`
-      );
-
-      return result;
-    }
-
-    if (session.clients == null || typeof session.clients === "undefined") {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        null,
-        null,
-        `session.clients was null or undefined`
-      );
-
-      return result;
-    }
-
-    if (session.sockets == null || typeof session.sockets === "undefined") {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        null,
-        null,
-        `session.sockets was null or undefined`
-      );
-
-      return result;
-    }
-
-    this.sessions.forEach((candidate_session, candidate_session_id) => {
-      if (
-        candidate_session.clients == null ||
-        typeof candidate_session.clients === "undefined"
-      ) {
-        return; // return from the inner function only.
-      }
-
-      if (
-        candidate_session.sockets == null ||
-        typeof candidate_session.sockets === "undefined"
-      ) {
-        return; // return from the inner function only.
-      }
-
-      if (candidate_session.sockets.size != session.sockets.size) {
-        return; // return from the inner function only.
-      }
-
-      if (compareKeys(candidate_session.sockets, session.sockets)) {
-        result = candidate_session_id;
-      }
-    });
-
-    return result;
-  },
-
-  getClientIdFromSessionSocket: function (socket) {
     if (session == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -1533,48 +1387,15 @@ module.exports = {
 
       return null;
     }
-
-    if (session.sockets == null) {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        client_id,
-        null,
-        `tried to get client ID from session socket, but session.sockets was null`
-      );
-
-      return null;
-    }
-
-    if (socket.id == null) {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        client_id,
-        null,
-      `tried to get client ID from session socket, but socket.id was null`
-      );
-
-      return null;
-    }
-
-    if (session.sockets[socket.id] == null) {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        client_id,
-        null,
-      `tried to get client ID from session socket, but session.sockets[socket.id] was null`
-      );
-
-      return null;
-    }
-
-    return session.sockets[socket.id].client_id;
   },
 
   getSessionSocketsFromClientId: function (
-    session,
+    session_id,
     client_id,
     excluded_socket_id
   ) {
+    let session = this.getSession(session_id);
+
     if (session == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -1586,140 +1407,49 @@ module.exports = {
       return null;
     }
 
-    if (session.sockets == null) {
-      this.logErrorSessionClientSocketAction(
-        session.id,
-        client_id,
-        null,
-        `tried to get session sockets from client ID, but session.sockets was null`
-      );
-
-      return null;
-    }
-
-    var result = [];
-
-    for (var candidate_socket_id in session.sockets) {
-      let isCorrectId =
-        session.sockets[candidate_socket_id].client_id == client_id;
-
-      let doExclude =
-        session.sockets[candidate_socket_id].socket.id == excluded_socket_id;
-
-      if (isCorrectId && !doExclude) {
-        result.push(session.sockets[candidate_socket_id].socket);
-      }
-    }
-
-    return result;
+    return session.getSocketsFromClientId(client_id, excluded_socket_id);
   },
 
   isClientInSession: function (session_id, client_id) {
-    const numInstances = this.getNumClientInstancesForClient(session_id, client_id);
+    let session = this.getSession(session_id);
 
-    if (numInstances >= 1) {
-        return true;
-    }
-
-    return false;
+    return session.hasClient(client_id);
   },
 
-  // Returns success = true if operation succeeded or false if socket or session with session_id were null.
-  // Returns isInSession if socket is in session.sockets.
-  isSocketInSession: function (socket, session_id) {
-    if (!socket) {
-      this.logWarningSessionClientSocketAction(
+  // returns number of client instances of the same ID on success; returns -1 on failure;
+  getNumClientInstancesForSession: function (session_id, client_id) {
+    let session = this.getSession(session_id);
+
+    if (session == null) {
+      this.logErrorSessionClientSocketAction(
         session_id,
+        client_id,
         null,
-        null,
-        `removeSocketFromSession: socket was null.`
+        `Could not get number of client instances -- session was null`
       );
 
-      return {
-        success: false,
-        isInSession: null
-      };
+      return -1;
     }
 
+    return session.getNumClientInstances(client_id);
+  },
+
+  // Return true iff removing the socket succeeded.
+  removeSocketFromSession: function (socket, session_id) {
     let session = this.sessions.get(session_id);
 
     if (!session) {
       this.logWarningSessionClientSocketAction(
         session_id,
         null,
-        socket.id,
-        `Could not find session when trying to remove a socket from it.`
-      );
-
-      return {
-        success: false,
-        isInSession: null
-      };
-    }
-
-    return {
-      success: true,
-      isInSession: (socket.id in session.sockets)
-    };
-  },
-
-  // returns number of client instances of the same ID on success; returns -1 on failure;
-  getNumClientInstancesForClient: function (session_id, client_id) {
-    let session = this.sessions.get(session_id);
-
-    if (session == null || session.clients == null) {
-      this.logErrorSessionClientSocketAction(
-        session_id,
-        client_id,
         null,
-        `Could not get number of client instances -- session was null or session.clients was null.`
-      );
-
-      return -1;
-    }
-
-    var count = 0;
-
-    session.clients.forEach((value) => {
-      if (value == client_id) {
-        count += 1;
-      }
-    });
-
-    return count;
-  },
-
-  // Return true iff removing the socket succeeded.
-  removeSocketFromSession: function (socket, session_id) {
-    let { success, isInSession } = this.isSocketInSession(socket, session_id);
-
-    if (!success || isInSession == null) {
-      this.logErrorSessionClientSocketAction(
-        session_id,
-        null,
-        socket.id,
-        `tried removing socket from session.sockets, but there was an error.`
+        `tried to removeSocketFromSession, but session was not found.`
       );
 
       return false;
     }
 
-    if (!isInSession) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        null,
-        socket.id,
-        `tried removing socket from session.sockets, but it was not found.`
-      );
-
-      return false;
-    }
-
-    let session = this.sessions.get(session_id);
-
-    delete session.sockets[socket.id];
-
-    return true;
+    return session.removeSocket(socket);
   },
 
   disconnectSocket: function (socket, session_id, client_id) {
@@ -1761,12 +1491,12 @@ module.exports = {
 
     let session = this.sessions.get(session_id);
 
-    this.removeClientFromSession(session, client_id);
+    session.removeClient(client_id);
 
-    this.removeSocketFromSession(socket, session_id);
+    session.removeSocket(socket);
   },
 
-  getNumClientInstances: function (session_id) {
+  getTotalNumInstancesForAllClientsForSession: function (session_id) {
     let session = this.sessions.get(session_id);
 
     if (!session) {
@@ -1780,18 +1510,7 @@ module.exports = {
       return -1;
     }
 
-    if (session.clients == null) {
-      this.logWarningSessionClientSocketAction(
-        session_id,
-        null,
-        null,
-        `the session's session.clients was null.`
-      );
-
-      return -1;
-    }
-
-    return session.clients.length;
+    return session.getTotalNumInstancesForAllClients();
   },
 
   try_to_end_recording: function (session_id) {
@@ -1824,7 +1543,7 @@ module.exports = {
 
   // clean up session from sessions map if empty, write
   cleanUpSessionIfEmpty: function (session_id) {
-    if (this.getNumClientInstancesForClient(session_id) >= 0) {
+    if (this.getNumClientInstancesForSession(session_id) >= 0) {
       // don't clean up if there are still clients in the session
       return;
     }
@@ -1880,29 +1599,7 @@ module.exports = {
       `Creating session: ${session_id}`
     );
 
-    this.sessions.set(session_id, {
-      id: session_id,
-      sockets: {}, // socket.id -> client_id
-      clients: [],
-      entities: [],
-      scene: null,
-      isRecording: false,
-      start: Date.now(),
-      recordingStart: 0,
-      seq: 0,
-      // NOTE(rob): DEPRECATED, use message_buffer. 8/3/2021
-      // writers: {
-      //     pos: {
-      //         buffer: Buffer.alloc(this.positionWriteBufferSize()),
-      //         cursor: 0
-      //     },
-      //     int: {
-      //         buffer: Buffer.alloc(this.interactionWriteBufferSize()),
-      //         cursor: 0
-      //     }
-      // },
-      message_buffer: [],
-    });
+    this.sessions.set(session_id, new Session());
 
     session = this.sessions.get(session_id);
 
@@ -1947,7 +1644,7 @@ module.exports = {
 
       let session = s[1];
 
-      let { success, isInSession } = this.isSocketInSession(socket, session_id);
+      let { success, isInSession } = session.hasSocket(socket);
 
       if (!success || !isInSession) {
         // This isn't the right session, so keep looking.
@@ -1958,7 +1655,7 @@ module.exports = {
       return {
         session_id: session_id,
 
-        client_id: this.getClientIdFromSessionSocket(socket),
+        client_id: session.getClientIdFromSocket(socket),
       };
     }
 
@@ -2034,7 +1731,7 @@ module.exports = {
       client_id,
       socket.id,
       `Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, clients: ${JSON.stringify(
-        session.clients
+        session.getClients()
       )}`
     );
 
@@ -2541,7 +2238,7 @@ module.exports = {
         client_id,
         socket.id,
         `Client was disconnected; attempting to reconnect. Disconnect reason: , clients: ${JSON.stringify(
-          session.clients
+          session.getClients()
         )}`
       );
 
@@ -2574,9 +2271,7 @@ module.exports = {
           return;
         }
 
-        socket
-          .to(session_id.toString())
-          .emit(KomodoSendEvents.sessionInfo, session);
+        socket.to(session_id.toString()).emit(KomodoSendEvents.sessionInfo, session);
       });
 
       socket.on(KomodoReceiveEvents.requestToJoinSession, function (data) {

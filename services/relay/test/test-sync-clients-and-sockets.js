@@ -23,7 +23,7 @@ const DUMMY_SOCKET_C = { "dummy": "socketC", "id": "SCHRBEEF" };
 
 describe("Sync Server: Clients and Sockets", function (done) {
     beforeEach(function () {
-        syncServer.notifyBumpAction = function () { 
+        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function () { 
             throw Error("An unexpected bump occurred.");
         };
         
@@ -127,7 +127,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let bumpCount = 0;
 
-        syncServer.notifyBumpAction = function (session_id, socket) {
+        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.equal(DUMMY_SOCKET_A);
@@ -147,7 +147,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
             disconnectCount += 1;
         };
 
-        syncServer.bumpDuplicateSockets(session, CLIENT_ID, true, DUMMY_SOCKET_B.id);
+        syncServer.bumpDuplicateSockets(SESSION_ID, CLIENT_ID, true, DUMMY_SOCKET_B.id);
 
         bumpCount.should.eql(1);
 
@@ -178,7 +178,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let bumpCount = 0;
 
-        syncServer.notifyBumpAction = function (session_id, socket) {
+        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.be.oneOf(DUMMY_SOCKET_A, DUMMY_SOCKET_B);
@@ -198,7 +198,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
             disconnectCount += 1;
         };
 
-        syncServer.bumpDuplicateSockets(session, CLIENT_ID, true, DUMMY_SOCKET_C.id);
+        syncServer.bumpDuplicateSockets(SESSION_ID, CLIENT_ID, true, DUMMY_SOCKET_C.id);
 
         bumpCount.should.eql(2);
 
@@ -282,11 +282,11 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         syncServer.sessions.set(SESSION_ID, session);
 
-        let sockets = syncServer.getSessionSocketsFromClientId(session, CLIENT_ID, null);
+        let sockets = session.getSocketsFromClientId(CLIENT_ID, null);
 
         sockets.should.eql([ DUMMY_SOCKET_A ]);
         
-        syncServer.notifyBumpAction = function (session_id, socket) {
+        syncServer.notifyBumpAndMakeSocketLeaveSessionAction = function (session_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
@@ -302,7 +302,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         session = syncServer.sessions.get(SESSION_ID);
 
-        sockets = syncServer.getSessionSocketsFromClientId(session, CLIENT_ID, null);
+        sockets = session.getSocketsFromClientId(CLIENT_ID, null);
 
         sockets.should.eql([ DUMMY_SOCKET_A, DUMMY_SOCKET_B ]);
     });
@@ -319,7 +319,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         syncServer.sessions.set(SESSION_ID, session);
 
-        let sockets = syncServer.getSessionSocketsFromClientId(session, CLIENT_ID, DUMMY_SOCKET_C.id);
+        let sockets = session.getSocketsFromClientId(CLIENT_ID, DUMMY_SOCKET_C.id);
 
         sockets.should.eql( [ DUMMY_SOCKET_A, DUMMY_SOCKET_B ] );
     });
