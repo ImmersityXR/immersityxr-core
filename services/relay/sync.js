@@ -41,8 +41,13 @@ const fs = require("fs");
 const path = require("path");
 
 const util = require("util");
+
 const { syslog } = require("winston/lib/winston/config");
+
 const Session = require("./session");
+
+const SocketRepairCenter = require("./socket-repair-center");
+const SocketActivityMonitor = require("./socket-activity-monitor");
 
 // event data globals
 // NOTE(rob): deprecated.
@@ -117,7 +122,7 @@ const KomodoSendEvents = {
   message: "message",
   relayUpdate: "relayUpdate",
   notifyBump: "bump",
-  notifyNotInSession: "notifyNotInSession",
+  rejectUser: "rejectUser",
 };
 
 const KomodoMessages = {
@@ -1071,7 +1076,7 @@ module.exports = {
         session_id,
         client_id,
         null,
-        reason
+        `Failed to join: ${reason}`
       );
 
       // don't call failedToJoinAction here because we don't have a socket.
@@ -1086,7 +1091,7 @@ module.exports = {
         session_id,
         client_id,
         socket.id,
-        reason
+        `Failed to join: ${reason}`
       );
 
       this.failedToJoinAction(session_id, reason);
@@ -1105,7 +1110,7 @@ module.exports = {
         session_id,
         client_id,
         socket.id,
-        reason
+        `Failed to join: ${reason}`
       );
       
       this.failedToJoinAction(session_id, reason);
@@ -1137,6 +1142,13 @@ module.exports = {
 
       return true;
     }
+
+    this.logErrorSessionClientSocketAction(
+      session_id,
+      client_id,
+      socket.id,
+      "Successfully joined."
+    );
 
     this.successfullyJoinedAction(session_id, client_id, socket);
     
@@ -1737,7 +1749,7 @@ module.exports = {
         null,
         null,
         socket.id,
-        `disconnected. Not found in sessions. Probably ok. Skipping reconnectAction, removeSocketAndClientFromSession, and/or DisconnectSocket.)`
+        `disconnected. Not found in sessions. Probably ok. Skipping reconnectAction, removeSocketAndClientFromSession, and/or DisconnectSocket.`
       );
 
       return true;
@@ -1792,6 +1804,10 @@ module.exports = {
 
   initGlobals: function () {
     this.sessions = new Map();
+
+    this.socketActivityMonitor = new SocketActivityMonitor();
+
+    this.socketRepairCenter = new SocketRepairCenter(200, this, this, this, this);
   },
 
 // Check if message payload is pre-parsed.
@@ -1984,7 +2000,7 @@ module.exports = {
     }
   },
 
-  processMessage: function (data, socket) {
+  getMetadataFromMessage: function (data) {
     if (data == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -1992,6 +2008,12 @@ module.exports = {
         socket.id,
         "tried to process message, but data was null"
       );
+
+      return { 
+        success: false,
+        session_id: null,
+        client_id: null,
+      };
     }
     
     let session_id = data.session_id;
@@ -2004,7 +2026,11 @@ module.exports = {
         "tried to process message, but session_id was null"
       );
 
-      return;
+      return { 
+        success: false,
+        session_id: null,
+        client_id: data.client_id,
+      };
     }
 
     let client_id = data.client_id;
@@ -2017,6 +2043,179 @@ module.exports = {
         "tried to process message, but client_id was null"
       );
 
+      return { 
+        success: false,
+        session_id: data.session_id,
+        client_id: null,
+      };
+    }
+
+    return { 
+      success: true,
+      session_id: data.session_id,
+      client_id: data.client_id,
+    };
+  },
+
+  isSocketInRoom: function (socket, session_id) {
+    if (!socket) {
+      this.logInfoSessionClientSocketAction(session_id,
+        client_id,
+        socket.id,
+        "isSocketInRoom: socket was null."
+      );
+    }
+
+    if (!socket.rooms) {
+      this.logInfoSessionClientSocketAction(session_id,
+        client_id,
+        socket.id,
+        "isSocketInRoom: socket.rooms was null."
+      );
+    }
+
+    let roomIds = Object.keys(socket.rooms);
+
+    return roomIds.includes(session_id);
+  },
+
+  rejectUser: function (socket, reason) {
+      socketRepairCenter.set(socket.id, socket);
+
+      if (!this.rejectUserAction) {
+        this.logErrorSessionClientSocketAction(
+          null,
+          null,
+          socket.id,
+          "in rejectUser, no rejectUserAction callback was provided."
+        );
+
+        return;
+      }
+
+      this.rejectUserAction(socket, reason);
+
+      this.disconnectSocket(socket, session_id, client_id);
+
+      this.removeSocketAndClientFromSession(socket, session_id, client_id);
+  },
+
+  // Returns true iff we have previously cached a record for a user without a session.
+  isSocketInSocketRepairCenter: function (socket) {
+    return socket.id in this.socketRepairCenter;
+  },
+
+  applyMessageToState: function (data, type, message, session_id, client_id, socket) {
+    // get reference to session and parse message payload for state updates, if needed.
+    if (type == KomodoMessages.interaction.type) {
+      if (message.length < KomodoMessages.interaction.minLength) {
+          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: data.message.length was incorrect");
+  
+          return;
+      }
+  
+      let source_id = message[KomodoMessages.interaction.indices.sourceId];
+
+      if (source_id == null) {
+          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: source_id was null");
+      }
+
+      let target_id = message[KomodoMessages.interaction.indices.targetId];
+
+      if (target_id == null) {
+          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: target_id was null");
+      }
+
+      let interaction_type = message[KomodoMessages.interaction.indices.interactionType];
+
+      if (interaction_type == null) {
+          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: interaction_type was null");
+      }
+
+      this.applyInteractionMessageToState(session, target_id, interaction_type);
+    }
+
+    if (data.type == KomodoMessages.sync.type) {
+      this.applySyncMessageToState(session, data);
+    }
+  },
+  
+  repair: function (socket, session_id, client_id) {
+    addClientToSessionIfNeeded(session_id, client_id);
+
+    addSocketToSessionIfNeeded(socket, session_id);
+
+    joinSocketToRoomIfNeeded(socket, session_id);
+  },
+
+  addClientToSessionIfNeeded: function (session_id, client_id) {
+      let session = this.sessionManager.getSession(session_id);
+
+      if (!this.sessionManager.isClientInSession(session_id, client_id)) {
+          this.logger.logInfoSessionClientSocketAction(session_id,
+              client_id,
+              socket.id,
+              "User had a socket but client is not in session. Adding client and proceeding."
+          );
+
+          session.addClient(client_id);
+
+          // TODO: consider doing this.rejectUserAction(socket, "User has a socket but client is not in session.");
+      }
+  },
+
+  // check if the incoming packet is from a client who is valid for this session
+  addSocketToSessionIfNeeded: function (socket, session_id) {
+      let socketResult = this.sessionManager.isSocketInSession(session_id, socket);
+
+      let session = this.sessionManager.getSession(session_id);
+
+      if (!socketResult.success || !socketResult.isInSession ) {
+          this.logger.logInfoSessionClientSocketAction(
+              session_id, 
+              client_id, 
+              socket.id, 
+              "User had a socket but socket is not in session. Adding socket and proceeding."
+          );
+
+          session.addSocket(socket, client_id);
+
+          // TODO: consider doing this.rejectUserAction(socket, "User has a socket but socket is not in session.");
+      }
+  },
+
+  // Check if the socket is in a SocketIO room.
+  joinSocketToRoomIfNeeded: function (socket, session_id) {
+      if(!this.sessionManager.isSocketInRoom(socket, session_id)) {
+          this.logger.logInfoSessionClientSocketAction(
+              session_id, 
+              client_id, 
+              socket.id, 
+              "User had a socket but socket is not joined to SocketIO room. Joining socket and proceeding."
+          );
+
+          this.socketIOActionManager.joinSocketToRoomAction(session_id, socket);
+
+          // TODO: consider doing this.rejectUserAction(socket, "User has a socket but socket is not in session.");
+      }
+  },
+
+  processMessage: function (data, socket) {
+    this.socketActivityMonitor.updateTime(socket.id);
+
+    this.socketRepairCenter.repairEligibleSockets();
+
+    // Don't process a message for a socket...
+    // * whose socket record isn't in the session
+    // * whose client record isn't in the session
+    // * who isn't joined to the (SocketIO) room
+    if (this.socketRepairCenter.hasSocket(socket)) {
+      return;
+    }
+
+    let { success, session_id, client_id } = this.getMetadataFromMessage(data);
+
+    if (!success) {
       return;
     }
 
@@ -2035,26 +2234,7 @@ module.exports = {
       return;
     }
 
-    let isClientInSession = this.isClientInSession(session_id, client_id);
-
-    let { success, isInSession } = this.isSocketInSession(session_id, socket);
-
-    let isSocketInSession = isInSession;
-
-    // check if the incoming packet is from a client who is valid for this session
-    if ( !isClientInSession || !success || !isSocketInSession ) {
-        this.logWarningSessionClientSocketAction(session_id, client_id, socket.id, "tried to process message, but socket or client were not in session. Removing user.");
-
-        this.notifyNotInSessionAction(socket);
-
-        this.disconnectSocket(socket, session_id, client_id);
-
-        this.removeSocketAndClientFromSession(socket, session_id, client_id);
-    }
-
-    let type = data.type;
-
-    if (!type) {
+    if (!data.type) {
       this.logErrorSessionClientSocketAction(
         session_id,
         client_id,
@@ -2077,60 +2257,26 @@ module.exports = {
     }
     
     // `message` here will be in the legacy packed-array format.
-
-    // NOTE(rob): the following code is copypasta from the old interactionUpdate handler. 7/21/2021
-
-    // check if the incoming packet is from a client who is valid for this session
+    
+    // relay the message
+    this.messageAction(socket, session_id, data);
 
     if (!data.message.length) {
         this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "tried to process message, but data.message.length was 0.");
 
         return;
     }
-    
-    // relay the message
-    this.messageAction(socket, session_id, data);
 
     data.message = this.parseMessageIfNeeded(data, session_id, client_id);
 
-    // get reference to session and parse message payload for state updates, if needed.
-    if (type == KomodoMessages.interaction.type) {
-        if (data.message.length != KomodoMessages.interaction.minLength) {
-            this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: data.message.length was incorrect");
-    
-            return;
-        }
-    
-        let source_id = data.message[KomodoMessages.interaction.indices.sourceId];
-
-        if (source_id == null) {
-            this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: source_id was null");
-        }
-
-        let target_id = data.message[KomodoMessages.interaction.indices.targetId];
-
-        if (target_id == null) {
-            this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: target_id was null");
-        }
-
-        let interaction_type = data.message[KomodoMessages.interaction.indices.interactionType];
-
-        if (interaction_type == null) {
-            this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: interaction_type was null");
-        }
-
-        this.applyInteractionMessageToState(session, target_id, interaction_type);
-    }
-
-    if (type == KomodoMessages.sync.type) {
-      this.applySyncMessageToState(session, data);
-    }
+    this.applyMessageToState(data, data.type, data.message, session_id, client_id, socket);
 
     // data capture
     if (session.isRecording) {
       this.record_message_data(data);
     }
   },
+
   init: function (io, pool, logger) {
     this.initGlobals();
 
@@ -2185,16 +2331,16 @@ module.exports = {
       socket.emit(KomodoSendEvents.notifyBump, session_id);
     };
 
-    this.notifyNotInSessionAction = function (socket) {
+    this.rejectUserAction = function (socket, reason) {
       self.logInfoSessionClientSocketAction(
         null,
         null,
         socket.id,
-        `Notifying not in session`
+        `Rejecting`
       );
 
       // Let the client know it has been bumped
-      socket.emit(KomodoSendEvents.notifyNotInSession);
+      socket.emit(KomodoSendEvents.rejectUser, reason);
     };
 
     this.makeSocketLeaveSessionAction = function (session_id, socket) {
@@ -2241,6 +2387,10 @@ module.exports = {
           true
         );
       });
+    };
+
+    this.joinSocketToRoomAction = function (session_id, socket) {
+      socket.join(session_id.toString());
     };
 
     this.failedToJoinAction = function (session_id, reason, socket) {
@@ -2313,7 +2463,7 @@ module.exports = {
       });
     };
 
-    self.logInfoSessionClientSocketAction(
+    this.logInfoSessionClientSocketAction(
       null,
       null,
       null,
