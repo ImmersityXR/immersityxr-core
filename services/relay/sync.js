@@ -885,7 +885,7 @@ module.exports = {
     }
   },
 
-  getState: function (session_id, version) {
+  getState: function (socket, session_id, version) {
     let session = this.sessions.get(session_id);
 
     if (!session) {
@@ -981,7 +981,7 @@ module.exports = {
 
     return {
       session_id: session_id,
-      state: this.getState(session_id, version)
+      state: this.getState(socket, session_id, version)
     };
   },
 
