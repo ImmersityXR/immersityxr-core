@@ -35,7 +35,7 @@ describe("Sync Server: Integration", function (done) {
             throw Error("An unexpected disconnect occurred.");
         };
 
-        syncServer.requestToJoinSessionAction = function (session_id, client_id) {
+        syncServer.requestToJoinSessionAction = function (session_id, client_id, socket) {
             session_id.should.equal(SESSION_ID);
 
             client_id.should.equal(CLIENT_ID);

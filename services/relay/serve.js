@@ -76,12 +76,12 @@ if (config.db.host && config.db.host != "") {
 
     testQuery = pool.query(`SHOW TABLES;`, (err, res) => {
         if (err) { 
-            if (logger) logger.error(err);
+            if (logger) logger.error(`Tried to connect to database: ${err}`);
 
             process.exit();
+        } else { 
+            if (logger) logger.info(`Database initialized with ${res.length} tables.`); 
         }
-
-        else { if (logger) logger.info(`Database initialized with ${res.length} tables.`); }
     });
 
     if (logger) logger.info(`Database pool created: host: ${config.db.host}, database: ${config.db.database}.`);

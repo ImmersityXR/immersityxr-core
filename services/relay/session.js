@@ -104,13 +104,6 @@ class Session {
 
   removeClient(client_id) {
     if (this.clients == null) {
-      this.logErrorSessionClientSocketAction(
-        this.id,
-        client_id,
-        null,
-        `tried to remove client from session, but this.clients was null`
-      );
-
       return false;
     }
 
@@ -118,13 +111,6 @@ class Session {
 
     if (this.clients.length == 0 || this.clients.indexOf(client_id) == -1) {
       //client_id is not in the array, so we don't need to remove it.
-      this.logWarningSessionClientSocketAction(
-        null,
-        null,
-        client_id,
-        `Tried removing client from this.clients, but it was not there.`
-      );
-
       return false;
     }
 
