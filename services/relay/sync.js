@@ -2458,7 +2458,7 @@ module.exports = {
       self.writeEventToConnections("connect", session_id, client_id);
 
       // tell other clients that a client joined
-      io.to(session_id.toString()).emit(KomodoSendEvents.clientJoined, client_id);
+      socket.to(session_id.toString()).emit(KomodoSendEvents.clientJoined, client_id);
 
       // tell the joining client that they successfully joined
       socket.emit(KomodoSendEvents.successfullyJoined, session_id);
@@ -2476,7 +2476,7 @@ module.exports = {
 
     this.successfullyLeftAction = function (session_id, client_id, socket) {
       // notify others the client has left
-      io.to(session_id.toString()).emit(KomodoSendEvents.left, client_id);
+      socket.to(session_id.toString()).emit(KomodoSendEvents.left, client_id);
 
       // tell the leaving client that they successfully left
       socket.emit(KomodoSendEvents.successfullyLeft, session_id);
