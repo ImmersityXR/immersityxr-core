@@ -54,26 +54,34 @@ class SocketRepairCenter {
 
     // Accept a new socket needing to be repaired.
     add (socket) {
+        this.logger.logInfoSessionClientSocketAction(null, null, socket.id, `Added socket to repair center.`);
+
         this.sockets.set(socket.id, socket);
     }
 
     // Set the socket free, to be with the session manager.
     remove (socket) {
-        this.sockets.delete(socket);
+        this.sockets.delete(socket.id);
     }
 
     hasSocket (socket) {
         return this.sockets.has(socket.id);
     }
 
-    repairEligibleSockets () {
+    repairSocketIfEligible (socket, session_id, client_id) {
+        // this.logger.logInfoSessionClientSocketAction(null, null, null, `deltaTime: ${this.sockets.size}`);
+
         for (let [id, socket] of this.sockets.entries()) {
             let deltaTime = this.socketActivityMonitor.getDeltaTime(id);
 
-            if (deltaTime > minRepairWaitTime) {
-                this.logger.logInfoSessionClientSocketAction(session_id, client_id, id, `Repairing...`);
+            // this.logger.logInfoSessionClientSocketAction(null, null, id, `deltaTime: ${deltaTime}`);
+
+            if (deltaTime > this.minRepairWaitTime) {
+                this.logger.logInfoSessionClientSocketAction(null, null, id, `Repair user: ...`);
 
                 this.sessionManager.repair(socket, session_id, client_id);
+
+                this.socketActivityMonitor.updateTime(socket.id);
 
                 this.remove(socket);
             }

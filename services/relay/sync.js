@@ -1407,6 +1407,10 @@ module.exports = {
 
   isClientInSession: function (session_id, client_id) {
     let { success, session } = this.getSession(session_id);
+    
+    if (!success) {
+      return false;
+    }
 
     return session.hasClient(client_id);
   },
@@ -1594,7 +1598,7 @@ module.exports = {
       `Creating session: ${session_id}`
     );
 
-    this.sessions.set(session_id, new Session());
+    this.sessions.set(session_id, new Session(session_id));
 
     session = this.sessions.get(session_id);
 
@@ -1756,14 +1760,27 @@ module.exports = {
     }
 
     if (this.doTryReconnecting(reason)) {
+      this.logErrorSessionClientSocketAction(
+        null,
+        null,
+        socket.id,
+        `Trying to reconnect and rejoin user after ${reason}`
+      );
+
       // Try to reconnect the socket
-      return this.reconnectAction(
+      let success = this.reconnectAction(
         reason,
         socket,
         session_id,
         client_id,
         session
       );
+
+      if (!success) {
+        this.socketActivityMonitor.addOrUpdate(socket.id);
+
+        this.socketRepairCenter.add(socket);
+      }
     }
 
     // Disconnect the socket
@@ -1807,7 +1824,7 @@ module.exports = {
 
     this.socketActivityMonitor = new SocketActivityMonitor();
 
-    this.socketRepairCenter = new SocketRepairCenter(200, this, this, this, this);
+    this.socketRepairCenter = new SocketRepairCenter(2000, this, this, this.socketActivityMonitor, this);
   },
 
 // Check if message payload is pre-parsed.
@@ -2141,21 +2158,22 @@ module.exports = {
   },
   
   repair: function (socket, session_id, client_id) {
-    addClientToSessionIfNeeded(session_id, client_id);
+    let session = this.getOrCreateSession(session_id);
 
-    addSocketToSessionIfNeeded(socket, session_id);
+    this.addClientToSessionIfNeeded(socket, session, client_id);
 
-    joinSocketToRoomIfNeeded(socket, session_id);
+    this.addSocketToSessionIfNeeded(socket, session, client_id);
+
+    this.joinSocketToRoomIfNeeded(socket, session);
   },
 
-  addClientToSessionIfNeeded: function (session_id, client_id) {
-      let session = this.sessionManager.getSession(session_id);
-
-      if (!this.sessionManager.isClientInSession(session_id, client_id)) {
-          this.logger.logInfoSessionClientSocketAction(session_id,
-              client_id,
-              socket.id,
-              "User had a socket but client is not in session. Adding client and proceeding."
+  addClientToSessionIfNeeded: function (socket, session, client_id) {
+      if (!session.hasClient(client_id)) {
+          this.logInfoSessionClientSocketAction(
+            session.getId(),
+            client_id,
+            socket.id,
+            "    - Client is not in session. Adding client and proceeding."
           );
 
           session.addClient(client_id);
@@ -2165,17 +2183,15 @@ module.exports = {
   },
 
   // check if the incoming packet is from a client who is valid for this session
-  addSocketToSessionIfNeeded: function (socket, session_id) {
-      let socketResult = this.sessionManager.isSocketInSession(session_id, socket);
+  addSocketToSessionIfNeeded: function (socket, session, client_id) {
+      let socketResult = session.hasSocket(socket);
 
-      let session = this.sessionManager.getSession(session_id);
-
-      if (!socketResult.success || !socketResult.isInSession ) {
-          this.logger.logInfoSessionClientSocketAction(
-              session_id, 
+      if (!socketResult) {
+          this.logInfoSessionClientSocketAction(
+              session.id, 
               client_id, 
               socket.id, 
-              "User had a socket but socket is not in session. Adding socket and proceeding."
+              "    - Socket is not in session. Adding socket and proceeding."
           );
 
           session.addSocket(socket, client_id);
@@ -2185,25 +2201,29 @@ module.exports = {
   },
 
   // Check if the socket is in a SocketIO room.
-  joinSocketToRoomIfNeeded: function (socket, session_id) {
-      if(!this.sessionManager.isSocketInRoom(socket, session_id)) {
-          this.logger.logInfoSessionClientSocketAction(
-              session_id, 
-              client_id, 
+  joinSocketToRoomIfNeeded: function (socket, session) {
+      if(!this.isSocketInRoom(socket, session.getId())) {
+          this.logInfoSessionClientSocketAction(
+              session.getId(), 
+              null, 
               socket.id, 
-              "User had a socket but socket is not joined to SocketIO room. Joining socket and proceeding."
+              "    - Socket is not joined to SocketIO room. Joining socket and proceeding."
           );
 
-          this.socketIOActionManager.joinSocketToRoomAction(session_id, socket);
+          this.joinSocketToRoomAction(session.getId(), socket);
 
           // TODO: consider doing this.rejectUserAction(socket, "User has a socket but socket is not in session.");
       }
   },
 
   processMessage: function (data, socket) {
-    this.socketActivityMonitor.updateTime(socket.id);
+    let { success, session_id, client_id } = this.getMetadataFromMessage(data);
 
-    this.socketRepairCenter.repairEligibleSockets();
+    if (!success) {
+      return;
+    }
+
+    this.socketRepairCenter.repairSocketIfEligible(socket, session_id, client_id);
 
     // Don't process a message for a socket...
     // * whose socket record isn't in the session
@@ -2212,12 +2232,8 @@ module.exports = {
     if (this.socketRepairCenter.hasSocket(socket)) {
       return;
     }
-
-    let { success, session_id, client_id } = this.getMetadataFromMessage(data);
-
-    if (!success) {
-      return;
-    }
+    
+    this.socketActivityMonitor.updateTime(socket.id);
 
     let session = this.sessions.get(session_id);
 
@@ -2390,7 +2406,16 @@ module.exports = {
     };
 
     this.joinSocketToRoomAction = function (session_id, socket) {
-      socket.join(session_id.toString());
+      socket.join(session_id.toString(), (err) => {
+        if (err) {
+          self.logErrorSessionClientSocketAction(
+            session_id,
+            null,
+            socket.id,
+            `Tried to join socket to SocketIO room. Error: ${err}`
+          );
+        }
+      });
     };
 
     this.failedToJoinAction = function (session_id, reason, socket) {
@@ -2476,8 +2501,14 @@ module.exports = {
         null,
         null,
         socket.id,
-        `Session connection`
+        `Connected to main (sync) namespace`
       );
+
+      self.socketRepairCenter.add(socket);
+
+      self.socketActivityMonitor.updateTime(socket.id);
+
+      // self.socketRepairCenter.repairSocketIfEligible();
 
       socket.on(KomodoReceiveEvents.sessionInfo, function (session_id) {
         let session = self.sessions.get(session_id);

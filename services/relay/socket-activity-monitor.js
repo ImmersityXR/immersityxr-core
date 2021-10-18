@@ -49,7 +49,7 @@ class SocketActivityMonitor {
     }
 
     getDeltaTime(socketId) {
-        return Date.now() - this.socketTimes[socketId];
+        return Date.now() - this.socketTimes.get(socketId);
     }
 
     remove(socketId) {
