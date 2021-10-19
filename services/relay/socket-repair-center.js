@@ -69,22 +69,23 @@ class SocketRepairCenter {
     }
 
     repairSocketIfEligible (socket, session_id, client_id) {
+        if (!this.hasSocket(socket)) {
+            return;
+        }
+
         // this.logger.logInfoSessionClientSocketAction(null, null, null, `deltaTime: ${this.sockets.size}`);
+        let deltaTime = this.socketActivityMonitor.getDeltaTime(socket.id);
 
-        for (let [id, socket] of this.sockets.entries()) {
-            let deltaTime = this.socketActivityMonitor.getDeltaTime(id);
+        // this.logger.logInfoSessionClientSocketAction(null, null, id, `deltaTime: ${deltaTime}`);
 
-            // this.logger.logInfoSessionClientSocketAction(null, null, id, `deltaTime: ${deltaTime}`);
+        if (deltaTime > this.minRepairWaitTime) {
+            this.logger.logInfoSessionClientSocketAction(null, null, socket.id, `Repair user: ...`);
 
-            if (deltaTime > this.minRepairWaitTime) {
-                this.logger.logInfoSessionClientSocketAction(null, null, id, `Repair user: ...`);
+            this.sessionManager.repair(socket, session_id, client_id);
 
-                this.sessionManager.repair(socket, session_id, client_id);
+            this.socketActivityMonitor.updateTime(socket.id);
 
-                this.socketActivityMonitor.updateTime(socket.id);
-
-                this.remove(socket);
-            }
+            this.remove(socket);
         }
     }
 }

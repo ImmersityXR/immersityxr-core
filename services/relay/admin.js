@@ -43,14 +43,16 @@ function JSONStringifyCircular(obj) {
         if (seen.has(value)) {
             return;
         }
+
         seen.add(value);
         }
+
         return value;
     });
 }
 
 module.exports = {
-    init: function (io, syncServer, chatServer) {
+    init: function (io, logger, syncServer, chatServer) {
         var admin = io.of('/admin');
 
         admin.use((socket, next) => {
@@ -59,10 +61,11 @@ module.exports = {
         });
 
         admin.on('connection', function(socket) { //TODO finish or remove.
+            // TODO(Brandon): log connection here
+
             socket.emit("adminInfo", socket.id);
 
             socket.on('getAllSessions0', function() {
-
                 this.sessions = syncServer.sessions;
 
                 socket.emit('receiveAllSessions0', JSONStringifyCircular(Array.from(sessions.entries())));
@@ -94,7 +97,6 @@ module.exports = {
             });
 
             socket.on('sessionsWithDetails', function () {
-
                 this.sessions = syncServer.sessions;
 
                 var result = fromEntries(this.sessions);
@@ -103,17 +105,14 @@ module.exports = {
             });
 
             socket.on('stateClientsSockets', function () {
-
                 this.sessions = syncServer.sessions;
 
                 var stateClientsSockets = {};
 
                 this.sessions.forEach((session, session_id, map) => {
-
                     stateClientsSockets[session_id] = {};
 
                     stateClientsSockets[session_id].state = {
-                        
                         clients: session.clients,
                         entities: session.entities,
                         scene: session.scene,
@@ -123,7 +122,6 @@ module.exports = {
                     stateClientsSockets[session_id].clientsAndSockets = [];
 
                     for (var socket_id in session.sockets) {
-
                         var client_id = session.sockets[socket_id].client_id;
 
                         stateClientsSockets[session_id].clientsAndSockets.push(`${client_id} - ${socket_id}`);
@@ -149,13 +147,11 @@ module.exports = {
                 var sockets = io.of("/").sockets;
 
                 for (var socket_id in sockets) {
-
                     let curSocketObj = sockets[socket_id];
 
                     socketsAndRooms[socket_id] = [];
 
                     for (var room_id in curSocketObj.rooms) {
-
                         socketsAndRooms[socket_id].push(room_id);
                     }
                 }
@@ -179,5 +175,9 @@ module.exports = {
                 socket.emit('clients', JSON.stringify(sessionToClient));
             });
         });
+
+        logger.info(`Admin namespace is waiting for connections...`);
+
+        return admin;
     }
 };

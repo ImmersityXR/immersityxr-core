@@ -48,6 +48,7 @@ const Session = require("./session");
 
 const SocketRepairCenter = require("./socket-repair-center");
 const SocketActivityMonitor = require("./socket-activity-monitor");
+const chat = require("./chat");
 
 // event data globals
 // NOTE(rob): deprecated.
@@ -74,6 +75,8 @@ const INTERACTION_LOCK_END = 9;
 const SYNC_OBJECTS = 3;
 
 const STATE_VERSION = 2;
+
+const SYNC_NAMESPACE = "/sync";
 
 //TODO refactor this.sessions into instances of the Session object.
 
@@ -967,7 +970,7 @@ module.exports = {
       session_id,
       client_id,
       socket.id,
-      `State: ${JSON.stringify(data)}`
+      `Received state catch-up request, version ${data.version}`
     );
 
     if (!session_id || !client_id) {
@@ -1655,6 +1658,44 @@ module.exports = {
     return true;
   },
 
+  // Remove this function once we upgrade the server and client to use the "/sync" namespace
+  isInChatNamespace: function (socket) {
+    if (!socket) {
+      return false;
+    }
+
+    if (!this.chatNamespace) {
+      return false;
+    }
+
+    let connectedIds = Object.keys(this.chatNamespace.connected);
+
+    if (connectedIds == null) {
+      return false;
+    }
+
+    return connectedIds.includes(`${this.chatNamespace.name}#${socket.id}`);
+  },
+
+  // Remove this function once we upgrade the server and client to use the "/sync" namespace
+  isInAdminNamespace: function (socket) {
+    if (!socket) {
+      return false;
+    }
+
+    if (!this.chatNamespace) {
+      return false;
+    }
+
+    let connectedIds = Object.keys(this.adminNamespace.connected);
+
+    if (connectedIds == null) {
+      return false;
+    }
+
+    return connectedIds.includes(`${this.adminNamespace.name}#${socket.id}`);
+  },
+
   isSocketInSession: function (session_id, socket) {
     if (!socket) {
       this.logWarningSessionClientSocketAction(
@@ -1729,6 +1770,9 @@ module.exports = {
     DisconnectKnownReasons[reason].doReconnect);
   },
 
+  handleDisconnecting: function(socket, reason) {
+  },
+
   // Returns true if socket is still connected
   handleDisconnect: function (socket, reason) {
     if (!socket) {
@@ -1741,6 +1785,13 @@ module.exports = {
 
       return false;
     }
+
+    this.logInfoSessionClientSocketAction(
+      null,
+      null,
+      socket.id,
+      `Disconnecting.`
+    );
 
     if (!this.reconnectAction) {
       this.logErrorSessionClientSocketAction(
@@ -1756,13 +1807,25 @@ module.exports = {
     // Check disconnect event reason and handle
     const { session_id, client_id } = this.whoDisconnected(socket);
 
-    if (session_id == null || client_id == null) {
+    if (session_id == null) {
       //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
       this.logInfoSessionClientSocketAction(
         null,
         null,
         socket.id,
-        `disconnected. Not found in sessions. Probably ok. Skipping reconnectAction, removeSocketAndClientFromSession, and/or DisconnectSocket.`
+        `-    session_id not found.`
+      );
+
+      return true;
+    }
+
+    if (client_id == null) {
+      //client not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
+      this.logInfoSessionClientSocketAction(
+        null,
+        null,
+        socket.id,
+        `-    client_id not found.`
       );
 
       return true;
@@ -1773,7 +1836,7 @@ module.exports = {
         null,
         null,
         socket.id,
-        `Trying to reconnect and rejoin user after ${reason}`
+        `-    trying to reconnect and rejoin user. Reason: ${reason}`
       );
 
       // Try to reconnect the socket
@@ -1789,17 +1852,27 @@ module.exports = {
         this.socketActivityMonitor.addOrUpdate(socket.id);
 
         this.socketRepairCenter.add(socket);
+
+        return false;
       }
+
+      return true;
     }
 
-    // Disconnect the socket
-    this.logInfoSessionClientSocketAction(
+    this.logErrorSessionClientSocketAction(
+      null,
+      null,
+      socket.id,
+      `-    not trying to reconnect user. Reason: ${reason}`
+    );
+
+    // Try to reconnect the socket
+    let success = this.reconnectAction(
+      reason,
+      socket,
       session_id,
       client_id,
-      socket.id,
-      `Client was disconnected, probably because an old socket was bumped. Reason: ${reason}, clients: ${JSON.stringify(
-        session.getClients()
-      )}`
+      session
     );
 
     this.tryToRemoveSocketAndClientFromSessionThenNotifyLeft(null, session_id, client_id, socket);
@@ -2026,7 +2099,7 @@ module.exports = {
     }
   },
 
-  getMetadataFromMessage: function (data) {
+  getMetadataFromMessage: function (data, socket) {
     if (data == null) {
       this.logErrorSessionClientSocketAction(
         null,
@@ -2126,11 +2199,6 @@ module.exports = {
       this.removeSocketAndClientFromSession(socket, session_id, client_id);
   },
 
-  // Returns true iff we have previously cached a record for a user without a session.
-  isSocketInSocketRepairCenter: function (socket) {
-    return socket.id in this.socketRepairCenter;
-  },
-
   applyMessageToState: function (data, type, message, session_id, client_id, socket) {
     // get reference to session and parse message payload for state updates, if needed.
     if (type == KomodoMessages.interaction.type) {
@@ -2204,7 +2272,7 @@ module.exports = {
             session.getId(),
             client_id,
             socket.id,
-            "    - Client is not in session. Adding client and proceeding."
+            "-     Client is not in session. Adding client and proceeding."
           );
 
           session.addClient(client_id);
@@ -2222,7 +2290,7 @@ module.exports = {
               session.id, 
               client_id, 
               socket.id, 
-              "    - Socket is not in session. Adding socket and proceeding."
+              "-     Socket is not in session. Adding socket and proceeding."
           );
 
           session.addSocket(socket, client_id);
@@ -2238,7 +2306,7 @@ module.exports = {
               session.getId(), 
               null, 
               socket.id, 
-              "    - Socket is not joined to SocketIO room. Joining socket and proceeding."
+              "-     Socket is not joined to SocketIO room. Joining socket and proceeding."
           );
 
           this.joinSocketToRoomAction(session.getId(), socket);
@@ -2248,7 +2316,7 @@ module.exports = {
   },
 
   processMessage: function (data, socket) {
-    let { success, session_id, client_id } = this.getMetadataFromMessage(data);
+    let { success, session_id, client_id } = this.getMetadataFromMessage(data, socket);
 
     if (!success) {
       return;
@@ -2324,7 +2392,7 @@ module.exports = {
     }
   },
 
-  init: function (io, pool, logger) {
+  init: function (io, pool, logger, chatNamespace, adminNamespace) {
     this.initGlobals();
 
     this.createCapturesDirectory();
@@ -2334,15 +2402,28 @@ module.exports = {
     }
 
     this.logger = logger;
+
     if (!this.logger) {
       console.error("Failed to init logger. Exiting.");
       process.exit();
     }
 
+    if (chatNamespace == null) {
+      this.logger.warn("No chatNamespace was found.");
+    }
+
+    this.chatNamespace = chatNamespace;
+
+    if (adminNamespace == null) {
+      this.logger.warn("No adminNamespace was found.");
+    }
+
+    this.adminNamespace = adminNamespace;
+
     this.logInfoSessionClientSocketAction(
-      "Session ID",
-      "Client ID",
-      "Socket ID",
+      "Session",
+      "Client",
+      "Socket ID       ",
       "Message"
     );
 
@@ -2523,20 +2604,13 @@ module.exports = {
       socket.emit(KomodoSendEvents.state, state);
     };
 
-    this.logInfoSessionClientSocketAction(
-      null,
-      null,
-      null,
-      `Sync server started. Waiting for connections...`
-    );
-
     // main relay handler
-    io.on(SocketIOEvents.connection, function (socket) {
+    io.of(SYNC_NAMESPACE).on(SocketIOEvents.connection, function (socket) {
       self.logInfoSessionClientSocketAction(
         null,
         null,
         socket.id,
-        `Connected to main (sync) namespace`
+        `Connected to sync namespace`
       );
 
       self.socketRepairCenter.add(socket);
@@ -2730,11 +2804,14 @@ module.exports = {
       });
 
       socket.on(SocketIOEvents.disconnecting, function (reason) {
+        self.handleDisconnecting(socket, reason);
       });
 
       socket.on(SocketIOEvents.error, function (err) {
         self.logErrorSessionClientSocketAction(null, null, socket.id || "null", err);
       });
     });
+
+    logger.info(`Sync namespace is waiting for connections...`);
   },
 };

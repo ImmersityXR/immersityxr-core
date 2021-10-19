@@ -97,8 +97,8 @@ io.listen(PORT, {
 
 if (logger) logger.info(`Komodo relay is running on :${PORT}`);
 
-syncServer.init(io, pool, logger);
+var chatNamespace = chatServer.init(io, logger);
 
-chatServer.init(io, logger);
+var adminNamespace = adminServer.init(io, logger, syncServer, chatServer);
 
-adminServer.init(io, syncServer, chatServer);
+syncServer.init(io, pool, logger, chatNamespace, adminNamespace);
