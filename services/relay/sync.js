@@ -2318,6 +2318,21 @@ module.exports = {
   processMessage: function (data, socket) {
     let { success, session_id, client_id } = this.getMetadataFromMessage(data, socket);
 
+    if (!client_id || !session_id) {
+      this.connectionAuthorizationErrorAction(
+        socket,
+        "You must provide a client ID and a session ID in the message metadata. Disconnecting"
+      );
+
+      this.disconnectAction(
+        socket,
+        session_id,
+        client_id
+      );
+
+      return;
+    }
+
     if (!success) {
       return;
     }
@@ -2566,6 +2581,14 @@ module.exports = {
     this.disconnectAction = function (socket, session_id, client_id) {
       //disconnect the client
       socket.disconnect();
+
+      if (!session_id) {
+        return;
+      }
+
+      if (!client_id) {
+        return;
+      }
 
       // notify others the client has disconnected
       socket
