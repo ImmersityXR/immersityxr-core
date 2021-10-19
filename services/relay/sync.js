@@ -76,6 +76,8 @@ const SYNC_OBJECTS = 3;
 
 const STATE_VERSION = 2;
 
+const SERVER_NAME = "Komodo Dev (IL)";
+
 const SYNC_NAMESPACE = "/sync";
 
 //TODO refactor this.sessions into instances of the Session object.
@@ -121,6 +123,7 @@ const KomodoSendEvents = {
   failedToLeave: "failedToLeave",
   successfullyLeft: "successfullyLeft",
   disconnected: "disconnected",
+  serverName: "serverName",
   sessionInfo: "sessionInfo",
   state: "state",
   draw: "draw",
@@ -2629,6 +2632,8 @@ module.exports = {
 
     // main relay handler
     io.of(SYNC_NAMESPACE).on(SocketIOEvents.connection, function (socket) {
+      socket.emit(KomodoSendEvents.serverName, `${SERVER_NAME} + ${SYNC_NAMESPACE}`);
+
       self.logInfoSessionClientSocketAction(
         null,
         null,
