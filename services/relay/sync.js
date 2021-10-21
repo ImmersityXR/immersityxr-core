@@ -49,6 +49,7 @@ const Session = require("./session");
 const SocketRepairCenter = require("./socket-repair-center");
 const SocketActivityMonitor = require("./socket-activity-monitor");
 const chat = require("./chat");
+const { debug } = require("console");
 
 // event data globals
 // NOTE(rob): deprecated.
@@ -211,7 +212,7 @@ module.exports = {
     client_id = `c${client_id}`;
 
     if (socket_id == null) {
-      socket_id = "---.................";
+      socket_id = "---.......................";
     }
 
     if (action == null) {
@@ -224,7 +225,7 @@ module.exports = {
 
     if (this.logger)
       this.logger.info(
-        ` ${socket_id}    ${session_id}  ${client_id}    ${action}`
+        `${socket_id}\t${session_id}\t${client_id}\t${action}`
       );
   },
 
@@ -247,7 +248,7 @@ module.exports = {
     client_id = `c${client_id}`;
 
     if (socket_id == null) {
-      socket_id = "---.................";
+      socket_id = "---.......................";
     }
 
     if (action == null) {
@@ -260,7 +261,7 @@ module.exports = {
 
     if (this.logger)
       this.logger.error(
-        `${socket_id}    ${session_id}  ${client_id}    ${action}`
+        `${socket_id}\t${session_id}\t${client_id}\t${action}`
       );
   },
 
@@ -283,7 +284,7 @@ module.exports = {
     client_id = `c${client_id}`;
 
     if (socket_id == null) {
-      socket_id = "---.................";
+      socket_id = "---.......................";
     }
 
     if (action == null) {
@@ -296,7 +297,7 @@ module.exports = {
 
     if (this.logger)
       this.logger.warn(
-        ` ${socket_id}    ${session_id}  ${client_id}    ${action}`
+        `${socket_id}\t${session_id}\t${client_id}\t${action}`
       );
   },
 
@@ -394,7 +395,7 @@ module.exports = {
           session_id,
           session.recordingStart,
           "data"
-        );
+        ); // [capturesDirectoryHere]/[session_id_here]/[session.recordingStartHere]/data
         fs.writeFile(path, JSON.stringify(session.message_buffer), (e) => {
           if (e) {
             console.log(`Error writing message buffer: ${e}`);
@@ -1954,7 +1955,7 @@ module.exports = {
         
         let entity = {
             id: target_id,
-            latest: data.message,
+            latest: {},
             render: true,
             locked: false,
         };
@@ -1975,7 +1976,7 @@ module.exports = {
         
         let entity = {
             id: target_id,
-            latest: [],
+            latest: {},
             render: false,
             locked: false,
         };
@@ -1996,7 +1997,7 @@ module.exports = {
         
         let entity = {
             id: target_id,
-            latest: [], // TODO(Brandon): investigate this. data.message?
+            latest: {}, // TODO(Brandon): investigate this. data.message?
             render: true,
             locked: true,
         };
@@ -2017,7 +2018,7 @@ module.exports = {
         
         let entity = {
             id: target_id,
-            latest: [], // TODO(Brandon): investigate this. data.message?
+            latest: {}, // TODO(Brandon): investigate this. data.message?
             render: true,
             locked: false,
         };
@@ -2069,8 +2070,8 @@ module.exports = {
     }
   },
 
-  applyObjectsSyncToState: function (session, data) {
-    let entity_id = data.message[KomodoMessages.sync.indices.entityId];
+  applyObjectsSyncPackedArrayToState: function (session, packedArray) {
+    let entity_id = packedArray[KomodoMessages.sync.indices.entityId];
 
     let foundEntity = self.getEntityFromState(session, entity_id);
 
@@ -2079,7 +2080,7 @@ module.exports = {
         
         let entity = {
             id: entity_id,
-            latest: data.message,
+            latest: packedArray,
             render: true,
             locked: false,
         };
@@ -2089,16 +2090,40 @@ module.exports = {
         return;
     }
 
-    foundEntity.latest = data.message;
+    foundEntity.latest = packedArray;
   },
 
-  applySyncMessageToState: function (session, data) {
+  applyObjectsSyncToState: function (session, message) {
+    let foundEntity = self.getEntityFromState(session, entity_id);
+
+    if (foundEntity == null) {
+      this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply sync message to state: no entity with target_id ${target_id} found. Creating one.`);
+        
+        let entity = {
+            id: entity_id,
+            latest: message,
+            render: true,
+            locked: false,
+        };
+
+        session.entities.push(entity);
+
+        return;
+    }
+
+    foundEntity.latest = message;
+  },
+
+  applySyncMessageToState: function (session, message) {
+    if (message == null) {
+      //TODO: do something other than fail silently, which we need to do now
+
+      return;
+    }
+
     // update session state with latest entity positions
-
-    let entity_type = data.message[KomodoMessages.sync.indices.entityType];
-
-    if (entity_type == SYNC_OBJECTS) {
-      this.applyObjectsSyncToState(session, data);
+    if (message.entityType == SYNC_OBJECTS) {
+      this.applyObjectsSyncToState(session, message);
     }
   },
 
@@ -2202,38 +2227,62 @@ module.exports = {
       this.removeSocketAndClientFromSession(socket, session_id, client_id);
   },
 
-  applyMessageToState: function (data, type, message, session_id, client_id, socket) {
+  // currently unused.
+  applyInteractionPackedArrayToState: function (data, type, packedArray, session_id, client_id, socket) {
+    if (message.length < KomodoMessages.interaction.minLength) {
+      this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "poorly formed interaction message: data.message.length was incorrect");
+
+      return;
+    }
+
+    let source_id = message[KomodoMessages.interaction.indices.sourceId];
+
+    if (source_id == null) {
+        this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `poorly formed interaction message: ${JSON.stringify(message)}`);
+    }
+
+    let target_id = message[KomodoMessages.interaction.indices.targetId];
+
+    if (target_id == null) {
+        this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `poorly formed interaction message: ${message.toString()}`);
+    }
+
+    let interaction_type = message[KomodoMessages.interaction.indices.interactionType];
+
+    if (interaction_type == null) {
+        this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `poorly formed interaction message: ${message.toString()}`);
+    }
+
+    this.applyInteractionMessageToState(session, target_id, interaction_type);
+  },
+
+  // Not currently used.
+  applySyncPackedArrayToState: function(data, type, packedArray, session_id, client_id, socket) {
+    let entity_type = data.message[KomodoMessages.sync.indices.entityType];
+
+    if (entity_type == null) {
+      this.logErrorSessionClientSocketAction(null, null, null, JSON.stringify(data.message));
+    }
+
+    if (entity_type == SYNC_OBJECTS) {
+      this.applyObjectsSyncToState(session, data);
+    }
+  },
+
+  applyMessageToState: function (data, type, message, session, client_id, socket) {
+    if (message == null) {
+      //TODO: do something other than fail silently.
+
+      return;
+    }
+
     // get reference to session and parse message payload for state updates, if needed.
     if (type == KomodoMessages.interaction.type) {
-      if (message.length < KomodoMessages.interaction.minLength) {
-          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: data.message.length was incorrect");
-  
-          return;
-      }
-  
-      let source_id = message[KomodoMessages.interaction.indices.sourceId];
-
-      if (source_id == null) {
-          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: source_id was null");
-      }
-
-      let target_id = message[KomodoMessages.interaction.indices.targetId];
-
-      if (target_id == null) {
-          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: target_id was null");
-      }
-
-      let interaction_type = message[KomodoMessages.interaction.indices.interactionType];
-
-      if (interaction_type == null) {
-          this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "could not apply interaction message to state: interaction_type was null");
-      }
-
-      this.applyInteractionMessageToState(session, target_id, interaction_type);
+      this.applyInteractionMessageToState(session, message.targetEntity_id, message.interactionType);
     }
 
     if (data.type == KomodoMessages.sync.type) {
-      this.applySyncMessageToState(session, data);
+      this.applySyncMessageToState(session, message);
     }
   },
   
@@ -2265,6 +2314,13 @@ module.exports = {
 
       return;
     }
+
+    this.logInfoSessionClientSocketAction(
+      session_id,
+      null,
+      socket.id,
+      `Sending state catch-up: ${JSON.stringify(result.state)}`
+    );
       
     this.sendStateCatchUpAction(socket, result.state);
   },
@@ -2402,7 +2458,9 @@ module.exports = {
 
     data.message = this.parseMessageIfNeeded(data, session_id, client_id);
 
-    this.applyMessageToState(data, data.type, data.message, session_id, client_id, socket);
+    //TODO remove this.logInfoSessionClientSocketAction(null, null, null, data.message);
+
+    this.applyMessageToState(data, data.type, data.message, session, client_id, socket);
 
     // data capture
     if (session.isRecording) {
@@ -2439,9 +2497,9 @@ module.exports = {
     this.adminNamespace = adminNamespace;
 
     this.logInfoSessionClientSocketAction(
-      "Session",
+      "Sess.",
       "Client",
-      "Socket ID       ",
+      "Socket ID.................",
       "Message"
     );
 
@@ -2715,6 +2773,13 @@ module.exports = {
 
           return;
         }
+
+        self.logInfoSessionClientSocketAction(
+          session_id,
+          null,
+          socket.id,
+          `Sending state catch-up: ${JSON.stringify(state)}`
+        );
 
         //TODO -- refactor this so that sendStateCatchupAction gets called within handleStateCatchupRequest or something like that.
         try {
