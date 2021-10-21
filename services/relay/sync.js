@@ -2094,13 +2094,19 @@ module.exports = {
   },
 
   applyObjectsSyncToState: function (session, message) {
-    let foundEntity = this.getEntityFromState(session, entity_id);
+    if (message == null) {
+      //TODO: do something other than fail silently, which we need to do now
+
+      return;
+    }
+
+    let foundEntity = this.getEntityFromState(session, message.entityId);
 
     if (foundEntity == null) {
-      this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply sync message to state: no entity with target_id ${target_id} found. Creating one.`);
+      this.logInfoSessionClientSocketAction(null, null, null, `Apply sync message to state: no entity with entityId ${message.entityId} found. Creating one.`);
         
         let entity = {
-            id: entity_id,
+            id: message.entityId,
             latest: message,
             render: true,
             locked: false,
