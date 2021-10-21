@@ -1993,7 +1993,7 @@ module.exports = {
     let foundEntity = this.getEntityFromState(session, target_id);
 
     if (foundEntity == null) {
-        self.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply lock interaction to state: no entity with target_id ${target_id} found. Creating one.`);
+        this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply lock interaction to state: no entity with target_id ${target_id} found. Creating one.`);
         
         let entity = {
             id: target_id,
@@ -2073,7 +2073,7 @@ module.exports = {
   applyObjectsSyncPackedArrayToState: function (session, packedArray) {
     let entity_id = packedArray[KomodoMessages.sync.indices.entityId];
 
-    let foundEntity = self.getEntityFromState(session, entity_id);
+    let foundEntity = this.getEntityFromState(session, entity_id);
 
     if (foundEntity == null) {
       this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply sync message to state: no entity with target_id ${target_id} found. Creating one.`);
@@ -2094,7 +2094,7 @@ module.exports = {
   },
 
   applyObjectsSyncToState: function (session, message) {
-    let foundEntity = self.getEntityFromState(session, entity_id);
+    let foundEntity = this.getEntityFromState(session, entity_id);
 
     if (foundEntity == null) {
       this.logInfoSessionClientSocketAction("unk", "unk", "unk", `apply sync message to state: no entity with target_id ${target_id} found. Creating one.`);
@@ -2620,6 +2620,8 @@ module.exports = {
       // tell the joining client that they successfully joined
       socket.emit(KomodoSendEvents.successfullyJoined, session_id);
     };
+
+    //TODO(Brandon) -- somewhere, handle request to leave and log to server output.
 
     this.requestToLeaveSessionAction = function (session_id, client_id, socket) {
       socket.leave(session_id.toString(), (err) => {
