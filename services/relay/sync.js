@@ -1208,7 +1208,6 @@ module.exports = {
       );
 
       // don't call failedToLeaveAction here because we don't have a socket.
-
       return;
     }
 

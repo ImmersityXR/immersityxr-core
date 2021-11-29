@@ -40,11 +40,11 @@ function JSONStringifyCircular(obj) {
     const seen = new WeakSet();
     return JSON.stringify (obj, (key, value) => {
         if (typeof value === "object" && value !== null) {
-        if (seen.has(value)) {
-            return;
-        }
+            if (seen.has(value)) {
+                return;
+            }
 
-        seen.add(value);
+            seen.add(value);
         }
 
         return value;
@@ -60,9 +60,9 @@ module.exports = {
             next();
         });
 
-        admin.on('connection', function(socket) { //TODO finish or remove.
+        admin.on('connection', function(socket) {
+            //TODO finish or remove.
             // TODO(Brandon): log connection here
-
             socket.emit("adminInfo", socket.id);
 
             socket.on('getAllSessions0', function() {
