@@ -45,7 +45,7 @@ module.exports = {
         var chat = io.of('/chat');
 
         chat.on('connection', function(socket) {
-            if (logger) logger.info(`Chat connection: ${socket.id}`);
+            // TODO(Brandon): log connection here
 
             // setup text chat relay
             socket.on('micText', function(data) {
@@ -142,5 +142,9 @@ module.exports = {
                 }
             });
         });
+
+        logger.info(`Chat namespace is waiting for connections...`);
+
+        return chat;
     }
 };

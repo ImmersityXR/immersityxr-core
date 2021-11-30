@@ -33,72 +33,61 @@
 
 /* jshint esversion: 6 */
 
-const io = require('socket.io')();
+require('./session.js');
 
-const mysql = require('mysql2');
+require('./socket-activity-monitor.js');
 
-const syncServer = require('./sync');
+class SocketRepairCenter {
+    constructor(minRepairWaitTime, sessionManager, socketIOActionManager, socketActivityMonitor, logger) {
+        this.minRepairWaitTime = minRepairWaitTime;
 
-const chatServer = require('./chat');
+        this.sessionManager = sessionManager;
 
-const adminServer = require('./admin');
+        this.socketIOActionManager = socketIOActionManager;
 
-const config = require('./config');
+        this.socketActivityMonitor = socketActivityMonitor;
 
-// set up logging
-const { createLogger, format, transports } = require('winston');
+        this.logger = logger;
 
-const { combine, timestamp, printf } = format;
+        this.sockets = new Map(); // socket IDs -> sockets
+    }
 
-const printFormat = printf(({ level, message, timestamp }) => {
-  return `${timestamp} ${level}: ${message}`;
-});
+    // Accept a new socket needing to be repaired.
+    add (socket) {
+        this.logger.logInfoSessionClientSocketAction(null, null, socket.id, `Added socket to repair center.`);
 
-const logger = createLogger({
-    format: combine(
+        this.sockets.set(socket.id, socket);
+    }
 
-        timestamp(),
+    // Set the socket free, to be with the session manager.
+    remove (socket) {
+        this.sockets.delete(socket.id);
+    }
 
-        printFormat
-    ),
-    transports: [
+    hasSocket (socket) {
+        return this.sockets.has(socket.id);
+    }
 
-        new transports.Console(),
-        new transports.File({ filename: 'log.txt' })
-    ],
-    exitOnError: false
-});
-
-let pool;
-
-if (config.db.host && config.db.host != "") {
-    pool = mysql.createPool(config.db);
-
-    testQuery = pool.query(`SHOW TABLES;`, (err, res) => {
-        if (err) { 
-            if (logger) logger.error(`Tried to connect to database: ${err}`);
-
-            process.exit();
-        } else { 
-            if (logger) logger.info(`Database initialized with ${res.length} tables.`); 
+    repairSocketIfEligible (socket, session_id, client_id) {
+        if (!this.hasSocket(socket)) {
+            return;
         }
-    });
 
-    if (logger) logger.info(`Database pool created: host: ${config.db.host}, database: ${config.db.database}.`);
+        // this.logger.logInfoSessionClientSocketAction(null, null, null, `deltaTime: ${this.sockets.size}`);
+        let deltaTime = this.socketActivityMonitor.getDeltaTime(socket.id);
+
+        // this.logger.logInfoSessionClientSocketAction(null, null, id, `deltaTime: ${deltaTime}`);
+
+        if (deltaTime > this.minRepairWaitTime) {
+            this.logger.logInfoSessionClientSocketAction(null, null, socket.id, `Repair user: ...`);
+
+            this.sessionManager.repair(socket, session_id, client_id);
+
+            this.socketActivityMonitor.updateTime(socket.id);
+
+            this.remove(socket);
+        }
+    }
 }
 
-// relay server
-const PORT = 3000;
-
-io.listen(PORT, {
-    upgradeTimeout: 1000,
-    pingTimeout: 30000
-});
-
-if (logger) logger.info(`Komodo relay is running on :${PORT}`);
-
-var chatNamespace = chatServer.init(io, logger);
-
-var adminNamespace = adminServer.init(io, logger, syncServer, chatServer);
-
-syncServer.init(io, pool, logger, chatNamespace, adminNamespace);
+module.exports = SocketRepairCenter;

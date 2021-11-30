@@ -33,72 +33,28 @@
 
 /* jshint esversion: 6 */
 
-const io = require('socket.io')();
+require('./session.js');
 
-const mysql = require('mysql2');
+class SocketActivityMonitor {
+    constructor() {
+        this.socketTimes = new Map(); // socket ID -> timestamp
+    }
 
-const syncServer = require('./sync');
+    addOrUpdateTime(socketId) {
+        this.updateTime(socketId);
+    }
 
-const chatServer = require('./chat');
+    updateTime(socketId) {
+        this.socketTimes.set(socketId, Date.now());
+    }
 
-const adminServer = require('./admin');
+    getDeltaTime(socketId) {
+        return Date.now() - this.socketTimes.get(socketId);
+    }
 
-const config = require('./config');
-
-// set up logging
-const { createLogger, format, transports } = require('winston');
-
-const { combine, timestamp, printf } = format;
-
-const printFormat = printf(({ level, message, timestamp }) => {
-  return `${timestamp} ${level}: ${message}`;
-});
-
-const logger = createLogger({
-    format: combine(
-
-        timestamp(),
-
-        printFormat
-    ),
-    transports: [
-
-        new transports.Console(),
-        new transports.File({ filename: 'log.txt' })
-    ],
-    exitOnError: false
-});
-
-let pool;
-
-if (config.db.host && config.db.host != "") {
-    pool = mysql.createPool(config.db);
-
-    testQuery = pool.query(`SHOW TABLES;`, (err, res) => {
-        if (err) { 
-            if (logger) logger.error(`Tried to connect to database: ${err}`);
-
-            process.exit();
-        } else { 
-            if (logger) logger.info(`Database initialized with ${res.length} tables.`); 
-        }
-    });
-
-    if (logger) logger.info(`Database pool created: host: ${config.db.host}, database: ${config.db.database}.`);
+    remove(socketId) {
+        this.socketTimes.delete(socketId);
+    }
 }
 
-// relay server
-const PORT = 3000;
-
-io.listen(PORT, {
-    upgradeTimeout: 1000,
-    pingTimeout: 30000
-});
-
-if (logger) logger.info(`Komodo relay is running on :${PORT}`);
-
-var chatNamespace = chatServer.init(io, logger);
-
-var adminNamespace = adminServer.init(io, logger, syncServer, chatServer);
-
-syncServer.init(io, pool, logger, chatNamespace, adminNamespace);
+module.exports = SocketActivityMonitor;
