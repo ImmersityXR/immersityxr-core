@@ -64,7 +64,7 @@ describe("Sync Server: Integration", function (done) {
             throw Error("An unexpected reconnect occurred.");
         };
         
-        syncServer.disconnectedAction = function () { 
+        syncServer.disconnectAction = function () { 
             throw Error("An unexpected disconnect occurred.");
         };
 
@@ -173,7 +173,7 @@ describe("Sync Server: Integration", function (done) {
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
         };
         
-        syncServer.disconnectedAction = function (socket, session_id, client_id) {
+        syncServer.disconnectAction = function (socket, session_id, client_id) {
             socket.should.eql( { dummy: "socketA", id: "DEADBEEF" } );
             
             session_id.should.equal(SESSION_ID);

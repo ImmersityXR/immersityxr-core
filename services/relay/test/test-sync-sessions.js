@@ -66,7 +66,7 @@ describe("Sync Server: Sessions", function (done) {
             throw Error("An unexpected reconnect occurred.");
         };
         
-        syncServer.disconnectedAction = function () { 
+        syncServer.disconnectAction = function () { 
             throw Error("An unexpected disconnect occurred.");
         };
     });

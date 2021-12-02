@@ -66,7 +66,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
             throw Error("An unexpected reconnect occurred.");
         };
         
-        syncServer.disconnectedAction = function () { 
+        syncServer.disconnectAction = function () { 
             throw Error("An unexpected disconnect occurred.");
         };
 
@@ -135,7 +135,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let disconnectCount = 0;
 
-        syncServer.disconnectedAction = function (socket, session_id, client_id) {
+        syncServer.disconnectAction = function (socket, session_id, client_id) {
             session_id.should.equal(SESSION_ID);
 
             client_id.should.equal(CLIENT_ID);
@@ -199,7 +199,7 @@ describe("Sync Server: Clients and Sockets", function (done) {
 
         let disconnectCount = 0;
 
-        syncServer.disconnectedAction = function (socket, session_id, client_id) {
+        syncServer.disconnectAction = function (socket, session_id, client_id) {
             session_id.should.equal(SESSION_ID);
 
             client_id.should.equal(CLIENT_ID);
