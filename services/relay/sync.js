@@ -1483,7 +1483,7 @@ module.exports = {
         session_id,
         client_id,
         socket.id,
-        `in disconnectSocket, disconnectedAction callback was not provided`
+        `in disconnectSocket, .disconnectAction callback was not provided`
       );
     }
 
