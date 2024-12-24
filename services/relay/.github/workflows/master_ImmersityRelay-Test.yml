@@ -17,7 +17,7 @@ jobs:
     - uses: actions/checkout@v2
     
     - name: Copy environment config file
-      run: echo "${{ secrets.BUILD_CONFIG }}" > config.js
+      run: echo "${{ secrets.BUILD_CONFIG }}" > komodo/config.js
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
