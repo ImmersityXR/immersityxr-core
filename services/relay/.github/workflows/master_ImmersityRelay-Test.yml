@@ -23,14 +23,14 @@ jobs:
       uses: docker/login-action@v2
       with:
         registry: https://immersityxr.azurecr.io/
-        username: ${{ secrets.AzureAppService_ContainerUsername_7359e44cd0d444d0ab4ae0c762b44192 }}
-        password: ${{ secrets.AzureAppService_ContainerPassword_b8536d29ba0d4368bbf5234a464ead70 }}
+        username: ${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}
+        password: ${{ secrets.AzureAppService_ContainerPassword_67e5576f92d54b758d24ef97646d1908 }}
 
     - name: Build and push container image to registry
       uses: docker/build-push-action@v3
       with:
         push: true
-        tags: immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_7359e44cd0d444d0ab4ae0c762b44192 }}/komodo-relay/komodo-relay:${{ github.sha }}
+        tags: immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
         file: ./Dockerfile
 
   deploy:
@@ -47,5 +47,5 @@ jobs:
       with:
         app-name: 'ImmersityRelay-Test'
         slot-name: 'production'
-        publish-profile: ${{ secrets.AzureAppService_PublishProfile_2b0ec77806c74ff28dac954a8a4c2763 }}
-        images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_7359e44cd0d444d0ab4ae0c762b44192 }}/komodo-relay/komodo-relay:${{ github.sha }}'
+        publish-profile: ${{ secrets.AzureAppService_PublishProfile_22ce9d32e9714aa28e9ecd5c76c71950 }}
+        images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}'
