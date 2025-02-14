@@ -100,7 +100,7 @@ if (config.db.host && config.db.host != "") {
 }
 
 // relay server
-const PORT = 3000;
+const PORT = 80;
 
 server.listen(PORT, {
     upgradeTimeout: 1000,

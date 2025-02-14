@@ -10,14 +10,14 @@ services:
     labels:
       - "traefik.frontend.rule=Host:relay.komodo-dev.library.illinois.edu"
       - "traefik.backend=komodo-relay"
-      - "traefik.port=3000"
+      - "traefik.port=80"
       - "traefik.enable=false"
       - "traefik.docker.network=proxy"
     networks: 
       - proxy
       - komodo_internal
     ports: 
-      - 3000:3000
+      - 80:80
 
 networks: 
   proxy:

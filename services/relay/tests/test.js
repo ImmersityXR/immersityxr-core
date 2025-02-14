@@ -2,7 +2,7 @@
 var io = require('socket.io-client');
 const { assert } = require('console');
 
-const DEFAULT_LOCAL_RELAY = `http://localhost:3000`;
+const DEFAULT_LOCAL_RELAY = `http://localhost:80`;
 
 const INTERACTION_LOOK          = 0;
 const INTERACTION_LOOK_END      = 1;

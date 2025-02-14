@@ -4,7 +4,7 @@
 
 var io = require('socket.io-client');
 const { assert } = require('console');
-var socket = io.connect('http://localhost:3000/chat', { secure: true, reconnect: true, rejectUnauthorized : false } );
+var socket = io.connect('http://localhost:80/chat', { secure: true, reconnect: true, rejectUnauthorized : false } );
 socket.emit('connection');
 
 let client_id = 98765;

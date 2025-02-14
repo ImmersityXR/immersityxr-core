@@ -3,4 +3,4 @@ COPY . /komodo
 WORKDIR /komodo
 RUN npm install
 CMD [ "node", "serve.js"]
-EXPOSE 3000
+EXPOSE 80

@@ -3,7 +3,7 @@
 // field size, then unpacks relay data into array. 
 
 var io = require('socket.io-client');
-var socket = io.connect('http://localhost:3000', { secure: true, reconnect: true, rejectUnauthorized : false } );
+var socket = io.connect('http://localhost:80', { secure: true, reconnect: true, rejectUnauthorized : false } );
 socket.emit('connection');
 
 let client_id = 98765;
