@@ -33,7 +33,18 @@
 
 /* jshint esversion: 6 */
 
-const io = require('socket.io')();
+const express = require('express');
+const monitorApp = express();
+const server = require('http').createServer(monitorApp);
+
+var options = {
+    dotfiles: 'deny',
+    extensions: ['htm', 'html'],
+    redirect: true
+}
+monitorApp.use(express.static('public', options));
+
+const io = require('socket.io')(server);
 
 const mysql = require('mysql2');
 
@@ -41,6 +52,7 @@ const syncServer = require('./sync');
 
 const chatServer = require('./chat');
 
+//TODO: rename to `diagnostics`
 const adminServer = require('./admin');
 
 const config = require('./config');
@@ -90,7 +102,7 @@ if (config.db.host && config.db.host != "") {
 // relay server
 const PORT = 3000;
 
-io.listen(PORT, {
+server.listen(PORT, {
     upgradeTimeout: 1000,
     pingTimeout: 30000
 });

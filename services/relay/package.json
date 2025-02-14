@@ -9,6 +9,7 @@
   "author": "Grainger IDEA Lab",
   "license": "NCSA",
   "dependencies": {
+    "express": "^4.21.2",
     "microsoft-cognitiveservices-speech-sdk": "^1.10.1",
     "mkdirp": "^1.0.4",
     "mysql2": "^2.3.0",
