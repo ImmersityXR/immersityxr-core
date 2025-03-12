@@ -9,7 +9,6 @@
 # to verify the environment variables are interpolated correctly:
 #     $ docker compose -f docker-compose.yml -f docker-compose.dev.yml config
 
-version: '3.3'
 services:
 
   backend:
