@@ -18,5 +18,3 @@ services:
     build: ./frontend
     container_name: komodo-portal-frontend
     restart: always
-    environment:
-      - VUE_APP_API_BASE_URL 

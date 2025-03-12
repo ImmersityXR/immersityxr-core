@@ -4,6 +4,10 @@
 #     $ docker-compose up --build
 #     $ docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
 
+# to verify the environment variables are interpolated correctly:
+#     $ docker compose config
+#     $ docker compose -f docker-compose.yml -f docker-compose.override.yml config
+
 version: '3.3'
 services:
 
@@ -24,6 +28,8 @@ services:
       - "traefik.backend=komodo-portal-frontend"
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
+    env_file:
+      - path: "./frontend/envLocalProd"
     networks:
       - proxy
       - komodo_internal
