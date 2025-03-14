@@ -98,7 +98,7 @@ export default {
     },
     login() {
       if (!this.email.length || !this.password.length) {
-        this.showInfo("Invalid Input!", "warning");
+        this.showInfo("Email and password are required.", "warning");
         return;
       }
       login({
@@ -107,24 +107,34 @@ export default {
       })
         .then(res => {
           // Cached the user data if the user logged in seccessfully
-          if (res.status === 200) {
+          if (res?.status === 200) {
             const { userId, email, firstName, lastName, roleName: role } = res.data.user;
-            this.showInfo("Login Succeeded! Redirecting ...", "success");
+            this.showInfo("Login succeeded! Redirecting ...", "success");
             this.$store.commit("setUser", { userId, email, firstName, lastName, role });
             return getCourseList(userId);
           }
-        })
-        .then(res => {
-          // Redirect to the dashboard page
-          this.$store.commit("setCourses", res.data);
-          setTimeout(() => {
-            this.$router.push({
-              path: "/dashboard"
-            });
-          }, 1000);
+
+          if (res?.status >= 400) {
+            console.dir(res);
+            this.showInfo(res?.data?.message || "Login failed", "error");
+          }
         })
         .catch(err => {
-          this.showInfo(err.response.data.message || "Login Failed!", "error");
+          this.showInfo(err?.response?.data?.message || err?.message || err || "Login failed", "error");
+        })
+        .then(res => {
+          if (res) {
+            // Redirect to the dashboard page
+            this.$store.commit("setCourses", res.data);
+            setTimeout(() => {
+              this.$router.push({
+                path: "/dashboard"
+              });
+            }, 1000);
+          }
+        })
+        .catch(err => {
+          this.showInfo(err?.response?.data?.message || err || "Login Failed!", "error");
         });
     },
     register() {
