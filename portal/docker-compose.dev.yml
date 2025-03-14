@@ -20,5 +20,6 @@ services:
   frontend:
     labels:
       - "traefik.enable=false"
+    command: ["npm", "run", "dev"]
     ports: 
       - 8080:80

@@ -27,6 +27,7 @@ services:
       - "traefik.backend=komodo-portal-frontend"
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
+    command: ["npm", "run", "build"]
     networks:
       - proxy
       - komodo_internal
