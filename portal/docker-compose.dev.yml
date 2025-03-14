@@ -12,14 +12,17 @@
 services:
 
   backend:
+    build: ./backend
     labels:
       - "traefik.enable=false"
     ports:
       - 4040:4040
 
   frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.development
     labels:
       - "traefik.enable=false"
-    command: ["npm", "run", "dev"]
     ports: 
       - 8080:80

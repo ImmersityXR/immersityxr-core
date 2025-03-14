@@ -9,11 +9,9 @@
 services:
 
   backend:
-    build: ./backend
     container_name: komodo-portal-backend
     restart: always
 
   frontend:
-    build: ./frontend
     container_name: komodo-portal-frontend
     restart: always
