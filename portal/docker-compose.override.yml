@@ -27,8 +27,6 @@ services:
       - "traefik.backend=komodo-portal-frontend"
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-    env_file:
-      - path: "./frontend/envLocalProd"
     networks:
       - proxy
       - komodo_internal
