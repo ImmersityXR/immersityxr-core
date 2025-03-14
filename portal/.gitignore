@@ -3,3 +3,4 @@
 frontend/package-lock.json
 backend/package-lock.json
 frontend/dist
+node_modules
