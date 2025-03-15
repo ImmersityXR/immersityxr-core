@@ -15,9 +15,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    
-    - name: Copy environment config file
-      run: pwd; echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js; ls
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
@@ -30,11 +27,13 @@ jobs:
         password: ${{ secrets.AzureAppService_ContainerPassword_67e5576f92d54b758d24ef97646d1908 }}
 
     - name: Build and push container image to registry
-      uses: docker/build-push-action@v3
-      with:
-        push: true
-        tags: immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
-        file: ./Dockerfile
+      run: |
+        echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js
+        docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
+        docker create --name relay-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
+        docker export relay-inspect | tar t | grep komodo/config
+        docker rm relay-inspect
+        docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
