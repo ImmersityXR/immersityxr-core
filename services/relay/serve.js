@@ -44,7 +44,13 @@ var options = {
 }
 monitorApp.use(express.static('public', options));
 
-const io = require('socket.io')(server);
+const io = require('socket.io')(server, {
+    origins: [
+        "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net",
+        "https://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net",
+        "http://localhost:3000"
+    ]
+});
 
 const mysql = require('mysql2');
 
