@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
 service ssh start
-node serve.js
+DEBUG= * node serve.js
