@@ -68,10 +68,11 @@ function isEmpty (obj) {
 }
 
 window.onload = function () {
+    localStorage.debug = '*';
     
-    var adminSocket = io(RELAY_BASE_URL + '/admin');
-    
-    localStorage.debug = 'socket.io-client:socket';
+    var adminSocket = io(RELAY_BASE_URL + '/admin', {
+        withCredentials: true   
+    });
 
     adminSocket.on("adminInfo", function (info) {
         adminInfoEl.innerHTML = "Admin socket: " + info;
