@@ -44,6 +44,7 @@ var options = {
 }
 monitorApp.use(express.static('public', options));
 
+// TODO(bd): read in origins from process.env
 const io = require('socket.io')(server, {
     origins: [
         "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:80",
