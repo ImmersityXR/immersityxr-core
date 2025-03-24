@@ -46,7 +46,9 @@ monitorApp.use(express.static('public', options));
 
 const io = require('socket.io')(server, {
     origins: [
-        "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net",
+        "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:80",
+        "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:8081",
+        "https://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:443",
         "http://localhost:3000"
     ]
 });
