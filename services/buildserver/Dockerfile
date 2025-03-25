@@ -24,6 +24,6 @@ COPY sshd_config /etc/ssh/
 RUN openrc default \
     && rc-update add sshd
 
-EXPOSE 80 2222
+EXPOSE 443
 CMD ["nginx", "-g", "daemon off;"]
 ENTRYPOINT ["./buildserver-entrypoint.sh"]
