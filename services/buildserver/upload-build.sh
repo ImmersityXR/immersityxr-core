@@ -2,6 +2,3 @@
 # Zip, transfer, unzip './builds/latest' folder.
 # The -k flag means to not overwrite existing files.
 tar -c ./builds/latest | ssh -p 443 root@localhost 'tar -kxvf - -C /usr/share/nginx/html/builds/latest'
-
-scp -OP 443 ./immersityxr-local.crt root@localhost:/etc/ssl/certs/immersityxr-local.crt
-scp -OP 443 ./immersityxr-local.key root@localhost:/etc/ssl/private/immersityxr-local.key
