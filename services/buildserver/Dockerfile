@@ -2,6 +2,7 @@
 FROM nginx:stable-alpine
 USER root
 
+COPY ./nginx.conf /etc/nginx/nginx.conf
 COPY ./default.conf /etc/nginx/conf.d/
 COPY ./builds /usr/share/nginx/html/builds
 COPY ./entrypoint.sh ./buildserver-entrypoint.sh
