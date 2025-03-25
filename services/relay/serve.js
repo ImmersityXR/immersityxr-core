@@ -50,7 +50,8 @@ const io = require('socket.io')(server, {
         "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:80",
         "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:8081",
         "https://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:443",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://localhost:443"
     ]
 });
 
