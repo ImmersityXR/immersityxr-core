@@ -4,9 +4,9 @@ COPY ./default.conf /etc/nginx/conf.d/
 COPY ./builds /usr/share/nginx/html/builds
 COPY ./entrypoint.sh ./buildserver-entrypoint.sh
 
-# Start and enable SSH
 RUN apk update \
     && apk upgrade \
+    && apk add openrc \
     && apk add bash \
     && apk add openssh
 
