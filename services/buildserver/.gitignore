@@ -1,3 +1,5 @@
 builds/*
 !builds/.empty
 .DS_Store
+*.key
+*.crt
