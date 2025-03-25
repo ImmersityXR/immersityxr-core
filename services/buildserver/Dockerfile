@@ -1,5 +1,7 @@
 # serve with nginx
 FROM nginx:stable-alpine
+USER root
+
 COPY ./default.conf /etc/nginx/conf.d/
 COPY ./builds /usr/share/nginx/html/builds
 COPY ./entrypoint.sh ./buildserver-entrypoint.sh
@@ -15,5 +17,9 @@ RUN echo "root:Docker!" | chpasswd \
 
 COPY sshd_config /etc/ssh/
 
+RUN openrc default \
+    && rc-update add sshd
+
 EXPOSE 80 2222
+CMD ["nginx", "-g", "daemon off;"]
 ENTRYPOINT ["./buildserver-entrypoint.sh"]
