@@ -3,3 +3,4 @@ builds/*
 .DS_Store
 *.key
 *.crt
+.env*
