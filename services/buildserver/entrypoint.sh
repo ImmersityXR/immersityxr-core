@@ -1,6 +1,7 @@
 #!/bin/sh
 set -e
 rc-service sshd start
+set +e
 
 # initialize WebDAV
 # AUTH_FILE=/etc/nginx/webdav_credentials
