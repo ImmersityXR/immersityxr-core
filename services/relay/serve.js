@@ -44,14 +44,14 @@ var options = {
 }
 monitorApp.use(express.static('public', options));
 
-// TODO(bd): read in origins from process.env
+// TODO(bd): read in origins from config.js
 const io = require('socket.io')(server, {
     origins: [
         "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:80",
         "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:8081",
         "https://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:443",
-        "http://localhost:3000",
-        "https://localhost:443"
+        "http://immersitybuild-test-cwfpekgjcfbkfbat.northcentralus-01.azurewebsites.net:80",
+        "https://immersitybuild-test-cwfpekgjcfbkfbat.northcentralus-01.azurewebsites.net:443"
     ]
 });
 
