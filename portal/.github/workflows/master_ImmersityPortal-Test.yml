@@ -35,7 +35,7 @@ jobs:
         docker create --name portal-frontend-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
         docker export portal-frontend-inspect | tar t | grep komodo/config
         docker rm portal-frontend-inspect
-        docker push immersityxr.azurecr.io/${{ secrets.secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
+        docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
