@@ -47,9 +47,7 @@ jobs:
     - name: Build and push container image to registry7
       run: |
         docker rm portal-frontend-inspect
-    - name: Build and push container image to registry8
-      run: |
-        docker push immersityxr.azurecr.io/${{ secrets.secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
+        docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
