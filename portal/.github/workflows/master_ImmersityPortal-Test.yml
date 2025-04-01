@@ -26,21 +26,22 @@ jobs:
         username: ${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}
         password: ${{ secrets.AzureAppService_ContainerPassword_7269ffb0712343f0994872d9b3ca3379 }}
 
-    - name: Build and push container image to registry1
+    - name: Build front end with environment secrets
       run: |
         cd ./frontend
         pwd
-        echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js
+        echo "${{ secrets.BUILD_ENV_FILE_DEV }}" >> .env.development
+        echo "${{ secrets.BUILD_ENV_FILE_PROD }}" >> .env.production
         docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
-    - name: Build and push container image to registry5
+    - name: Check build result for environment files
       run: |
         docker create --name portal-frontend-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
-    - name: Build and push container image to registry6
-      run: |
-        docker export portal-frontend-inspect | tar t | grep komodo/config
-    - name: Build and push container image to registry7
-      run: |
+        if [[ docker export portal-frontend-inspect | tar t | grep ".env." ]]; 
+          then echo ".env.* files not found" 
+        fi
         docker rm portal-frontend-inspect
+    - name: Push container image to registry
+      run: |
         docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
 
   deploy:
