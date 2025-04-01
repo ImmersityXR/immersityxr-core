@@ -26,15 +26,29 @@ jobs:
         username: ${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}
         password: ${{ secrets.AzureAppService_ContainerPassword_7269ffb0712343f0994872d9b3ca3379 }}
 
-    - name: Build and push container image to registry
+    - name: Build and push container image to registry1
       run: |
         cd ./frontend
+    - name: Build and push container image to registry2
+      run: |
         pwd
+    - name: Build and push container image to registry3
+      run: |
         echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js
+    - name: Build and push container image to registry4
+      run: |
         docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
+    - name: Build and push container image to registry5
+      run: |
         docker create --name portal-frontend-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
+    - name: Build and push container image to registry6
+      run: |
         docker export portal-frontend-inspect | tar t | grep komodo/config
+    - name: Build and push container image to registry7
+      run: |
         docker rm portal-frontend-inspect
+    - name: Build and push container image to registry8
+      run: |
         docker push immersityxr.azurecr.io/${{ secrets.secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
 
   deploy:
