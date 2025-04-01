@@ -29,11 +29,7 @@ jobs:
     - name: Build and push container image to registry1
       run: |
         cd ./frontend
-    - name: Build and push container image to registry2
-      run: |
         pwd
-    - name: Build and push container image to registry3
-      run: |
         echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js
     - name: Build and push container image to registry4
       run: |
