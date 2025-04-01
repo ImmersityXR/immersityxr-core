@@ -31,8 +31,6 @@ jobs:
         cd ./frontend
         pwd
         echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js
-    - name: Build and push container image to registry4
-      run: |
         docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
     - name: Build and push container image to registry5
       run: |
