@@ -26,12 +26,16 @@ jobs:
         username: ${{ secrets.AzureAppService_ContainerUsername_dcd09d95ba9c44ae8fca70ff0ef6834e }}
         password: ${{ secrets.AzureAppService_ContainerPassword_1535b149cae749b6b8ef256edaf6e91c }}
 
-    - name: Build and push container image to registry
-      uses: docker/build-push-action@v3
-      with:
-        push: true
-        tags: immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_dcd09d95ba9c44ae8fca70ff0ef6834e }}/immersity-portal-backend/immersity-portal-backend:${{ github.sha }}
-        file: ./Dockerfile
+    - name: Build back end with environment secrets
+      run: |
+        cd ./backend
+        pwd
+        echo "${{ secrets.BUILD_BACKEND_CONFIG }}" > config.js
+        docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_dcd09d95ba9c44ae8fca70ff0ef6834e }}/immersity-portal-backend/immersity-portal-backend:${{ github.sha }}
+    
+    - name: Push container image to registry
+      run: |
+        docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_dcd09d95ba9c44ae8fca70ff0ef6834e }}/immersity-portal-backend/immersity-portal-backend:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
