@@ -33,13 +33,6 @@ jobs:
         echo "${{ secrets.BUILD_ENV_FILE_DEV }}" >> .env.development
         echo "${{ secrets.BUILD_ENV_FILE_PROD }}" >> .env.production
         docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
-    - name: Check build result for environment files
-      run: |
-        docker create --name portal-frontend-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
-        if ! (docker export portal-frontend-inspect | tar t | grep ".env." ); 
-          then echo ".env.* files not found" 
-        fi
-        docker rm portal-frontend-inspect
     - name: Push container image to registry
       run: |
         docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
