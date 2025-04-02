@@ -30,8 +30,8 @@ jobs:
       run: |
         cd ./frontend
         pwd
-        echo "${{ secrets.BUILD_ENV_FILE_DEV }}" >> .env.development
-        echo "${{ secrets.BUILD_ENV_FILE_PROD }}" >> .env.production
+        echo "${{ secrets.BUILD_ENV_FILE_DEV }}" > .env.development
+        echo "${{ secrets.BUILD_ENV_FILE_PROD }}" > .env.production
         docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/komodo-portal/komodo-portal-frontend:${{ github.sha }}
     - name: Push container image to registry
       run: |
