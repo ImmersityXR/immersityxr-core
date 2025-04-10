@@ -1,7 +1,3 @@
-CREATE DATABASE IF NOT EXISTS `immersity-db`;
-
-USE `immersity-db`;
-
 -- Portal tables
 CREATE TABLE `KP_Role` (
     `role_id`  tinyint NOT NULL AUTO_INCREMENT,
