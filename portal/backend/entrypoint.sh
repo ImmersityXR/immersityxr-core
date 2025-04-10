@@ -14,6 +14,7 @@ rc-update add mariadb default
 
 cd /komodo/portal/backend/db/scripts
 chown mysql .
+mariadb-admin create $MYSQL_DATABASE
 mariadb < 00_CreateDatabase.sql
 mariadb --database=$(MYSQL_DATABASE) < 01_CreateInitialTables.sql
 mariadb --database=$(MYSQL_DATABASE) < 02_InsertInitialData.sql
