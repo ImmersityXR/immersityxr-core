@@ -14,11 +14,10 @@ rc-update add mariadb default
 
 cd /komodo/portal/backend/db/scripts
 chown mysql .
-mariadb-admin create $MYSQL_DATABASE
-mariadb < 00_CreateDatabase.sql
-mariadb --database=$(MYSQL_DATABASE) < 01_CreateInitialTables.sql
-mariadb --database=$(MYSQL_DATABASE) < 02_InsertInitialData.sql
-mariadb --database=$(MYSQL_DATABASE) < 03_InsertDummyAssets.sql
+mariadb-admin --verbose create $MYSQL_DATABASE
+mariadb --database=$MYSQL_DATABASE < 01_CreateInitialTables.sql
+mariadb --database=$MYSQL_DATABASE < 02_InsertInitialData.sql
+mariadb --database=$MYSQL_DATABASE < 03_InsertDummyAssets.sql
 
 rc-service sshd start
 rc-update add sshd
