@@ -24,8 +24,10 @@ pool.on("release", connection => console.debug(`released: ${connection.threadId}
 pool.on("enqueue", () => console.log("enqueued"));
 
 pool.getConnection((error, connection) => {
-  if (error) throw error;
-})
+  if (error) {
+    console.dir(error.stack);
+  }
+});
 
 const app = express();
 const port = config.web.port;
