@@ -30,7 +30,8 @@ jobs:
       run: |
         cd ./backend
         pwd
-        echo "${{ secrets.BUILD_BACKEND_CONFIG }}" > config.js
+        echo "${{ secrets.BUILD_BACKEND_ENV }}" > .env
+        echo "${{ secrets.BUILD_BACKEND_CONFIG }}" > server/config.js
         docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_dcd09d95ba9c44ae8fca70ff0ef6834e }}/immersity-portal-backend/immersity-portal-backend:${{ github.sha }}
     
     - name: Push container image to registry
