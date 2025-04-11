@@ -18,13 +18,28 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-pool.on("connection", connection => console.debug(`connection established: ${connection.threadId}`));
-pool.on("acquire", connection => console.debug(`acquired: ${connection.threadId}`));
-pool.on("release", connection => console.debug(`released: ${connection.threadId}`));
-pool.on("enqueue", () => console.log("enqueued"));
+let status = "initializing";
 
-pool.getConnection((error, connection) => {
+pool.on("connection", (connection) => {
+  status = `connection established: ${connection.threadId}`;
+  console.debug(status);
+});
+pool.on("acquire", (connection) => {
+  status = `acquired: ${connection.threadId}`;
+  console.debug(status);
+});
+pool.on("release", (connection) => {
+  status = `released: ${connection.threadId}`;
+  console.debug(status);
+});
+pool.on("enqueue", () => {
+  status = `enqueued`;
+  console.debug(status);
+});
+
+let conn = pool.getConnection((error, connection) => {
   if (error) {
+    status = `error`;
     console.dir(error.stack);
   }
 });
@@ -72,7 +87,7 @@ app.use("/data", dataController);
 app.use("/public", publicController);
 app.use("/turn", turnController);
 
-app.get('/', (req, res) => res.send('Hello Komodo!' + pool));
+app.get('/', (req, res) => res.send('<p>Hello Komodo!</p><p>Database status: ' + status + '</p>'));
 
 app.get('/s3_signed/:name', (req, res) => {
   const name = req.params.name;
