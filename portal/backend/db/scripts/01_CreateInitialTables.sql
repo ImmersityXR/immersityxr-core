@@ -1,11 +1,11 @@
 -- Portal tables
-CREATE TABLE `KP_Role` (
+CREATE TABLE IF NOT EXISTS `KP_Role` (
     `role_id`  tinyint NOT NULL AUTO_INCREMENT,
     `role_name` varchar(20),
     PRIMARY KEY (role_id)
 );
 
-CREATE TABLE `KP_User` (
+CREATE TABLE IF NOT EXISTS `KP_User` (
     `user_id`  int NOT NULL AUTO_INCREMENT,
     `email` varchar(50) NOT NULL,
     `password`  varchar(50) NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE `KP_User` (
     FOREIGN KEY (role_id) REFERENCES KP_Role(role_id)
 );
 
-CREATE TABLE `KP_User_Log` (
+CREATE TABLE IF NOT EXISTS `KP_User_Log` (
     `log_id`  int NOT NULL,
     `user_id` int NOT NULL,
     `action`  varchar(20) NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE `KP_User_Log` (
     FOREIGN KEY (user_id) REFERENCES KP_User(user_id)
 );
 
-CREATE TABLE `KP_Semester` (
+CREATE TABLE IF NOT EXISTS `KP_Semester` (
     `semester_id`  tinyint NOT NULL AUTO_INCREMENT,
     `year` year NOT NULL,
     `period`  varchar(10) NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE `KP_Semester` (
     PRIMARY KEY (semester_id)
 );
 
-CREATE TABLE `KP_Course` (
+CREATE TABLE IF NOT EXISTS `KP_Course` (
     `course_id`  int NOT NULL AUTO_INCREMENT,
     `CRN` int,
     `course_no` varchar(50) NOT NULL,
@@ -52,14 +52,14 @@ CREATE TABLE `KP_Course` (
     FOREIGN KEY (semester_id) REFERENCES KP_Semester(semester_id)
 );
 
-CREATE TABLE `KP_Registration` (
+CREATE TABLE IF NOT EXISTS `KP_Registration` (
     `student_id`  int NOT NULL,
     `course_id` int NOT NULL,
     FOREIGN KEY (student_id) REFERENCES KP_User(user_id),
     FOREIGN KEY (course_id) REFERENCES KP_Course(course_id)
 );
 
-CREATE TABLE `KP_Lab` (
+CREATE TABLE IF NOT EXISTS `KP_Lab` (
     `session_id`  int NOT NULL AUTO_INCREMENT,
     `session_name` varchar(100) NOT NULL,
     `course_id`  int NOT NULL,
@@ -73,7 +73,7 @@ CREATE TABLE `KP_Lab` (
     FOREIGN KEY (course_id) REFERENCES KP_Course(course_id)
 );
 
-CREATE TABLE `KP_Session_Type` (
+CREATE TABLE IF NOT EXISTS `KP_Session_Type` (
     `type_id` tinyint NOT NULL AUTO_INCREMENT,
     `type_name` varchar(20) NOT NULL,
     UNIQUE (type_id),
@@ -81,7 +81,7 @@ CREATE TABLE `KP_Session_Type` (
 );
 
 
-CREATE TABLE `KP_Asset` (
+CREATE TABLE IF NOT EXISTS `KP_Asset` (
     `asset_id`  int NOT NULL AUTO_INCREMENT,
     `uuid` varchar(100) NOT NULL,
     `asset_name` varchar(100) NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE `KP_Asset` (
     FOREIGN KEY (creator_id) REFERENCES KP_User(user_id)
 );
 
-CREATE TABLE `KP_Session_Asset`(
+CREATE TABLE IF NOT EXISTS `KP_Session_Asset`(
     `session_id` int NOT NULL,
     `asset_id` int NOT NULL,
     `session_type` tinyint NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE `KP_Session_Asset`(
     FOREIGN KEY(session_type) REFERENCES KP_Session_Type(type_id)
 );
 
-CREATE TABLE `KP_Interactions`(
+CREATE TABLE IF NOT EXISTS `KP_Interactions`(
     `capture_id` varchar(255) NOT NULL,
     `capture_start` bigint NOT NULL,
     `session_id` int NOT NULL,
@@ -121,14 +121,14 @@ CREATE TABLE `KP_Interactions`(
 
 -- data pipeline tables
 
-CREATE TABLE `connections` (
+CREATE TABLE IF NOT EXISTS `connections` (
     `timestamp` bigint NOT NULL,
     `session_id` int NOT NULL,
     `client_id` int NOT NULL,
     `event` varchar(255) NOT NULL
 );
 
-CREATE TABLE `captures` (
+CREATE TABLE IF NOT EXISTS `captures` (
     `capture_id` varchar(255) NOT NULL,
     `session_id` int NOT NULL,
     `start` bigint NOT NULL,
@@ -136,7 +136,7 @@ CREATE TABLE `captures` (
     `processed` bigint DEFAULT NULL
 );
 
-CREATE TABLE `data` (
+CREATE TABLE IF NOT EXISTS `data` (
     `id` int NOT NULL AUTO_INCREMENT,
     `capture_id` varchar(255),
     `session_id` int,
