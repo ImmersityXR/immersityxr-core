@@ -35,11 +35,15 @@ COPY --chmod=644 ./db/my.cnf /etc/mysql/my.cnf
 COPY --chmod=644 ./db/mariadb-server.cnf /etc/my.cnf.d/mariadb-server.cnf
 COPY --chmod=744 ./db/mariadb /etc/init.d/mariadb
 
-COPY --chmod=744 ./entrypoint.sh /usr/bin/entrypoint.sh
 # COPY ./db/scripts /docker-entrypoint-initdb.d
 VOLUME /sys/fs/cgroup
+
+# === copy env file and entrypoint ===
+
+COPY --chmod=744 ./entrypoint.sh entrypoint.sh
+COPY --chmod=744 ./seten[v].sh setenv.sh
 
 # === run node back end ===
 
 CMD [ "node", "index.js"]
-ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]

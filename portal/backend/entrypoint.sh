@@ -1,5 +1,37 @@
 #!/bin/sh
 
+script_name="setenv"
+if [ -f "$script_name.sh" ]; then
+    echo "Running $script_name.sh"
+    . ./$script_name.sh
+else
+    echo "Note: $script_name.sh not detected. Skipping the file."
+    echo "  If you intended to run this script, copy $script_name.template.sh to a new file $script_name.sh and set your environment variables there."
+fi
+
+echo "Checking that environment variables were set correctly."
+
+is_env_valid=1
+
+if [ -z "${MYSQL_DATABASE}" ]; then
+    echo "  \$MYSQL_DATABASE must not be empty." >&2
+    is_env_valid=0
+fi
+
+if [ -z "${MYSQL_USER}" ]; then
+    echo "  \$MYSQL_USER must not be empty." >&2
+    is_env_valid=0
+fi
+
+if [ -z "${MYSQL_PASSWORD}" ]; then
+    echo "  \$MYSQL_PASSWORD must not be empty." >&2
+    is_env_valid=0
+fi
+
+if [ $is_env_valid -eq 0 ]; then
+    exit 2
+fi
+
 openrc default
 rc-status
 
