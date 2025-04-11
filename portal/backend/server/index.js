@@ -53,11 +53,7 @@ const port = config.web.port;
 app.use(cookieParser());
 app.use(bodyParser.json({limit: '50mb'}));
 app.use(cors({
-  origin: [
-    "https://vr.komodo-dev.library.illinois.edu",
-    "https://komodo-dev.library.illinois.edu",
-    "http://localhost:8080"
-  ],
+  origin: config.cors.origins,
   methods: [
     'GET', 'PUT', 'POST', 'DELETE'
   ],

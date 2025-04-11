@@ -6,6 +6,11 @@ module.exports = {
         database: '',
         port: '',
     },
+    cors: {
+        origins: [
+            "http://localhost:8080"
+        ]
+    },
     mysql_hint: 'find config values from immersity-db environment variables',
     web: {
         session_secret: '',
