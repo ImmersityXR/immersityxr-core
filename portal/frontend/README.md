@@ -1,9 +1,9 @@
-# Komodo Portal - Frontend
+# Immersity Portal - Frontend
 
-[Learn more about the Komodo Platform](https://github.com/gelic-idealab/komodo-docs)
+[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
 
 ## What is it?
-As a part of Komodo Portal, the frontend provides web views for users to interact, it includes several web pages such as login page, dashboard page, course detail page, etc. The frontend is based on `Vue` framework.
+As a part of Immersity Portal, the frontend provides web views for users to interact, it includes several web pages such as login page, dashboard page, course detail page, etc. The frontend is based on `Vue` framework.
 
 1. [Development](#development)
 2. [Deployment](#deployment)
@@ -18,8 +18,8 @@ Prerequisite:
 
 1. Clone this repository
  ```bash
- git clone https://github.com/gelic-idealab/komodo-portal.git 
- cd komodo-portal/frontend
+ git clone https://github.com/ImmersityXR/immersity-portal.git 
+ cd immersity-portal/frontend
  ```
 2. Install dependencies
 ```bash
@@ -38,4 +38,4 @@ npm run serve
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Komodo deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  

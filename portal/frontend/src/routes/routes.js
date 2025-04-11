@@ -27,7 +27,7 @@ const routes = [
     name: "Login",
     component: LoginPage,
     meta: {
-      title: "Log In — Komodo"
+      title: "Log In — Immersity"
     }
   },
   // User logout
@@ -37,7 +37,7 @@ const routes = [
     component: LogoutPage,
     meta: {
       requireLogin: true,
-      title: "Logging out... (Komodo)"
+      title: "Logging out... (Immersity)"
     }
   },
   // Go to about page
@@ -46,7 +46,7 @@ const routes = [
     name: "About",
     component: AboutPage,
     meta: {
-      title: "About — Komodo"
+      title: "About — Immersity"
     }
   },
   // Go to dashboard page
@@ -62,7 +62,7 @@ const routes = [
         component: LandingPage,
         meta: {
           requireLogin: true,
-          title: "Dashboard — Komodo"
+          title: "Dashboard — Immersity"
         }
       },
       // Get course details
@@ -72,7 +72,7 @@ const routes = [
         component: CourseDetail,
         meta: {
           requireLogin: true,
-          title: "Course — Komodo"
+          title: "Course — Immersity"
         }
       },
       // Create new lab
@@ -82,7 +82,7 @@ const routes = [
         component: LabCreate,
         meta: {
           requireLogin: true,
-          title: "Create Lab — Komodo"
+          title: "Create Lab — Immersity"
         }
       },
       // Edit lab by lab id
@@ -92,7 +92,7 @@ const routes = [
         component: LabEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Lab — Komodo"
+          title: "Edit Lab — Immersity"
         }
       },
       // Go to the lab detail page by course id and lab id
@@ -102,7 +102,7 @@ const routes = [
         component: LabDetail,
         meta: {
           requireLogin: true,
-          title: "Lab — Komodo"
+          title: "Lab — Immersity"
         }
       },
       // Go to the assets page
@@ -112,7 +112,7 @@ const routes = [
         component: AssetsPage,
         meta: {
           requireLogin: true,
-          title: "All Assets — Komodo"
+          title: "All Assets — Immersity"
         }
       },
       // Go to the admin view page
@@ -122,7 +122,7 @@ const routes = [
         component: AdminPage,
         meta: {
           requireLogin: true,
-          title: "Admin — Komodo"
+          title: "Admin — Immersity"
         }
       },
       // Create new user
@@ -132,7 +132,7 @@ const routes = [
         component: UserCreate,
         meta: {
           requireLogin: true,
-          title: "Create User — Komodo"
+          title: "Create User — Immersity"
         }
       },
       // Edit user by user id
@@ -142,7 +142,7 @@ const routes = [
         component: UserEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Users — Komodo"
+          title: "Edit Users — Immersity"
         }
       },
       // Edit multiple users in admin page
@@ -152,7 +152,7 @@ const routes = [
         component: MultipleUsersEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Users — Komodo"
+          title: "Edit Users — Immersity"
         }
       },
       // Create new course in admin page
@@ -162,7 +162,7 @@ const routes = [
         component: CourseCreate,
         meta: {
           requireLogin: true,
-          title: "Create Course — Komodo"
+          title: "Create Course — Immersity"
         }
       },
       // Edit course by course id
@@ -172,7 +172,7 @@ const routes = [
         component: CourseEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Course — Komodo"
+          title: "Edit Course — Immersity"
         }
       },
       // Edit multiple course in admin page
@@ -182,7 +182,7 @@ const routes = [
         component: MultipleCoursesEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Courses — Komodo"
+          title: "Edit Courses — Immersity"
         }
       },
       // Create new asset
@@ -192,7 +192,7 @@ const routes = [
         component: AssetCreate,
         meta: {
           requireLogin: true,
-          title: "Upload Asset — Komodo"
+          title: "Upload Asset — Immersity"
         }
       },
       // Get assets details by asset id
@@ -211,7 +211,7 @@ const routes = [
         component: MetricsPage,
         meta: {
           requireLogin: true,
-          title: "Metrics — Komodo"
+          title: "Metrics — Immersity"
         }
       },
       // {
@@ -228,7 +228,7 @@ const routes = [
         component: resetUser,
         meta: {
           requireLogin: true,
-          title: "Account — Komodo"
+          title: "Account — Immersity"
         },
       },
       // User Profile page
@@ -238,7 +238,7 @@ const routes = [
         component: UserProfilePage,
         meta: {
           requireLogin: true,
-          title: "Account — Komodo"
+          title: "Account — Immersity"
         }
       },
     ]

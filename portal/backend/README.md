@@ -1,9 +1,9 @@
-# Komodo Portal - Backend
+# Immersity Portal - Backend
 
-[Learn more about the Komodo Platform](https://github.com/gelic-idealab/komodo-docs)
+[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
 
 ## What is it?
-As a part of Komodo Portal, the backend served as a API to support the necessary data requested from the frontend and interacted with database to query the data. The backend is based on Node.js/Express. 
+As a part of Immersity Portal, the backend served as a API to support the necessary data requested from the frontend and interacted with database to query the data. The backend is based on Node.js/Express. 
 
 1. [Development](#development)
 2. [Test](#test)
@@ -19,8 +19,8 @@ Prerequisite:
 
 1. Clone this repository
  ```bash
- git clone https://github.com/gelic-idealab/komodo-portal.git 
- cd komodo-portal/backend
+ git clone https://github.com/ImmersityXR/immersity-portal.git 
+ cd immersity-portal/backend
  ```
 2. Install dependencies
 ```bash
@@ -34,12 +34,12 @@ node index.js
 ______________
 <a name="test"></a>
 ### Test
-The recommended Komodo test users `Postman`, more details can see [here](https://learning.postman.com/docs/getting-started/introduction/).
+The recommended Immersity test users `Postman`, more details can see [here](https://learning.postman.com/docs/getting-started/introduction/).
 
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Komodo deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
 
 # Azure App Service
 ## Persistence

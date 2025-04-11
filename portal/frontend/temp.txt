@@ -1251,7 +1251,7 @@
             globOptions: {
               ignore: [
                 '**/.DS_Store',
-                'C:/Users/Desktop/Documents/GitHub---gelic-idealab/komodo-portal/frontend/public/index.html'
+                'C:/Users/Desktop/Documents/GitHub---ImmersityXR/immersity-portal/frontend/public/index.html'
               ]
             },
             info: {

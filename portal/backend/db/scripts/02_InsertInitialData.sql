@@ -8,7 +8,7 @@ VALUES ('lab'),
        ('capture');
 
 INSERT INTO KP_User (email, password, role_id, first_name, last_name)
-VALUES ('admin@komodo.edu', SHA('password'), 1, 'Admin', 'Komodo');
+VALUES ('admin@immersity.edu', SHA('password'), 1, 'Admin', 'Immersity');
 
 INSERT INTO KP_Semester (year, period)
 VALUES (2020, 'Spring'),

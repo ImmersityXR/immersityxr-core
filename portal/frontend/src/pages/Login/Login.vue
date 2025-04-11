@@ -36,7 +36,7 @@
               <v-btn class="mx-6 full-width" color="primary" @click="login" large>Login</v-btn>
             </v-card-actions>
             <p class="register-text">
-              Don't have an account? Please click "Learn More" and fill out the Interest form to indicate that you are interested in getting an account, or contact the Project Komodo team if you are supposed to have access.
+              Don't have an account? Please click "Learn More" and fill out the Interest form to indicate that you are interested in getting an account, or contact the ImmersityXR team if you are supposed to have access.
             </p>
           </v-col>
           <!-- Image section -->
@@ -44,7 +44,7 @@
             <div class="landing-img">
               <div class="landing-logo">
                 <p class="title1 display-2 white--text">
-                  Welcome to Komodo
+                  Welcome to Immersity
                 </p>
                 <p class="title2 headline white--text font-italic">
                   A new way of learning with VR

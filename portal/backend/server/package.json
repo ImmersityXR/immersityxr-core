@@ -1,7 +1,7 @@
 {
-  "name": "komodo-portal-backend",
+  "name": "immersity-portal-backend",
   "version": "1.2.2",
-  "description": "Back end for Project Komodo web portal",
+  "description": "Back end for Project Immersity web portal",
   "private": true,
   "main": "index.js",
   "scripts": {

@@ -9,9 +9,9 @@
 services:
 
   backend:
-    container_name: komodo-portal-backend
+    container_name: immersity-portal-backend
     restart: always
 
   frontend:
-    container_name: komodo-portal-frontend
+    container_name: immersity-portal-frontend
     restart: always

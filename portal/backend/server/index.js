@@ -86,7 +86,7 @@ app.use("/data", dataController);
 app.use("/public", publicController);
 app.use("/turn", turnController);
 
-app.get('/', (req, res) => res.send('<p>Hello Komodo!</p><p>Database status: ' + status + '</p><a href="/api-docs">API Docs</a>'));
+app.get('/', (req, res) => res.send('<p>Hello Immersity!</p><p>Database status: ' + status + '</p><a href="/api-docs">API Docs</a>'));
 
 app.get('/s3_signed/:name', (req, res) => {
   const name = req.params.name;
@@ -104,7 +104,7 @@ app.get('/s3_signed/:name', (req, res) => {
 });
 
 
-let server = app.listen(port, () => console.log(`Komodo portal backend listening on port ${port}!`));
+let server = app.listen(port, () => console.log(`Immersity portal backend listening on port ${port}!`));
 
 const shutdownHandler = (signal) => {
   console.log(`Received ${signal}. Shutting down gracefully...`);

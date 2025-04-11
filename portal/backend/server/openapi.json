@@ -1,12 +1,12 @@
 {
   "openapi" : "3.0.0",
   "info" : {
-    "title" : "Komodo Portal",
-    "description" : "Komodo Portal API",
+    "title" : "Immersity Portal",
+    "description" : "Immersity Portal API",
     "version" : "1.2.2-oas3"
   },
   "servers" : [ {
-    "url" : "https://api.komodo-dev.library.illinois.edu/",
+    "url" : "https://api.immersity-dev.library.illinois.edu/",
     "description" : "Production server"
   }, {
     "url" : "http://localhost:4040/",

@@ -40,7 +40,7 @@ rc-status
 
 sleep 10
 
-cd /komodo/portal/backend/db/scripts
+cd /immersity/portal/backend/db/scripts
 mariadb-admin --verbose create "$MYSQL_DATABASE"
 echo "CREATE USER IF NOT EXISTS $MYSQL_USER@localhost IDENTIFIED BY '$MYSQL_PASSWORD';" | mariadb
 echo "GRANT ALL PRIVILEGES ON $MYSQL_DATABASE.* TO $MYSQL_USER@localhost;" | mariadb
@@ -51,5 +51,5 @@ mariadb --database="$MYSQL_DATABASE" < 03_InsertDummyAssets.sql
 rc-service sshd start
 rc-update add sshd
 
-cd /komodo/portal/backend
+cd /immersity/portal/backend
 node index.js

@@ -2,9 +2,9 @@ FROM node:lts-alpine
 
 # === install node back end ===
 
-RUN mkdir -p /komodo/portal/backend/node_modules \
-    && chown -R node:node /komodo/portal/backend
-WORKDIR /komodo/portal/backend
+RUN mkdir -p /immersity/portal/backend/node_modules \
+    && chown -R node:node /immersity/portal/backend
+WORKDIR /immersity/portal/backend
 COPY --chown=node:node server/package*.json ./
 USER node
 RUN npm install
@@ -24,12 +24,12 @@ COPY sshd_config /etc/ssh/
 
 # === install and run mysql === 
 
-COPY ./db/scripts /komodo/portal/backend/db/scripts
+COPY ./db/scripts /immersity/portal/backend/db/scripts
 
 RUN apk add mariadb mariadb-client mariadb-dev \
     && mkdir /home/mysql \
     && chown mysql /home/mysql \
-    && chown mysql /komodo/portal/backend/db/scripts
+    && chown mysql /immersity/portal/backend/db/scripts
 
 COPY --chmod=644 ./db/my.cnf /etc/mysql/my.cnf
 COPY --chmod=644 ./db/mariadb-server.cnf /etc/my.cnf.d/mariadb-server.cnf

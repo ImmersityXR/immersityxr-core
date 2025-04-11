@@ -61,7 +61,7 @@ export default {
       userId: this.$store.getters.user.userId,
       text: "",
       records: [
-        { sessionId: 1, clientId: 1, clientName: "Komodo", text: "Let's chat :)", time: this.formatTime(Date.now()) , type: "text" },
+        { sessionId: 1, clientId: 1, clientName: "Immersity", text: "Let's chat :)", time: this.formatTime(Date.now()) , type: "text" },
       ]
     }
   },

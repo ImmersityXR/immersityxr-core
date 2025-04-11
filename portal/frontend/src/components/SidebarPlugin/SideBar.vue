@@ -47,7 +47,7 @@ export default {
   props: {
     title: {
       type: String,
-      default: "Komodo"
+      default: "Immersity"
     },
     backgroundImage: {
       type: String,

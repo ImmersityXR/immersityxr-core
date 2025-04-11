@@ -1,9 +1,9 @@
-# Komodo Portal
+# Immersity Portal
 
-[Learn more about the Komodo Platform](https://github.com/gelic-idealab/komodo-docs)
+[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
 
 ## What is it?
-Komodo Portal is a web service for instructors to deploy social virtual reality education apps. Instructors can easily deploy a classroom session, manage sessions and upload assets. Students can join in the classroom session to receive the instruction. This repo contains both backend and frontend. The frontend provides web views for users to interact, while the backend served as a API to support the necessary data requested from the frontend. 
+Immersity Portal is a web service for instructors to deploy social virtual reality education apps. Instructors can easily deploy a classroom session, manage sessions and upload assets. Students can join in the classroom session to receive the instruction. This repo contains both backend and frontend. The frontend provides web views for users to interact, while the backend served as a API to support the necessary data requested from the frontend. 
 
 1. [Development](#development)
 2. [Deployment](#deployment)
@@ -19,18 +19,18 @@ Prerequisite:
 
 Clone this repository
  ```bash
- git clone https://github.com/gelic-idealab/komodo-portal.git 
- cd komodo-portal/
+ git clone https://github.com/ImmersityXR/immersity-portal.git 
+ cd immersity-portal/
  ```
 
 This repo contains two parts: frontend and backend. You need to set up these two parts seperatively and run them on different port. 
 
 #### Frontend
-Visit [here](https://github.com/gelic-idealab/komodo-portal/tree/master/frontend) to get more details about the frontend.
+Visit [here](https://github.com/ImmersityXR/immersity-portal/tree/master/frontend) to get more details about the frontend.
 #### Backend
-Visit [here](https://github.com/gelic-idealab/komodo-portal/tree/master/backend) to get more details about the backend.
+Visit [here](https://github.com/ImmersityXR/immersity-portal/tree/master/backend) to get more details about the backend.
 
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Komodo deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  

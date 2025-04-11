@@ -115,7 +115,7 @@
             small 
             color="primary" 
             class="ma-1" 
-            href="https://github.com/gelic-idealab/komodo/blob/e6500eb1b53dfbd1d2f21d76ec9e91b52454ed0b/ABOUT.md">GitHub →
+            href="https://github.com/ImmersityXR/immersity/blob/e6500eb1b53dfbd1d2f21d76ec9e91b52454ed0b/ABOUT.md">GitHub →
           </v-btn>
         </div>
       </v-col>
