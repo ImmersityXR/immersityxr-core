@@ -6,9 +6,7 @@ rc-status
 /etc/init.d/mariadb setup
 /usr/bin/mariadbd-safe --datadir='/home/mysql' --nowatch --socket='/run/mysqld/mysqld.sock'
 
-sleep 60
-# rc-service mariadb start
-# rc-update add mariadb default
+sleep 10
 
 cd /komodo/portal/backend/db/scripts
 mariadb-admin --verbose create $MYSQL_DATABASE
