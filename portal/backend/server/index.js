@@ -37,11 +37,14 @@ pool.on("enqueue", () => {
   console.debug(status);
 });
 
-let conn = pool.getConnection((error, connection) => {
+let conn;
+pool.getConnection((error, connection) => {
   if (error) {
     status = `error`;
     console.dir(error.stack);
+    return;
   }
+  conn = connection;
 });
 
 const app = express();
@@ -87,7 +90,7 @@ app.use("/data", dataController);
 app.use("/public", publicController);
 app.use("/turn", turnController);
 
-app.get('/', (req, res) => res.send('<p>Hello Komodo!</p><p>Database status: ' + status + '</p>'));
+app.get('/', (req, res) => res.send('<p>Hello Komodo!</p><p>Database status: ' + status + '</p><a href="/api-docs">API Docs</a>'));
 
 app.get('/s3_signed/:name', (req, res) => {
   const name = req.params.name;
@@ -105,4 +108,24 @@ app.get('/s3_signed/:name', (req, res) => {
 });
 
 
-app.listen(port, () => console.log(`Komodo portal backend listening on port ${port}!`));
+let server = app.listen(port, () => console.log(`Komodo portal backend listening on port ${port}!`));
+
+const shutdownHandler = (signal) => {
+  console.log(`Received ${signal}. Shutting down gracefully...`);
+
+  //app.stoplistening(...)
+
+  console.log(`Releasing connection pool...`);
+  pool.releaseConnection(conn);
+
+  console.log(`Releasing connection...`);
+  conn.release();
+
+  console.log(`Shutting down server...`);
+  server.close();
+
+  console.log(`Done.`);
+}
+
+process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+process.on('SIGINT', () => shutdownHandler('SIGINT'));
