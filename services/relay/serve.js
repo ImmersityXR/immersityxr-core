@@ -32,7 +32,7 @@
 // SOFTWARE.
 
 /* jshint esversion: 6 */
-const config = require('config');
+const config = require('./config');
 const express = require('express');
 const monitorApp = express();
 const server = require('http').createServer(monitorApp);
