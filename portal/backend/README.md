@@ -40,3 +40,10 @@ ______________
 <a name="deployment"></a>
 ### Deployment
 The recommended Komodo deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+
+# Azure App Service
+## Persistence
+For the database to persist between container restarts, two things must be true:
+
+1. The database must be written to a subdirectory of `/home`, and
+2. The environment variable `WEBSITES_ENABLE_APP_SERVICE_STORAGE` must be true.
