@@ -5,10 +5,10 @@ FROM node:lts-alpine
 RUN mkdir -p /komodo/portal/backend/node_modules \
     && chown -R node:node /komodo/portal/backend
 WORKDIR /komodo/portal/backend
-COPY --chown=node:node package*.json ./
+COPY --chown=node:node server/package*.json ./
 USER node
 RUN npm install
-COPY --chown=node:node . .
+COPY --chown=node:node server/ .
 EXPOSE 4040
 
 # === install and run ssh ===
@@ -24,13 +24,18 @@ COPY sshd_config /etc/ssh/
 
 # === install and run mysql === 
 
-RUN apk add mariadb mariadb-client mariadb-dev
+COPY ./db/scripts /komodo/portal/backend/db/scripts
+
+RUN apk add mariadb mariadb-client mariadb-dev \
+    && mkdir /home/mysql \
+    && chown mysql /home/mysql \
+    && chown mysql /komodo/portal/backend/db/scripts
 
 COPY --chmod=644 ./db/my.cnf /etc/mysql/my.cnf
 COPY --chmod=644 ./db/mariadb-server.cnf /etc/my.cnf.d/mariadb-server.cnf
 COPY --chmod=744 ./db/mariadb /etc/init.d/mariadb
 
-COPY --chmod=550 ./entrypoint.sh /usr/bin/entrypoint.sh
+COPY --chmod=744 ./entrypoint.sh /usr/bin/entrypoint.sh
 # COPY ./db/scripts /docker-entrypoint-initdb.d
 VOLUME /sys/fs/cgroup
 

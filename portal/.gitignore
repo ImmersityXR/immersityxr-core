@@ -5,3 +5,4 @@ backend/package-lock.json
 frontend/dist
 node_modules
 backend/db/.env*
+backend/.env

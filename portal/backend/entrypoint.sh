@@ -3,17 +3,13 @@
 openrc default
 rc-status
 
-mkdir /home/mysql
-chown mysql /home/mysql
-
 /etc/init.d/mariadb setup
 /usr/bin/mariadbd-safe --datadir='/home/mysql'
 
-rc-service mariadb start
-rc-update add mariadb default
+# rc-service mariadb start
+# rc-update add mariadb default
 
 cd /komodo/portal/backend/db/scripts
-chown mysql .
 mariadb-admin --verbose create $MYSQL_DATABASE
 mariadb --database=$MYSQL_DATABASE < 01_CreateInitialTables.sql
 mariadb --database=$MYSQL_DATABASE < 02_InsertInitialData.sql
