@@ -1,4 +1,5 @@
 module.exports = {
+    config_hint: 'use single quotes only for maximum compatibility with GitHub Actions scripts',
     mysql: {
         host: '',
         user: '',
@@ -8,10 +9,11 @@ module.exports = {
     },
     cors: {
         origins: [
-            "http://localhost:8080"
+            'http://localhost:8080'
         ]
     },
-    mysql_hint: 'find config values from immersity-db environment variables',
+    cors_hint: 'comma-separated list of origins (no trailing slash) for build server, analytics server, front end',
+    mysql_hint: 'find config values from setenv.sh or environment variables starting with MYSQL_',
     web: {
         session_secret: '',
         hint_session_secret: 'any phrase to encrypt the session cookie',
