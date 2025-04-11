@@ -57,8 +57,6 @@ const chatServer = require('./chat');
 //TODO: rename to `diagnostics`
 const adminServer = require('./admin');
 
-const config = require('./config');
-
 // set up logging
 const { createLogger, format, transports } = require('winston');
 
