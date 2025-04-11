@@ -1,6 +1,6 @@
 FROM node:latest
-COPY . /komodo
-WORKDIR /komodo
+COPY . /immersity
+WORKDIR /immersity
 RUN npm install
 
 # Start and enable SSH

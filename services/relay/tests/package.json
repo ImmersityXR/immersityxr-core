@@ -1,7 +1,7 @@
 {
   "name": "tests",
   "version": "1.0.0",
-  "description": "test suite for Komodo relay server",
+  "description": "test suite for Immersity relay server",
   "main": "test.js",
   "scripts": {
     "test": "node test.js"

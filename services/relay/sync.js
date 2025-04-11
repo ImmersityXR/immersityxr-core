@@ -77,7 +77,7 @@ const SYNC_OBJECTS = 3;
 
 const STATE_VERSION = 2;
 
-const SERVER_NAME = "Komodo Dev (IL)";
+const SERVER_NAME = "Immersity Dev (IL)";
 
 const SYNC_NAMESPACE = "/sync";
 
@@ -100,7 +100,7 @@ const SocketIOEvents = {
   error: "error"
 };
 
-const KomodoReceiveEvents = {
+const ImmersityReceiveEvents = {
   requestToJoinSession: "join",
   leave: "leave",
   sessionInfo: "sessionInfo",
@@ -114,7 +114,7 @@ const KomodoReceiveEvents = {
   playback: "playback",
 };
 
-const KomodoSendEvents = {
+const ImmersitySendEvents = {
   connectionError: "connectionError",
   interactionUpdate: "interactionUpdate",
   clientJoined: "joined",
@@ -134,7 +134,7 @@ const KomodoSendEvents = {
   rejectUser: "rejectUser",
 };
 
-const KomodoMessages = {
+const ImmersityMessages = {
     interaction: {
         type: "interaction",
         minLength: 5, //TODO: what should this number be?
@@ -563,7 +563,7 @@ module.exports = {
     //     // }
 
     //     // // emit audio manifest to connected clients
-    //     // io.of('chat').to(session_id.toString()).emit(KomodoSendEvents.playbackAudioManifest', audioManifest);
+    //     // io.of('chat').to(session_id.toString()).emit(ImmersitySendEvents.playbackAudioManifest', audioManifest);
 
     //     // // stream all audio files for caching and playback by client
     //     // audioManifest.forEach((file) => {
@@ -571,7 +571,7 @@ module.exports = {
     //     //         file.data = data;
     //     //         if(err) if (this.logger) this.logger.error(`Error reading audio file: ${file.path}`);
     //     //         // console.log('emitting audio packet:', file);
-    //     //         io.of('chat').to(session_id.toString()).emit(KomodoSendEvents.playbackAudioData', file);
+    //     //         io.of('chat').to(session_id.toString()).emit(ImmersitySendEvents.playbackAudioData', file);
     //     //     });
     //     // });
 
@@ -583,7 +583,7 @@ module.exports = {
     //     let playbackStart = Date.now();
 
     //     // position data emit loop
-    //     stream.on(KomodoReceiveEvents.data, function(chunk) {
+    //     stream.on(ImmersityReceiveEvents.data, function(chunk) {
     //         stream.pause();
 
     //         // start data buffer loop
@@ -608,30 +608,30 @@ module.exports = {
     //                 // if (!audioStarted) {
     //                 //     // HACK(rob): trigger clients to begin playing buffered audio
     //                 //     audioStarted = true;
-    //                 //     io.of('chat').to(session_id.toString()).emit(KomodoSendEvents.startPlaybackAudio');
+    //                 //     io.of('chat').to(session_id.toString()).emit(ImmersitySendEvents.startPlaybackAudio');
     //                 // }
-    //                 io.to(session_id.toString()).emit(KomodoSendEvents.relayUpdate', arr);
+    //                 io.to(session_id.toString()).emit(ImmersitySendEvents.relayUpdate', arr);
     //                 stream.resume();
     //                 clearInterval(timer);
     //             }
     //         }, 1);
     //     });
 
-    //     stream.on(KomodoReceiveEvents.error, function(err) {
+    //     stream.on(ImmersityReceiveEvents.error, function(err) {
     //         if (this.logger) this.logger.error(`Error creating position playback stream for ${playback_id} ${start}: ${err}`);
-    //         io.to(session_id.toString()).emit(KomodoSendEvents.playbackEnd');
+    //         io.to(session_id.toString()).emit(ImmersitySendEvents.playbackEnd');
     //     });
 
-    //     stream.on(KomodoReceiveEvents.end, function() {
+    //     stream.on(ImmersityReceiveEvents.end, function() {
     //         if (this.logger) this.logger.info(`End of pos data for playback session: ${session_id}`);
-    //         io.to(session_id.toString()).emit(KomodoSendEvents.playbackEnd');
+    //         io.to(session_id.toString()).emit(ImmersitySendEvents.playbackEnd');
     //     });
 
     //     // interaction streaming
     //     let ipath = this.getCapturePath(capture_id, start, 'int');
     //     let istream = fs.createReadStream(ipath, { highWaterMark: interactionChunkSize() });
 
-    //     istream.on(KomodoReceiveEvents.data, function(chunk) {
+    //     istream.on(ImmersityReceiveEvents.data, function(chunk) {
     //         istream.pause();
 
     //         let buff = Buffer.from(chunk);
@@ -645,7 +645,7 @@ module.exports = {
     //             // console.log(`=== INT === current seq ${current_seq}; arr seq ${arr[INT_FIELDS-1]}`);
 
     //             if (arr[INT_FIELDS-1] <= current_seq) {
-    //                 io.to(session_id.toString()).emit(KomodoSendEvents.interactionUpdate', arr);
+    //                 io.to(session_id.toString()).emit(ImmersitySendEvents.interactionUpdate', arr);
     //                 istream.resume();
     //                 clearInterval(timer);
     //             }
@@ -653,14 +653,14 @@ module.exports = {
 
     //     });
 
-    //     istream.on(KomodoReceiveEvents.error, function(err) {
+    //     istream.on(ImmersityReceiveEvents.error, function(err) {
     //         if (this.logger) this.logger.error(`Error creating interaction playback stream for session ${session_id}: ${err}`);
-    //         io.to(session_id.toString()).emit(KomodoSendEvents.interactionpPlaybackEnd');
+    //         io.to(session_id.toString()).emit(ImmersitySendEvents.interactionpPlaybackEnd');
     //     });
 
-    //     istream.on(KomodoReceiveEvents.end, function() {
+    //     istream.on(ImmersityReceiveEvents.end, function() {
     //         if (this.logger) this.logger.info(`End of int data for playback session: ${session_id}`);
-    //         io.to(session_id.toString()).emit(KomodoSendEvents.interactionPlaybackEnd');
+    //         io.to(session_id.toString()).emit(ImmersitySendEvents.interactionPlaybackEnd');
     //     });
     // }
   },
@@ -784,7 +784,7 @@ module.exports = {
       // relay interaction events to all connected clients
       socket
         .to(session_id.toString())
-        .emit(KomodoSendEvents.interactionUpdate, data);
+        .emit(ImmersitySendEvents.interactionUpdate, data);
 
       // do session state update if needed
       let source_id = data[3];
@@ -1811,7 +1811,7 @@ module.exports = {
     const { session_id, client_id } = this.whoDisconnected(socket);
 
     if (session_id == null) {
-      //socket not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
+      //socket not found in our records. This will happen for immersity-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
       this.logInfoSessionClientSocketAction(
         null,
         null,
@@ -1823,7 +1823,7 @@ module.exports = {
     }
 
     if (client_id == null) {
-      //client not found in our records. This will happen for komodo-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
+      //client not found in our records. This will happen for immersity-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
       this.logInfoSessionClientSocketAction(
         null,
         null,
@@ -2070,7 +2070,7 @@ module.exports = {
   },
 
   applyObjectsSyncPackedArrayToState: function (session, packedArray) {
-    let entity_id = packedArray[KomodoMessages.sync.indices.entityId];
+    let entity_id = packedArray[ImmersityMessages.sync.indices.entityId];
 
     let foundEntity = this.getEntityFromState(session, entity_id);
 
@@ -2234,25 +2234,25 @@ module.exports = {
 
   // currently unused.
   applyInteractionPackedArrayToState: function (data, type, packedArray, session_id, client_id, socket) {
-    if (message.length < KomodoMessages.interaction.minLength) {
+    if (message.length < ImmersityMessages.interaction.minLength) {
       this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, "poorly formed interaction message: data.message.length was incorrect");
 
       return;
     }
 
-    let source_id = message[KomodoMessages.interaction.indices.sourceId];
+    let source_id = message[ImmersityMessages.interaction.indices.sourceId];
 
     if (source_id == null) {
         this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `poorly formed interaction message: ${JSON.stringify(message)}`);
     }
 
-    let target_id = message[KomodoMessages.interaction.indices.targetId];
+    let target_id = message[ImmersityMessages.interaction.indices.targetId];
 
     if (target_id == null) {
         this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `poorly formed interaction message: ${message.toString()}`);
     }
 
-    let interaction_type = message[KomodoMessages.interaction.indices.interactionType];
+    let interaction_type = message[ImmersityMessages.interaction.indices.interactionType];
 
     if (interaction_type == null) {
         this.logErrorSessionClientSocketAction(session_id, client_id, socket.id, `poorly formed interaction message: ${message.toString()}`);
@@ -2263,7 +2263,7 @@ module.exports = {
 
   // Not currently used.
   applySyncPackedArrayToState: function(data, type, packedArray, session_id, client_id, socket) {
-    let entity_type = data.message[KomodoMessages.sync.indices.entityType];
+    let entity_type = data.message[ImmersityMessages.sync.indices.entityType];
 
     if (entity_type == null) {
       this.logErrorSessionClientSocketAction(null, null, null, JSON.stringify(data.message));
@@ -2282,11 +2282,11 @@ module.exports = {
     }
 
     // get reference to session and parse message payload for state updates, if needed.
-    if (type == KomodoMessages.interaction.type) {
+    if (type == ImmersityMessages.interaction.type) {
       this.applyInteractionMessageToState(session, message.targetEntity_id, message.interactionType);
     }
 
-    if (data.type == KomodoMessages.sync.type) {
+    if (data.type == ImmersityMessages.sync.type) {
       this.applySyncMessageToState(session, message);
     }
   },
@@ -2521,11 +2521,11 @@ module.exports = {
     }
 
     this.connectionAuthorizationErrorAction = function (socket, message) {
-      socket.emit(KomodoSendEvents.connectionError, message);
+      socket.emit(ImmersitySendEvents.connectionError, message);
     };
 
     this.messageAction = function (socket, session_id, data) {
-      socket.to(session_id.toString()).emit(KomodoSendEvents.message, data);
+      socket.to(session_id.toString()).emit(ImmersitySendEvents.message, data);
     };
 
     this.notifyBumpAction = function (session_id, socket) {
@@ -2537,7 +2537,7 @@ module.exports = {
       );
 
       // Let the client know it has been bumped
-      socket.emit(KomodoSendEvents.notifyBump, session_id);
+      socket.emit(ImmersitySendEvents.notifyBump, session_id);
     };
 
     this.rejectUserAction = function (socket, reason) {
@@ -2549,7 +2549,7 @@ module.exports = {
       );
 
       // Let the client know it has been bumped
-      socket.emit(KomodoSendEvents.rejectUser, reason);
+      socket.emit(ImmersitySendEvents.rejectUser, reason);
     };
 
     this.makeSocketLeaveSessionAction = function (session_id, socket) {
@@ -2612,7 +2612,7 @@ module.exports = {
     };
 
     this.failedToJoinAction = function (session_id, reason, socket) {
-      socket.emit(KomodoSendEvents.failedToJoin, session_id, reason);
+      socket.emit(ImmersitySendEvents.failedToJoin, session_id, reason);
     };
 
     this.successfullyJoinedAction = function (session_id, client_id, socket) {
@@ -2620,10 +2620,10 @@ module.exports = {
       self.writeEventToConnections("connect", session_id, client_id);
 
       // tell other clients that a client joined
-      socket.to(session_id.toString()).emit(KomodoSendEvents.clientJoined, client_id);
+      socket.to(session_id.toString()).emit(ImmersitySendEvents.clientJoined, client_id);
 
       // tell the joining client that they successfully joined
-      socket.emit(KomodoSendEvents.successfullyJoined, session_id);
+      socket.emit(ImmersitySendEvents.successfullyJoined, session_id);
     };
 
     //TODO(Brandon) -- somewhere, handle request to leave and log to server output.
@@ -2635,15 +2635,15 @@ module.exports = {
     };
 
     this.failedToLeaveAction = function (session_id, reason, socket) {
-      socket.emit(KomodoSendEvents.failedToLeave, session_id, reason);
+      socket.emit(ImmersitySendEvents.failedToLeave, session_id, reason);
     };
 
     this.successfullyLeftAction = function (session_id, client_id, socket) {
       // notify others the client has left
-      socket.to(session_id.toString()).emit(KomodoSendEvents.left, client_id);
+      socket.to(session_id.toString()).emit(ImmersitySendEvents.left, client_id);
 
       // tell the leaving client that they successfully left
-      socket.emit(KomodoSendEvents.successfullyLeft, session_id);
+      socket.emit(ImmersitySendEvents.successfullyLeft, session_id);
     };
 
     this.disconnectAction = function (socket, session_id, client_id) {
@@ -2661,11 +2661,11 @@ module.exports = {
       // notify others the client has disconnected
       socket
         .to(session_id.toString())
-        .emit(KomodoSendEvents.disconnected, client_id);
+        .emit(ImmersitySendEvents.disconnected, client_id);
     };
 
     this.stateErrorAction = function (socket, message) {
-      socket.emit(KomodoSendEvents.stateError, message);
+      socket.emit(ImmersitySendEvents.stateError, message);
     };
 
     // returns true for successful reconnection
@@ -2692,12 +2692,12 @@ module.exports = {
     };
 
     this.sendStateCatchUpAction = function (socket, state) {
-      socket.emit(KomodoSendEvents.state, state);
+      socket.emit(ImmersitySendEvents.state, state);
     };
 
     // main relay handler
     io.of(SYNC_NAMESPACE).on(SocketIOEvents.connection, function (socket) {
-      socket.emit(KomodoSendEvents.serverName, `${SERVER_NAME} + ${SYNC_NAMESPACE}`);
+      socket.emit(ImmersitySendEvents.serverName, `${SERVER_NAME} + ${SYNC_NAMESPACE}`);
 
       self.logInfoSessionClientSocketAction(
         null,
@@ -2712,7 +2712,7 @@ module.exports = {
 
       // self.socketRepairCenter.repairSocketIfEligible();
 
-      socket.on(KomodoReceiveEvents.sessionInfo, function (session_id) {
+      socket.on(ImmersityReceiveEvents.sessionInfo, function (session_id) {
         let session = self.sessions.get(session_id);
 
         if (!session) {
@@ -2726,10 +2726,10 @@ module.exports = {
           return;
         }
 
-        socket.to(session_id.toString()).emit(KomodoSendEvents.sessionInfo, session);
+        socket.to(session_id.toString()).emit(ImmersitySendEvents.sessionInfo, session);
       });
 
-      socket.on(KomodoReceiveEvents.requestToJoinSession, function (data) {
+      socket.on(ImmersityReceiveEvents.requestToJoinSession, function (data) {
         let session_id = data[0];
 
         let client_id = data[1];
@@ -2757,7 +2757,7 @@ module.exports = {
             session_id,
             client_id,
             socket.id,
-            `in socket.on(${KomodoReceiveEvents.requestToJoinSession}), requestToJoinSessionAction callback was not provided`
+            `in socket.on(${ImmersityReceiveEvents.requestToJoinSession}), requestToJoinSessionAction callback was not provided`
           );
 
           return;
@@ -2767,7 +2767,7 @@ module.exports = {
       });
 
       // When a client requests a state catch-up, send the current session state. Supports versioning.
-      socket.on(KomodoReceiveEvents.requestOwnStateCatchup, function (data) {
+      socket.on(ImmersityReceiveEvents.requestOwnStateCatchup, function (data) {
         let { session_id, state } = self.handleStateCatchupRequest(socket, data);
 
         if (session_id == -1 || !state) {
@@ -2791,7 +2791,7 @@ module.exports = {
         //TODO -- refactor this so that sendStateCatchupAction gets called within handleStateCatchupRequest or something like that.
         try {
           // emit versioned state data
-          socket.emit(KomodoSendEvents.state, state); // Behavior as of 10/7/21: Sends the state only to the client who requested it.
+          socket.emit(ImmersitySendEvents.state, state); // Behavior as of 10/7/21: Sends the state only to the client who requested it.
         } catch (err) {
           this.logErrorSessionClientSocketAction(
             session_id,
@@ -2802,7 +2802,7 @@ module.exports = {
         }
       });
 
-      socket.on(KomodoReceiveEvents.draw, function (data) {
+      socket.on(ImmersityReceiveEvents.draw, function (data) {
         let session_id = data[1];
 
         let client_id = data[2];
@@ -2829,7 +2829,7 @@ module.exports = {
           return;
         }
 
-        socket.to(session_id.toString()).emit(KomodoSendEvents.draw, data);
+        socket.to(session_id.toString()).emit(ImmersitySendEvents.draw, data);
       });
 
       // general message relay
@@ -2838,7 +2838,7 @@ module.exports = {
       // of the various interactions we care about, eg. grab, drop, start/end recording, etc.
       // in order to update the session state accordingly. we will probably need to protect against
       // garbage values that might be passed by devs who are overwriting reserved message events.
-      socket.on(KomodoReceiveEvents.message, function (data) {
+      socket.on(ImmersityReceiveEvents.message, function (data) {
         if (socket == null) {
           self.logErrorSessionClientSocketAction(
             null,
@@ -2852,7 +2852,7 @@ module.exports = {
       });
 
       // client position update handler
-      socket.on(KomodoReceiveEvents.update, function (data) {
+      socket.on(ImmersityReceiveEvents.update, function (data) {
         if (!self.isValidRelayPacket(data)) {
           return;
         }
@@ -2862,7 +2862,7 @@ module.exports = {
         // relay packet if client is valid
         socket
           .to(session_id.toString())
-          .emit(KomodoSendEvents.relayUpdate, data);
+          .emit(ImmersitySendEvents.relayUpdate, data);
 
         // self.writeRecordedRelayData(data); NOTE(rob): DEPRECATED. 8/5/21.
 
@@ -2871,20 +2871,20 @@ module.exports = {
 
       // handle interaction events
       // see `INTERACTION_XXX` declarations for type values
-      socket.on(KomodoReceiveEvents.interact, function (data) {
+      socket.on(ImmersityReceiveEvents.interact, function (data) {
         self.handleInteraction(socket, data);
       });
 
       // session capture handler
-      socket.on(KomodoReceiveEvents.start_recording, function (session_id) {
+      socket.on(ImmersityReceiveEvents.start_recording, function (session_id) {
         self.start_recording(pool, session_id);
       });
 
-      socket.on(KomodoReceiveEvents.end_recording, function (session_id) {
+      socket.on(ImmersityReceiveEvents.end_recording, function (session_id) {
         self.end_recording(pool, session_id);
       });
 
-      socket.on(KomodoReceiveEvents.playback, function (data) {
+      socket.on(ImmersityReceiveEvents.playback, function (data) {
         self.handlePlayback(io, data);
       });
 

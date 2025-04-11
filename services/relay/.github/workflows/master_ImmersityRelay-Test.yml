@@ -29,11 +29,11 @@ jobs:
     - name: Build and push container image to registry
       run: |
         echo "${{ secrets.BUILD_CONFIG }}" >> ./config.js
-        docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
-        docker create --name relay-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
-        docker export relay-inspect | tar t | grep komodo/config
+        docker build . -t immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/immersity-relay/immersity-relay:${{ github.sha }}
+        docker create --name relay-inspect immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/immersity-relay/immersity-relay:${{ github.sha }}
+        docker export relay-inspect | tar t | grep immersity/config
         docker rm relay-inspect
-        docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}
+        docker push immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/immersity-relay/immersity-relay:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -50,4 +50,4 @@ jobs:
         app-name: 'ImmersityRelay-Test'
         slot-name: 'production'
         publish-profile: ${{ secrets.AzureAppService_PublishProfile_22ce9d32e9714aa28e9ecd5c76c71950 }}
-        images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/komodo-relay/komodo-relay:${{ github.sha }}'
+        images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_66221a05b2a7425a9425cddaaf2da857 }}/immersity-relay/immersity-relay:${{ github.sha }}'

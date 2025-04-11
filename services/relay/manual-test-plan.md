@@ -1,7 +1,7 @@
 
 # Manual Test Plan
 
-## Integration Tests with komodo-unity
+## Integration Tests with immersity-unity
 
 ### Capture feature — Pressing spectator mode capture button should produce a correct capture file
 
