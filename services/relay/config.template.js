@@ -9,6 +9,12 @@ module.exports = {
             rejectUnauthorized: false
         }
     },
+    cors: {
+        origins: [
+            'http://localhost',
+            'https://localhost'
+        ]
+    },
     azure: {
         subscriptionKey: "",
         serviceRegion: ""

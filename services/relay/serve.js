@@ -32,7 +32,7 @@
 // SOFTWARE.
 
 /* jshint esversion: 6 */
-
+const config = require('config');
 const express = require('express');
 const monitorApp = express();
 const server = require('http').createServer(monitorApp);
@@ -44,17 +44,8 @@ var options = {
 }
 monitorApp.use(express.static('public', options));
 
-// TODO(bd): read in origins from config.js
 const io = require('socket.io')(server, {
-    origins: [
-        "http://localhost",
-        "https://localhost",
-        "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:80",
-        "http://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:8081",
-        "https://immersityrelay-test-cqgyeccffberfrbr.northcentralus-01.azurewebsites.net:443",
-        "http://immersitybuild-test-cwfpekgjcfbkfbat.northcentralus-01.azurewebsites.net:80",
-        "https://immersitybuild-test-cwfpekgjcfbkfbat.northcentralus-01.azurewebsites.net:443"
-    ]
+    origins: config.cors.origins
 });
 
 const mysql = require('mysql2');

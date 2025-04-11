@@ -1,6 +1,6 @@
 # Immersity Relay Server
 
-[Learn more about the Immersity Platform](https://github.com/gelic-idealab/immersity-docs)
+[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
 
 ## What is it?
 The relay server facilitates client communication during multiplayer sessions. It allows clients to join session namespaces or 'rooms', propagates client updates (including positions within the VR scene and interactions with entities or other clients), coordinates chat sessions (including text and voice/video/screen) [1], maintains session state (including active clients, entity and scene state, session properties), and captures data during session recording. 
@@ -19,7 +19,7 @@ _______________
 #### Getting started
 You will need [Node.js](https://nodejs.org/en/download/) installed on your machine.
 1. Clone this repository
-    * `git clone https://github.com/gelic-idealab/immersity-relay.git`
+    * `git clone https://github.com/ImmersityXR/immersity-relay.git`
     * `cd immersity-relay/`
 
 2. Configure the Docker container
