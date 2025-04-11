@@ -23,9 +23,7 @@ services:
       - komodo_internal
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.production
+    build: ./frontend
     labels:
       - "traefik.frontend.rule=Host:komodo-dev.library.illinois.edu"
       - "traefik.backend=komodo-portal-frontend"

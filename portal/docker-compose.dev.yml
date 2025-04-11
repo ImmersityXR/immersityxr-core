@@ -13,15 +13,16 @@ services:
 
   backend:
     build: ./backend
+    env_file: ./backend/.env
     labels:
       - "traefik.enable=false"
+    volumes: 
+      - ~/Immersity\ XR/volumes/mysql:/home/mysql
     ports:
       - 4040:4040
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.development
+    build: ./frontend
     labels:
       - "traefik.enable=false"
     ports: 
