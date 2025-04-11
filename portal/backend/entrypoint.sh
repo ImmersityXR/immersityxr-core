@@ -4,7 +4,7 @@ openrc default
 rc-status
 
 /etc/init.d/mariadb setup
-/usr/bin/mariadbd-safe --datadir='/home/mysql'
+/usr/bin/mariadbd-safe --datadir='/home/mysql' --nowatch
 
 # rc-service mariadb start
 # rc-update add mariadb default
