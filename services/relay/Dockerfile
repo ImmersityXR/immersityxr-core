@@ -1,9 +1,14 @@
 FROM node:latest
-COPY . /immersity
+
+COPY --chown=node:node ./package*.json /immersity/
 WORKDIR /immersity
+USER node
 RUN npm install
 
+COPY --chown=node:node . /immersity
+
 # Start and enable SSH
+USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends dialog \
     && apt-get install -y --no-install-recommends openssh-server \
