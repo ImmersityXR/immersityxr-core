@@ -18,7 +18,7 @@ cd ..
 # find $cur_dir -type d -exec curl --ftp-create-dirs -T {} "$host/{}/" \;
 for dir in $(find $cur_dir -type d)
 do
-    curl --ftp-create-dirs -T $dir $host/$dir/;
+    curl --verbose --ftp-create-dirs -T $dir $host/$dir/;
 done
 
 # to verify which files are being uploaded, uncomment this line:
@@ -26,5 +26,7 @@ done
 # find $cur_dir -type f -exec curl -T {} "$host/{}" \;
 for file in $(find $cur_dir -type f)
 do
-    curl -T $file $host/$file;
+    curl --verbose -T $file $host/$file;
 done
+
+# An HTTP 301 error can mean that you are using http:// instead of https://.
