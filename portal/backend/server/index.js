@@ -18,7 +18,7 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-let status = "initializing";
+let status = "initializing...";
 
 pool.on("connection", (connection) => {
   status = `connection established: ${connection.threadId}`;
