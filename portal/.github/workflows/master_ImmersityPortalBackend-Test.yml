@@ -50,7 +50,7 @@ jobs:
       id: deploy-to-webapp
       uses: azure/webapps-deploy@v2
       with:
-        app-name: 'ImmersityPortalBackend-Test'
+        app-name: 'ImmersityPortalBack-Test'
         slot-name: 'production'
-        publish-profile: ${{ secrets.AzureAppService_PublishProfile_df8ba1adf17e44d9930dea21f91b6a80 }}
+        publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_5B14B40B53194C479512208524EF6677 }}
         images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_dcd09d95ba9c44ae8fca70ff0ef6834e }}/immersity-portal-backend/immersity-portal-backend:${{ github.sha }}'
