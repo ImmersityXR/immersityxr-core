@@ -61,4 +61,4 @@ jobs:
           app-name: 'ImmersityPortalBack-Test'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_5B14B40B53194C479512208524EF6677 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_2B161737334B498AA20318C83A7CD428 }}
