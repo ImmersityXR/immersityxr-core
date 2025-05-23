@@ -46,7 +46,7 @@
 
     <v-list class="side-bar-bottom-wrapper" nav dense>
       <v-list-item>
-        1.2.2 <!-- TODO -- update this manually with every version -->
+        v1.4.0 <!-- TODO -- update this manually with every version -->
       </v-list-item>
     </v-list>
   </v-navigation-drawer>
