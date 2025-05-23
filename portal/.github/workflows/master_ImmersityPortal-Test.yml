@@ -51,5 +51,5 @@ jobs:
       with:
         app-name: 'ImmersityPortalFront-Test'
         slot-name: 'production'
-        publish-profile: ${{ secrets.AzureAppService_PublishProfile_6bc360f9b91049d395f2e2b45704986c }}
-        images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_794c6cd0c86f4f8b9b65c7c6646e003d }}/immersity-portal/immersity-portal:${{ github.sha }}'
+        publish-profile: ${{ secrets.AzureAppService_PublishProfile_b8360e2c254c41cf9fa6bfb749b03805 }}
+        images: 'immersityxr.azurecr.io/${{ secrets.AzureAppService_ContainerUsername_d31e941577014599a0b5501ef627e47b }}/immersity-portal/immersity-portal:${{ github.sha }}'
