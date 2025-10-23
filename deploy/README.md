@@ -84,7 +84,41 @@ TZ=America/Chicago                     # Your timezone
 
 **Note:** The email from `.env` is automatically used for Let's Encrypt. You don't need to edit `traefik.yml`.
 
-### Step 3: Deploy!
+### Step 3: Add Unity Builds to builds Folder
+
+**Important:** Unity WebGL builds must be placed in the `immersity-buildserver/builds/` directory.
+
+**Download from GitHub Releases:**
+
+1. Visit the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases)
+2. Download the desired version (e.g., v0.5.8, v0.5.7)
+3. Place the build in the builds folder:
+
+```bash
+# Navigate to builds directory
+cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+
+# Download and extract build (replace URL with actual release asset)
+wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm/v0.5.8/build.zip
+unzip build.zip
+rm build.zip
+
+# Or copy from existing deployment if available
+cp -R ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds/your-build-folder ./
+
+# Or upload from local machine
+# scp -r ./your-unity-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+
+# Verify builds are in place
+ls -la ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+```
+
+**Note:** 
+- Unity builds are large and should NOT be committed to Git
+- The `.gitkeep` file ensures the builds directory structure is tracked
+- Multiple build versions can coexist in the builds folder
+
+### Step 4: Deploy!
 
 ```bash
 # Run deployment
@@ -98,7 +132,7 @@ Done! The script will:
 - Start all containers
 - Let's Encrypt will auto-generate certificates (30-60 seconds)
 
-### Step 4: Test
+### Step 5: Test
 
 ```bash
 # Wait 30-60 seconds for Let's Encrypt, then test:
@@ -108,21 +142,6 @@ curl -I https://yourdomain.edu
 ```
 
 Open browser: `https://yourdomain.edu/your-build/index.html?session=test&client=1`
-
-### Step 5: Upload Unity Build (Optional)
-
-```bash
-# Option 1: Upload via SCP from your local machine
-scp -r ./your-unity-build youruser@yourdomain.edu:~/immersity-deploy/immersity-buildserver/builds/
-
-# Option 2: Use Git (if builds are in repository)
-cd ~/immersity-deploy
-git add immersity-buildserver/builds/your-unity-build
-git commit -m "Add new Unity build"
-git push
-```
-
-No restart needed!
 
 That's it! Your Immersity VR environment is live at `https://yourdomain.edu`
 
@@ -195,30 +214,58 @@ TZ=America/Chicago                     # Your timezone
 
 **Note:** The email from `.env` is automatically passed to Traefik. You don't need to edit `traefik.yml`.
 
-### 3. Set Permissions
+### 3. Copy Unity Builds
+
+**Important:** The `immersity-deploy` repository is for deployment configuration only. Unity builds must be obtained from outside sources.
+
+#### Option 1: Copy from Existing Deployment
+
+```bash
+# Navigate to your existing deployment's builds directory
+cd ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds
+
+# Copy your Unity build folder to new deployment
+cp -R your-build-folder ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+
+# Verify builds are copied
+ls -la ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+```
+
+**Where to get Unity builds:** Download from the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases)
+
+#### Option 2: Upload from Local Machine
+
+```bash
+# Using SCP from your local machine
+scp -r ./your-unity-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+
+# Using rsync (recommended for large builds - shows progress and resumes on interruption)
+rsync -avz --progress ./your-unity-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+```
+
+#### Option 3: Download from Build Server
+
+```bash
+# If builds are hosted elsewhere, download them
+cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+wget https://your-build-server.com/unity-builds/v0.5.7.zip
+unzip v0.5.7.zip
+rm v0.5.7.zip
+```
+
+**Notes:** 
+- Unity builds are large (10-100+ MB) and should NOT be committed to Git
+- The `.gitkeep` file ensures the builds directory structure is tracked in Git
+- Ensure your build has the correct `relay.js` configuration for your domain
+- No container restart needed after copying builds
+
+### 4. Set Permissions
 
 The `acme.json` file must have restricted permissions for security:
 
 ```bash
 chmod 600 immersity-proxy/acme.json
 ```
-
-### 4. Upload Unity Build (Optional)
-
-```bash
-# Option 1: Upload via SCP from your local machine
-scp -r ./your-unity-build youruser@yourdomain.edu:~/immersity-deploy/immersity-buildserver/builds/
-
-# Option 2: Use Git (if builds are in repository)
-cd ~/immersity-deploy
-git add immersity-buildserver/builds/your-unity-build
-git commit -m "Add Unity build"
-git push
-
-# Option 3: Use SFTP/FTP client to upload to immersity-buildserver/builds/
-```
-
-**Important:** Ensure your build has the correct `relay.js` configuration for your domain.
 
 ### 5. Create Docker Network
 
@@ -382,26 +429,42 @@ docker logs immersity-proxy -f
 
 ### Update Unity Build
 
+Unity builds are stored outside of Git. Update them using one of these methods:
+
 ```bash
-# Option 1: Upload new build via SCP
-scp -r ./new-build youruser@yourdomain.edu:~/immersity-deploy/immersity-buildserver/builds/
+# Option 1: Copy from existing deployment
+cd ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds
+cp -R new-build ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
 
-# Option 2: Pull updates from Git
-cd ~/immersity-deploy
-git pull
+# Option 2: Upload new build via SCP from local machine
+scp -r ./new-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
 
-# Apply capture fix to relay.js if needed
-cp ~/immersity-deploy/immersity-buildserver/builds/v0.5.7/relay.js \
-   ~/immersity-deploy/immersity-buildserver/builds/new-build/relay.js
+# Option 3: Upload using rsync (better for large builds)
+rsync -avz --progress ./new-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
 
-# Update cache buster in index.html
-sed -i 's/relay.js"/relay.js?v=1"/' \
-   ~/immersity-deploy/immersity-buildserver/builds/new-build/index.html
-
-# No container restart needed - NGINX serves files directly
+# Option 4: Download from build server
+cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+wget https://your-build-server.com/new-build.zip
+unzip new-build.zip
+rm new-build.zip
 ```
 
-**Important:** The NGINX buildserver serves files from `~/immersity-deploy/immersity-buildserver/builds/`. Always update files in the deployment directory!
+**Apply capture fix to relay.js if needed:**
+
+```bash
+cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+
+# Copy working relay.js to new build
+cp v0.5.7/relay.js new-build/relay.js
+
+# Update cache buster in index.html
+sed -i 's/relay.js"/relay.js?v=1"/' new-build/index.html
+```
+
+**Important:** 
+- No container restart needed - NGINX serves files directly
+- Builds should NOT be committed to Git (they're in .gitignore)
+- The buildserver serves from `~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/`
 
 ### Create Clean URLs with Symbolic Links
 
@@ -597,11 +660,19 @@ git clone https://github.com/your-org/immersity-deploy.git
 cd immersity-deploy
 ```
 
-### 2. Copy Builds
+### 2. Copy Unity Builds
 
 ```bash
+# Copy builds from existing deployment
+cd ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds
+cp -R your-build-folder ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+
+# Or copy from older three-repo setup
 cp -r ~/workspace-immersity/immersity-build/builds/* \
-      immersity-buildserver/builds/
+      ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+
+# Or download from releases
+# See: https://github.com/gelic-idealab/komodo-unity/releases
 ```
 
 ### 3. Copy Captures
