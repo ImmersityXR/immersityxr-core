@@ -98,10 +98,10 @@ TZ=America/Chicago                     # Your timezone
 # Navigate to builds directory
 cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
 
-# Download and extract build (replace URL with actual release asset)
-wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm/v0.5.8/build.zip
-unzip build.zip
-rm build.zip
+# Download and extract build (example using v0.5.8)
+wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm%2Fv0.5.8/v0.5.8.zip
+unzip v0.5.8.zip
+rm v0.5.8.zip
 
 # Or copy from existing deployment if available
 cp -R ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds/your-build-folder ./
