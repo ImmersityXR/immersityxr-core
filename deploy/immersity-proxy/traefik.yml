@@ -1,0 +1,54 @@
+# ===========================================================================
+# Traefik 2.x Static Configuration
+# ===========================================================================
+
+# API and Dashboard
+api:
+  dashboard: true
+  insecure: true  # Enable dashboard on port 8080 (disable in production)
+
+# Entry Points
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+# Docker Provider
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: proxy
+
+# Let's Encrypt Certificate Resolver
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@yourdomain.edu  # CHANGE THIS to your email
+      storage: /acme.json
+      # Use HTTP challenge (port 80 must be open)
+      httpChallenge:
+        entryPoint: web
+      # Alternative: Use TLS challenge (if you prefer)
+      # tlsChallenge: {}
+      # Alternative: Use DNS challenge (requires DNS provider API)
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   delayBeforeCheck: 0
+
+# Logging
+log:
+  level: INFO  # DEBUG, INFO, WARN, ERROR
+  
+accessLog:
+  filePath: "/dev/stdout"
+  format: common
+
+
+
+
+
+
+
+

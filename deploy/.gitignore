@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+
+# Let's Encrypt certificates
+immersity-proxy/acme.json
+
+# Captures (recorded sessions)
+immersity-relay/captures/*
+!immersity-relay/captures/.gitkeep
+
+# Unity builds (too large for git)
+immersity-buildserver/builds/*
+!immersity-buildserver/builds/.gitkeep
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
