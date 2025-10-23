@@ -32,7 +32,7 @@ services:
   # Immersity Relay - WebSocket/Socket.IO Server
   # ===========================================================================
   immersity-relay:
-    image: immersity-relay:latest
+    image: immersityxr/immersity-relay:0.1.0
     container_name: immersity-relay
     restart: always
     volumes:
@@ -62,7 +62,7 @@ services:
   # Immersity Build Server - Static File Server (NGINX)
   # ===========================================================================
   immersity-buildserver:
-    image: immersity-buildserver:latest
+    image: immersityxr/immersity-buildserver:0.1.0
     container_name: immersity-buildserver
     restart: always
     volumes:
