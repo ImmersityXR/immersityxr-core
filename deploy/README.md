@@ -214,60 +214,34 @@ TZ=America/Chicago                     # Your timezone
 
 **Note:** The email from `.env` is automatically passed to Traefik. You don't need to edit `traefik.yml`.
 
-### 3. Copy Unity Builds
+### 3. Download Unity Build
 
-**Important:** The `immersity-deploy` repository is for deployment configuration only. Unity builds must be obtained from outside sources.
+Unity WebGL builds must be downloaded and placed in the `immersity-buildserver/builds/` directory.
 
-#### Option 1: Copy from Existing Deployment
+**Download from GitHub Releases:**
 
-```bash
-# Navigate to your existing deployment's builds directory
-cd ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds
-
-# Copy your Unity build folder to new deployment
-cp -R your-build-folder ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Verify builds are copied
-ls -la ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-```
-
-**Where to get Unity builds:** Download from the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases)
-
-#### Option 2: Upload from Local Machine
+Visit the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases) and download the desired version.
 
 ```bash
-# Using SCP from your local machine
-scp -r ./your-unity-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Using rsync (recommended for large builds - shows progress and resumes on interruption)
-rsync -avz --progress ./your-unity-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-```
-
-#### Option 3: Download from Build Server
-
-```bash
-# If builds are hosted elsewhere, download them
+# Navigate to builds directory
 cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
-wget https://your-build-server.com/unity-builds/v0.5.7.zip
-unzip v0.5.7.zip
-rm v0.5.7.zip
+
+# Download and extract build (example using v0.5.8)
+wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm%2Fv0.5.8/v0.5.8.zip
+unzip v0.5.8.zip
+rm v0.5.8.zip
+
+# Verify build is in place
+ls -la
 ```
 
 **Notes:** 
 - Unity builds are large (10-100+ MB) and should NOT be committed to Git
 - The `.gitkeep` file ensures the builds directory structure is tracked in Git
-- Ensure your build has the correct `relay.js` configuration for your domain
-- No container restart needed after copying builds
+- Multiple build versions can coexist in the builds folder
+- Check the [releases page](https://github.com/gelic-idealab/komodo-unity/releases) for the latest version
 
-### 4. Set Permissions
-
-The `acme.json` file must have restricted permissions for security:
-
-```bash
-chmod 600 immersity-proxy/acme.json
-```
-
-### 5. Create Docker Network
+### 4. Create Docker Network
 
 If the `proxy` network doesn't exist yet:
 
@@ -275,7 +249,7 @@ If the `proxy` network doesn't exist yet:
 docker network create proxy
 ```
 
-### 6. Deploy
+### 5. Deploy
 
 ```bash
 cd ~/immersity-deploy
