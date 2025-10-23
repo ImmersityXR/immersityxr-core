@@ -87,9 +87,6 @@ TZ=America/Chicago                     # Your timezone
 ### Step 3: Deploy!
 
 ```bash
-# Make deploy script executable
-chmod +x deploy.sh down.sh
-
 # Run deployment
 ./deploy.sh
 ```
@@ -237,7 +234,6 @@ docker network create proxy
 cd ~/immersity-deploy
 
 # Option 1: Use the automated deploy script (recommended)
-chmod +x deploy.sh down.sh
 ./deploy.sh
 
 # Option 2: Manual deployment
