@@ -61,7 +61,7 @@ Perfect for first-time setup or quick deployment.
 ssh youruser@yourdomain.edu
 
 # Clone the repository
-git clone https://github.com/your-org/immersity-deploy.git
+git clone https://github.com/ImmersityXR/immersity-deploy.git
 cd immersity-deploy
 ```
 
@@ -191,7 +191,7 @@ For those who want more control or need detailed explanations, here's the step-b
 ssh youruser@yourdomain.edu
 
 # Clone the repository
-git clone https://github.com/your-org/immersity-deploy.git
+git clone https://github.com/ImmersityXR/immersity-deploy.git
 cd immersity-deploy
 ```
 
@@ -656,7 +656,7 @@ If you're migrating from the three-repository setup:
 
 ```bash
 cd ~
-git clone https://github.com/your-org/immersity-deploy.git
+git clone https://github.com/ImmersityXR/immersity-deploy.git
 cd immersity-deploy
 ```
 
