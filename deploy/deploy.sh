@@ -30,7 +30,7 @@ if [ ! -f ".env" ]; then
     echo -e "${COLOR_YELLOW}Warning: .env file not found${COLOR_RESET}"
     echo "Creating .env from env.example..."
     cp env.example .env
-    echo -e "${COLOR_YELLOW}⚠️  Please edit .env with your domain before continuing${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}WARNING: Please edit .env with your domain before continuing${COLOR_RESET}"
     echo "Run: nano .env"
     exit 1
 fi
@@ -38,7 +38,7 @@ fi
 # Source .env
 source .env
 
-echo -e "${COLOR_GREEN}✓${COLOR_RESET} Configuration loaded"
+echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Configuration loaded"
 echo "  Domain: ${DOMAIN}"
 echo ""
 
@@ -47,22 +47,22 @@ if ! command -v docker &> /dev/null; then
     echo -e "${COLOR_RED}Error: Docker not installed${COLOR_RESET}"
     exit 1
 fi
-echo -e "${COLOR_GREEN}✓${COLOR_RESET} Docker installed"
+echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Docker installed"
 
 # Check Docker Compose
 if ! docker compose version &> /dev/null; then
     echo -e "${COLOR_RED}Error: Docker Compose not installed${COLOR_RESET}"
     exit 1
 fi
-echo -e "${COLOR_GREEN}✓${COLOR_RESET} Docker Compose installed"
+echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Docker Compose installed"
 
 # Check if network exists
 if ! docker network inspect proxy &> /dev/null; then
     echo -e "${COLOR_YELLOW}Creating Docker network 'proxy'...${COLOR_RESET}"
     docker network create proxy
-    echo -e "${COLOR_GREEN}✓${COLOR_RESET} Network created"
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Network created"
 else
-    echo -e "${COLOR_GREEN}✓${COLOR_RESET} Docker network 'proxy' exists"
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Docker network 'proxy' exists"
 fi
 
 # Check acme.json permissions
@@ -72,17 +72,17 @@ if [ -f "immersity-proxy/acme.json" ]; then
         echo -e "${COLOR_YELLOW}Fixing acme.json permissions...${COLOR_RESET}"
         chmod 600 immersity-proxy/acme.json
     fi
-    echo -e "${COLOR_GREEN}✓${COLOR_RESET} acme.json permissions correct"
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} acme.json permissions correct"
 else
     echo -e "${COLOR_YELLOW}Creating acme.json...${COLOR_RESET}"
     echo '{}' > immersity-proxy/acme.json
     chmod 600 immersity-proxy/acme.json
-    echo -e "${COLOR_GREEN}✓${COLOR_RESET} acme.json created"
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} acme.json created"
 fi
 
 # Check if builds directory has content
 if [ -z "$(ls -A immersity-buildserver/builds/)" ]; then
-    echo -e "${COLOR_YELLOW}⚠️  Warning: No Unity builds found in immersity-buildserver/builds/${COLOR_RESET}"
+    echo -e "${COLOR_YELLOW}WARNING: No Unity builds found in immersity-buildserver/builds/${COLOR_RESET}"
     echo "   Upload your Unity WebGL build before accessing the site"
 fi
 
@@ -95,7 +95,7 @@ docker compose up -d
 
 echo ""
 echo -e "${COLOR_GREEN}======================================================================="
-echo "  Deployment Complete! 🎉"
+echo "  Deployment Complete!"
 echo "=======================================================================${COLOR_RESET}"
 echo ""
 echo "Services:"

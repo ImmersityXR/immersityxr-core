@@ -20,6 +20,8 @@ services:
       - proxy
     environment:
       - TZ=America/Chicago
+    command:
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
     labels:
       - "traefik.enable=true"
       # Dashboard

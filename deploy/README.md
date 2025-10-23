@@ -4,43 +4,141 @@ This directory contains everything needed to deploy the complete Immersity VR en
 
 ## Features
 
-✅ **Single docker-compose.yml** - All 3 services in one file  
-✅ **Traefik 2.x** - Modern reverse proxy  
-✅ **Automatic HTTPS** - Let's Encrypt integration (no manual certificates)  
-✅ **Auto-renewal** - Certificates renew automatically  
-✅ **HTTP → HTTPS redirect** - Automatic redirection  
-✅ **Unified configuration** - All configs in one place  
+- **Single docker-compose.yml** - All 3 services in one file  
+- **Traefik 2.x** - Modern reverse proxy  
+- **Automatic HTTPS** - Let's Encrypt integration (no manual certificates)  
+- **Auto-renewal** - Certificates renew automatically  
+- **HTTP to HTTPS redirect** - Automatic redirection  
+- **Unified configuration** - All configs in one place  
+- **Git-based deployment** - Version control for all configurations
 
 ---
 
 ## Table of Contents
 
 - [Features](#features)
+- [What You Get](#what-you-get)
+- [5-Minute Quick Start](#5-minute-quick-start)
 - [Directory Structure](#directory-structure)
 - [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
+- [Detailed Setup](#detailed-setup)
 - [Verification](#verification)
-- [Let's Encrypt Details](#lets-encrypt-details)
 - [Management](#management)
   - [Update Unity Build](#update-unity-build)
   - [Create Clean URLs with Symbolic Links](#create-clean-urls-with-symbolic-links)
   - [Update Relay Server](#update-relay-server)
   - [View Captures](#view-captures)
+  - [Updating from Git](#updating-from-git)
   - [Restart/Stop Services](#restart-all-services)
+- [Let's Encrypt Details](#lets-encrypt-details)
 - [Migration from Old Setup](#migration-from-old-setup)
 - [Security Notes](#security-notes)
 - [Advanced Configuration](#advanced-configuration)
 - [Troubleshooting](#troubleshooting)
-- [Support](#support)
+- [Change Log](#change-log)
+
+---
+
+## What You Get
+
+A **unified deployment** with:
+- Single `docker-compose.yml` - All 3 services
+- Traefik 2.x with Let's Encrypt - Automatic HTTPS
+- No manual certificates needed
+- Git-based configuration management
+- Uses Docker images: `immersityxr/immersity-relay:0.1.0` and `immersityxr/immersity-buildserver:0.1.0`
+
+---
+
+## 5-Minute Quick Start
+
+Perfect for first-time setup or quick deployment.
+
+### Step 1: Clone Repository on VM
+
+```bash
+# SSH into your VM
+ssh youruser@yourdomain.edu
+
+# Clone the repository
+git clone https://github.com/your-org/immersity-deploy.git
+cd immersity-deploy
+```
+
+### Step 2: Configure Environment
+
+```bash
+# Create .env from template
+cp env.example .env
+
+# Edit with your domain and email
+nano .env
+```
+
+Update these values:
+```bash
+DOMAIN=yourdomain.edu                 # Your actual domain
+ACME_EMAIL=admin@yourdomain.edu       # Email for Let's Encrypt notifications
+TZ=America/Chicago                     # Your timezone
+```
+
+**Note:** The email from `.env` is automatically used for Let's Encrypt. You don't need to edit `traefik.yml`.
+
+### Step 3: Deploy!
+
+```bash
+# Make deploy script executable
+chmod +x deploy.sh down.sh
+
+# Run deployment
+./deploy.sh
+```
+
+Done! The script will:
+- Check prerequisites
+- Create Docker network
+- Set correct permissions
+- Start all containers
+- Let's Encrypt will auto-generate certificates (30-60 seconds)
+
+### Step 4: Test
+
+```bash
+# Wait 30-60 seconds for Let's Encrypt, then test:
+curl -I https://yourdomain.edu
+
+# Should return: HTTP/2 200
+```
+
+Open browser: `https://yourdomain.edu/your-build/index.html?session=test&client=1`
+
+### Step 5: Upload Unity Build (Optional)
+
+```bash
+# Option 1: Upload via SCP from your local machine
+scp -r ./your-unity-build youruser@yourdomain.edu:~/immersity-deploy/immersity-buildserver/builds/
+
+# Option 2: Use Git (if builds are in repository)
+cd ~/immersity-deploy
+git add immersity-buildserver/builds/your-unity-build
+git commit -m "Add new Unity build"
+git push
+```
+
+No restart needed!
+
+That's it! Your Immersity VR environment is live at `https://yourdomain.edu`
 
 ---
 
 ## Directory Structure
 
 ```
-immersity-deployment/
+immersity-deploy/
 ├── docker-compose.yml          # Main deployment file
 ├── env.example                 # Environment variables template
+├── deploy.sh                   # Automated deployment script
+├── down.sh                     # Shutdown and cleanup script
 ├── README.md                   # This file
 ├── immersity-proxy/           # Traefik configuration
 │   ├── traefik.yml            # Traefik static config
@@ -56,136 +154,160 @@ immersity-deployment/
 
 ## Prerequisites
 
-- Ubuntu 22.04+ VM with Docker installed
-- Domain name pointing to your VM's public IP
+- **Ubuntu 22.04+ VM** with Docker and Docker Compose installed
+- **Domain name** pointing to your VM's public IP
 - **Ports 80 and 443 open** in firewall (required for Let's Encrypt HTTP challenge)
-- Existing Docker images:
-  - `immersity-relay:latest`
-  - `immersity-buildserver:latest`
-- Docker network: `proxy`
+- **Git** installed on the VM
+- Docker images are pulled automatically from Docker Hub:
+  - `immersityxr/immersity-relay:0.1.0`
+  - `immersityxr/immersity-buildserver:0.1.0`
 
 ---
 
-## Quick Start
+## Detailed Setup
 
-### 1. Configure Environment
+For those who want more control or need detailed explanations, here's the step-by-step process.
+
+### 1. Clone Repository
 
 ```bash
-cd ~/immersity-deployment
+# SSH into your VM
+ssh youruser@yourdomain.edu
 
+# Clone the repository
+git clone https://github.com/your-org/immersity-deploy.git
+cd immersity-deploy
+```
+
+### 2. Configure Environment
+
+```bash
 # Copy environment template
 cp env.example .env
 
-# Edit with your domain
+# Edit with your domain and email
 nano .env
 ```
 
-Update `.env`:
+Update `.env` with your values:
 ```bash
-DOMAIN=yourdomain.edu
-ACME_EMAIL=admin@yourdomain.edu
-TZ=America/Chicago
+DOMAIN=yourdomain.edu                 # Your actual domain
+ACME_EMAIL=admin@yourdomain.edu       # Email for Let's Encrypt certificate notifications
+TZ=America/Chicago                     # Your timezone
 ```
 
-### 2. Update Traefik Configuration
+**Note:** The email from `.env` is automatically passed to Traefik. You don't need to edit `traefik.yml`.
 
-```bash
-nano immersity-proxy/traefik.yml
-```
+### 3. Set Permissions
 
-Update email (line 23):
-```yaml
-email: admin@yourdomain.edu  # Change this
-```
-
-### 3. Set ACME File Permissions
-
-**IMPORTANT:** The `acme.json` file must have restricted permissions:
+The `acme.json` file must have restricted permissions for security:
 
 ```bash
 chmod 600 immersity-proxy/acme.json
 ```
 
-### 4. Upload Unity Build
+### 4. Upload Unity Build (Optional)
 
 ```bash
-# From your local machine
-scp -r ./your-unity-build youruser@yourdomain.edu:~/immersity-deployment/immersity-buildserver/builds/
+# Option 1: Upload via SCP from your local machine
+scp -r ./your-unity-build youruser@yourdomain.edu:~/immersity-deploy/immersity-buildserver/builds/
 
-# Or use SFTP/FTP client
+# Option 2: Use Git (if builds are in repository)
+cd ~/immersity-deploy
+git add immersity-buildserver/builds/your-unity-build
+git commit -m "Add Unity build"
+git push
+
+# Option 3: Use SFTP/FTP client to upload to immersity-buildserver/builds/
 ```
 
-**Important:** Ensure your build has the fixed `relay.js` (see main documentation).
+**Important:** Ensure your build has the correct `relay.js` configuration for your domain.
 
-### 5. Create Docker Network (if not exists)
+### 5. Create Docker Network
+
+If the `proxy` network doesn't exist yet:
 
 ```bash
 docker network create proxy
 ```
 
-### 6. Deploy!
+### 6. Deploy
 
 ```bash
-cd ~/immersity-deployment
+cd ~/immersity-deploy
+
+# Option 1: Use the automated deploy script (recommended)
+chmod +x deploy.sh down.sh
+./deploy.sh
+
+# Option 2: Manual deployment
 docker compose up -d
 ```
 
-That's it! Let's Encrypt will automatically:
-- Request SSL certificates
+The deploy script will:
+- Check prerequisites
+- Create Docker network if needed
+- Set correct permissions
+- Start all containers
+- Show deployment status and URLs
+
+Let's Encrypt will automatically:
+- Request SSL certificates (30-60 seconds)
 - Configure HTTPS
-- Set up auto-renewal
+- Set up auto-renewal (every 90 days)
 
 ---
 
 ## Verification
 
-### Check Containers
+### View Status
 
 ```bash
+# Check all running containers
 docker ps
-```
 
-Should show 4 containers:
-- `immersity-proxy` (Traefik)
-- `immersity-relay` (Node.js)
-- `immersity-buildserver` (NGINX)
-- `traefik-middlewares` (helper, will exit immediately)
-
-### Check Logs
-
-```bash
-# Traefik logs (watch Let's Encrypt certificate generation)
+# View Traefik logs (watch Let's Encrypt certificate generation)
 docker logs immersity-proxy -f
 
-# Relay logs
+# View relay server logs
 docker logs immersity-relay --tail 50
 
-# Build server logs
+# View build server logs
 docker logs immersity-buildserver --tail 50
+
+# Check captures directory
+ls -la ~/immersity-deploy/immersity-relay/captures/
 ```
+
+Should see 3 running containers:
+- `immersity-proxy` (Traefik)
+- `immersity-relay` (Node.js Socket.IO server)
+- `immersity-buildserver` (NGINX static file server)
 
 ### Test HTTPS
 
 ```bash
-# Should return HTTP/2 200
+# Wait 30-60 seconds for Let's Encrypt certificate generation
+# Then test HTTPS (should return HTTP/2 200)
 curl -I https://yourdomain.edu
 
-# Check certificate
+# Check certificate details
 openssl s_client -connect yourdomain.edu:443 -servername yourdomain.edu < /dev/null
 ```
 
-### Test VR App
+### Test VR Application
 
-Open browser:
+Open in browser:
 ```
 https://yourdomain.edu/your-build/index.html?session=test123&client=1&teacher=1
 ```
 
-Should see:
-- ✅ Valid HTTPS (no certificate warnings)
-- ✅ Unity app loads
-- ✅ Socket.IO connects
-- ✅ Capture functionality works
+Verify:
+- Valid HTTPS (no certificate warnings)
+- Unity app loads successfully
+- Socket.IO connects to relay server
+- Capture functionality works
+- No mixed content warnings in console
 
 ---
 
@@ -206,7 +328,7 @@ Certificates are stored in `immersity-proxy/acme.json`:
 cat immersity-proxy/acme.json | jq .
 ```
 
-**⚠️ IMPORTANT:** 
+**IMPORTANT:** 
 - Keep `acme.json` permissions at `600` (owner read/write only)
 - Backup this file regularly
 - Don't delete it or certificates will be re-requested
@@ -265,21 +387,25 @@ docker logs immersity-proxy -f
 ### Update Unity Build
 
 ```bash
-# Upload new build
-scp -r ./new-build youruser@yourdomain.edu:~/immersity-deployment/immersity-buildserver/builds/
+# Option 1: Upload new build via SCP
+scp -r ./new-build youruser@yourdomain.edu:~/immersity-deploy/immersity-buildserver/builds/
 
-# Apply capture fix to relay.js
-cp ~/immersity-deployment/immersity-buildserver/builds/v0.5.7/relay.js \
-   ~/immersity-deployment/immersity-buildserver/builds/new-build/relay.js
+# Option 2: Pull updates from Git
+cd ~/immersity-deploy
+git pull
+
+# Apply capture fix to relay.js if needed
+cp ~/immersity-deploy/immersity-buildserver/builds/v0.5.7/relay.js \
+   ~/immersity-deploy/immersity-buildserver/builds/new-build/relay.js
 
 # Update cache buster in index.html
 sed -i 's/relay.js"/relay.js?v=1"/' \
-   ~/immersity-deployment/immersity-buildserver/builds/new-build/index.html
+   ~/immersity-deploy/immersity-buildserver/builds/new-build/index.html
 
 # No container restart needed - NGINX serves files directly
 ```
 
-**Important:** The NGINX buildserver serves files from `immersity-deployment/immersity-buildserver/builds/`, not from `immersity-build/builds/`. Always update files in the deployment directory!
+**Important:** The NGINX buildserver serves files from `~/immersity-deploy/immersity-buildserver/builds/`. Always update files in the deployment directory!
 
 ### Create Clean URLs with Symbolic Links
 
@@ -296,7 +422,7 @@ https://yourdomain.edu/unity/index.html?session=test123&client=1
 **How to create:**
 
 ```bash
-cd ~/immersity-deployment/immersity-buildserver/builds
+cd ~/immersity-deploy/immersity-buildserver/builds
 
 # Create symbolic link
 ln -s james-working/builds/live unity
@@ -307,10 +433,10 @@ ls -la unity
 ```
 
 **Benefits:**
-- ✅ No file duplication (saves disk space)
-- ✅ Updates to source automatically apply to symlink
-- ✅ Easy to switch between build versions
-- ✅ Professional, user-friendly URLs
+- No file duplication (saves disk space)
+- Updates to source automatically apply to symlink
+- Easy to switch between build versions
+- Professional, user-friendly URLs
 
 **Common patterns:**
 
@@ -354,16 +480,39 @@ docker compose up -d immersity-relay --build
 ### View Captures
 
 ```bash
-ls -la ~/immersity-deployment/immersity-relay/captures/
+# List all capture sessions
+ls -la ~/immersity-deploy/immersity-relay/captures/
 
-# View specific capture
-cat ~/immersity-deployment/immersity-relay/captures/test123/*/data | jq .
+# View specific capture data
+cat ~/immersity-deploy/immersity-relay/captures/test123/*/data | jq .
+```
+
+### Updating from Git
+
+Pull the latest changes from the repository:
+
+```bash
+# Pull latest changes
+cd ~/immersity-deploy
+git pull
+
+# Restart services to apply changes
+docker compose restart
+
+# Or redeploy completely (recommended for major changes)
+./deploy.sh
 ```
 
 ### Restart All Services
 
 ```bash
+# Restart all containers
 docker compose restart
+
+# Restart specific service
+docker compose restart immersity-relay
+docker compose restart immersity-buildserver
+docker compose restart immersity-proxy
 ```
 
 ### Stop All Services
@@ -423,11 +572,11 @@ docker compose down
 **Data Preservation:**
 
 When you run `./down.sh` without options:
-- ✅ **Containers stopped** - No services running
-- ✅ **Captures preserved** - All recordings kept in `immersity-relay/captures/`
-- ✅ **Certificates preserved** - SSL certificates remain valid
-- ✅ **Builds preserved** - Unity builds stay in `immersity-buildserver/builds/`
-- ✅ **Network preserved** - Docker network `proxy` remains for fast restart
+- **Containers stopped** - No services running
+- **Captures preserved** - All recordings kept in `immersity-relay/captures/`
+- **Certificates preserved** - SSL certificates remain valid
+- **Builds preserved** - Unity builds stay in `immersity-buildserver/builds/`
+- **Network preserved** - Docker network `proxy` remains for fast restart
 
 ### Update Configuration
 
@@ -444,28 +593,36 @@ docker compose up -d
 
 If you're migrating from the three-repository setup:
 
-### 1. Copy Builds
+### 1. Clone New Repository
+
+```bash
+cd ~
+git clone https://github.com/your-org/immersity-deploy.git
+cd immersity-deploy
+```
+
+### 2. Copy Builds
 
 ```bash
 cp -r ~/workspace-immersity/immersity-build/builds/* \
-      ~/immersity-deployment/immersity-buildserver/builds/
+      immersity-buildserver/builds/
 ```
 
-### 2. Copy Captures
+### 3. Copy Captures
 
 ```bash
 cp -r ~/workspace-immersity/immersity-relay/captures/* \
-      ~/immersity-deployment/immersity-relay/captures/
+      immersity-relay/captures/
 ```
 
-### 3. Copy Config
+### 4. Copy Config
 
 ```bash
 cp ~/workspace-immersity/immersity-relay/config.js \
-   ~/immersity-deployment/immersity-relay/config.js
+   immersity-relay/config.js
 ```
 
-### 4. Stop Old Containers
+### 5. Stop Old Containers
 
 ```bash
 cd ~/workspace-immersity/immersity-proxy
@@ -478,11 +635,13 @@ cd ~/workspace-immersity/immersity-build
 docker compose down
 ```
 
-### 5. Start New Deployment
+### 6. Configure and Start New Deployment
 
 ```bash
-cd ~/immersity-deployment
-docker compose up -d
+cd ~/immersity-deploy
+cp env.example .env
+nano .env  # Update DOMAIN and ACME_EMAIL
+./deploy.sh
 ```
 
 ---
@@ -561,30 +720,41 @@ docker logs immersity-proxy | grep -i acme
 docker logs immersity-relay --tail 100
 
 # Verify config
-cat ~/immersity-deployment/immersity-relay/config.js
+cat ~/immersity-deploy/immersity-relay/config.js
 
 # Check permissions
-ls -la ~/immersity-deployment/immersity-relay/captures/
+ls -la ~/immersity-deploy/immersity-relay/captures/
+
+# Test capture manually
+# Start capture: curl -X POST http://yourdomain.edu/sync/start_recording/1001
+# End capture: curl -X POST http://yourdomain.edu/sync/end_recording/1001
 ```
 
 ---
 
-## Support
+## Additional Resources
 
-- **Main Documentation**: See `IMMERSITY_DEPLOYMENT_GUIDE.md` in parent directory
-- **Traefik Docs**: https://doc.traefik.io/traefik/
-- **Let's Encrypt Docs**: https://letsencrypt.org/docs/
+- **Traefik Documentation**: https://doc.traefik.io/traefik/
+- **Let's Encrypt Documentation**: https://letsencrypt.org/docs/
+- **Docker Compose Documentation**: https://docs.docker.com/compose/
 
 ---
 
 ## Change Log
 
+### Version 2.1 (Current - Git-Based Deployment)
+- Git-based deployment and version control
+- Automated deploy.sh and down.sh scripts
+- Email configuration via .env (single source of truth)
+- Enhanced documentation with quick start guide
+- Merged comprehensive documentation into single README
+
 ### Version 2.0 (Unified Deployment)
-- ✅ Single docker-compose.yml for all services
-- ✅ Upgraded to Traefik 2.x
-- ✅ Automatic HTTPS via Let's Encrypt
-- ✅ No manual certificate management
-- ✅ Simplified deployment structure
+- Single docker-compose.yml for all services
+- Upgraded to Traefik 2.x
+- Automatic HTTPS via Let's Encrypt
+- No manual certificate management
+- Simplified deployment structure
 
 ### Version 1.0 (Original)
 - Three separate repositories
@@ -594,5 +764,5 @@ ls -la ~/immersity-deployment/immersity-relay/captures/
 
 ---
 
-**End of README**
+**© 2024 Immersity XR. This is a unified, single-repository deployment for Immersity VR.**
 

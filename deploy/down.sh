@@ -106,7 +106,7 @@ echo ""
 # Confirmation prompt (unless --force)
 if [ "$FORCE" = false ]; then
     if [ "$CLEAN_ALL" = true ] || [ "$CLEAN_CAPTURES" = true ] || [ "$CLEAN_CERTIFICATES" = true ]; then
-        echo -e "${COLOR_YELLOW}⚠️  Warning: Cleanup operations will delete data!${COLOR_RESET}"
+        echo -e "${COLOR_YELLOW}WARNING: Cleanup operations will delete data!${COLOR_RESET}"
         read -p "Continue? (yes/no): " CONFIRM
         if [ "$CONFIRM" != "yes" ]; then
             echo "Aborted."
@@ -121,9 +121,9 @@ echo -e "${COLOR_BLUE}Stopping containers...${COLOR_RESET}"
 docker compose down
 
 if [ $? -eq 0 ]; then
-    echo -e "${COLOR_GREEN}✓${COLOR_RESET} Containers stopped and removed"
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Containers stopped and removed"
 else
-    echo -e "${COLOR_RED}✗${COLOR_RESET} Failed to stop containers"
+    echo -e "${COLOR_RED}[FAILED]${COLOR_RESET} Failed to stop containers"
     exit 1
 fi
 
@@ -139,12 +139,12 @@ if [ "$CLEAN_CAPTURES" = true ]; then
         if [ "$CAPTURE_COUNT" -gt 0 ]; then
             # Remove all captures except .gitkeep
             find immersity-relay/captures -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
-            echo -e "${COLOR_GREEN}✓${COLOR_RESET} Removed $CAPTURE_COUNT capture session(s)"
+            echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Removed $CAPTURE_COUNT capture session(s)"
         else
-            echo -e "${COLOR_GREEN}✓${COLOR_RESET} No captures to remove"
+            echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} No captures to remove"
         fi
     else
-        echo -e "${COLOR_YELLOW}⚠️${COLOR_RESET}  Captures directory not found"
+        echo -e "${COLOR_YELLOW}[WARNING]${COLOR_RESET}  Captures directory not found"
     fi
 fi
 
@@ -158,15 +158,15 @@ if [ "$CLEAN_CERTIFICATES" = true ]; then
         if [ -s "immersity-proxy/acme.json" ]; then
             BACKUP_FILE="immersity-proxy/acme.json.backup.$(date +%Y%m%d_%H%M%S)"
             cp immersity-proxy/acme.json "$BACKUP_FILE"
-            echo -e "${COLOR_GREEN}✓${COLOR_RESET} Backed up certificates to: $BACKUP_FILE"
+            echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Backed up certificates to: $BACKUP_FILE"
         fi
         
         # Reset acme.json
         echo '{}' > immersity-proxy/acme.json
         chmod 600 immersity-proxy/acme.json
-        echo -e "${COLOR_GREEN}✓${COLOR_RESET} Certificates removed (will be re-requested on next deploy)"
+        echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Certificates removed (will be re-requested on next deploy)"
     else
-        echo -e "${COLOR_YELLOW}⚠️${COLOR_RESET}  acme.json not found"
+        echo -e "${COLOR_YELLOW}[WARNING]${COLOR_RESET}  acme.json not found"
     fi
 fi
 
@@ -180,14 +180,14 @@ if [ "$CLEAN_NETWORK" = true ]; then
         NETWORK_USERS=$(docker network inspect proxy -f '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null | wc -w)
         
         if [ "$NETWORK_USERS" -gt 0 ]; then
-            echo -e "${COLOR_RED}✗${COLOR_RESET} Cannot remove network 'proxy': still in use by $NETWORK_USERS container(s)"
+            echo -e "${COLOR_RED}[FAILED]${COLOR_RESET} Cannot remove network 'proxy': still in use by $NETWORK_USERS container(s)"
             echo "   Stop all containers using this network first"
         else
             docker network rm proxy
-            echo -e "${COLOR_GREEN}✓${COLOR_RESET} Network 'proxy' removed"
+            echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Network 'proxy' removed"
         fi
     else
-        echo -e "${COLOR_YELLOW}⚠️${COLOR_RESET}  Network 'proxy' not found"
+        echo -e "${COLOR_YELLOW}[WARNING]${COLOR_RESET}  Network 'proxy' not found"
     fi
 fi
 

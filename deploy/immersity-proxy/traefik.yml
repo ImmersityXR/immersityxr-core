@@ -25,7 +25,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: admin@yourdomain.edu  # CHANGE THIS to your email
+      # Email is configured via docker-compose.yml using ACME_EMAIL from .env
       storage: /acme.json
       # Use HTTP challenge (port 80 must be open)
       httpChallenge:
