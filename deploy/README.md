@@ -31,11 +31,9 @@ This directory contains everything needed to deploy the complete Immersity VR en
   - [Updating from Git](#updating-from-git)
   - [Restart/Stop Services](#restart-all-services)
 - [Let's Encrypt Details](#lets-encrypt-details)
-- [Migration from Old Setup](#migration-from-old-setup)
 - [Security Notes](#security-notes)
 - [Advanced Configuration](#advanced-configuration)
 - [Troubleshooting](#troubleshooting)
-- [Change Log](#change-log)
 
 ---
 
@@ -403,42 +401,25 @@ docker logs immersity-proxy -f
 
 ### Update Unity Build
 
-Unity builds are stored outside of Git. Update them using one of these methods:
+Download the latest Unity build from the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases) and place it in the builds directory.
 
 ```bash
-# Option 1: Copy from existing deployment
-cd ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds
-cp -R new-build ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Option 2: Upload new build via SCP from local machine
-scp -r ./new-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Option 3: Upload using rsync (better for large builds)
-rsync -avz --progress ./new-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Option 4: Download from build server
-cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
-wget https://your-build-server.com/new-build.zip
-unzip new-build.zip
-rm new-build.zip
-```
-
-**Apply capture fix to relay.js if needed:**
-
-```bash
+# Navigate to builds directory
 cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
 
-# Copy working relay.js to new build
-cp v0.5.7/relay.js new-build/relay.js
+# Download new build version (example using v0.5.8)
+wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm%2Fv0.5.8/v0.5.8.zip
+unzip v0.5.8.zip
+rm v0.5.8.zip
 
-# Update cache buster in index.html
-sed -i 's/relay.js"/relay.js?v=1"/' new-build/index.html
+# Verify new build is in place
+ls -la
 ```
 
 **Important:** 
 - No container restart needed - NGINX serves files directly
 - Builds should NOT be committed to Git (they're in .gitignore)
-- The buildserver serves from `~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/`
+- Check the [releases page](https://github.com/gelic-idealab/komodo-unity/releases) for the latest version
 
 ### Create Clean URLs with Symbolic Links
 
@@ -622,71 +603,6 @@ docker compose up -d
 
 ---
 
-## Migration from Old Setup
-
-If you're migrating from the three-repository setup:
-
-### 1. Clone New Repository
-
-```bash
-cd ~
-git clone https://github.com/ImmersityXR/immersity-deploy.git
-cd immersity-deploy
-```
-
-### 2. Copy Unity Builds
-
-```bash
-# Copy builds from existing deployment
-cd ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds
-cp -R your-build-folder ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Or copy from older three-repo setup
-cp -r ~/workspace-immersity/immersity-build/builds/* \
-      ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
-
-# Or download from releases
-# See: https://github.com/gelic-idealab/komodo-unity/releases
-```
-
-### 3. Copy Captures
-
-```bash
-cp -r ~/workspace-immersity/immersity-relay/captures/* \
-      immersity-relay/captures/
-```
-
-### 4. Copy Config
-
-```bash
-cp ~/workspace-immersity/immersity-relay/config.js \
-   immersity-relay/config.js
-```
-
-### 5. Stop Old Containers
-
-```bash
-cd ~/workspace-immersity/immersity-proxy
-docker compose down
-
-cd ~/workspace-immersity/immersity-relay
-docker compose down
-
-cd ~/workspace-immersity/immersity-build
-docker compose down
-```
-
-### 6. Configure and Start New Deployment
-
-```bash
-cd ~/immersity-deploy
-cp env.example .env
-nano .env  # Update DOMAIN and ACME_EMAIL
-./deploy.sh
-```
-
----
-
 ## Security Notes
 
 1. **acme.json permissions**: Must be `600` (owner read/write only)
@@ -778,30 +694,6 @@ ls -la ~/immersity-deploy/immersity-relay/captures/
 - **Traefik Documentation**: https://doc.traefik.io/traefik/
 - **Let's Encrypt Documentation**: https://letsencrypt.org/docs/
 - **Docker Compose Documentation**: https://docs.docker.com/compose/
-
----
-
-## Change Log
-
-### Version 2.1 (Current - Git-Based Deployment)
-- Git-based deployment and version control
-- Automated deploy.sh and down.sh scripts
-- Email configuration via .env (single source of truth)
-- Enhanced documentation with quick start guide
-- Merged comprehensive documentation into single README
-
-### Version 2.0 (Unified Deployment)
-- Single docker-compose.yml for all services
-- Upgraded to Traefik 2.x
-- Automatic HTTPS via Let's Encrypt
-- No manual certificate management
-- Simplified deployment structure
-
-### Version 1.0 (Original)
-- Three separate repositories
-- Traefik 1.7
-- Manual SSL certificates
-- Complex deployment process
 
 ---
 
