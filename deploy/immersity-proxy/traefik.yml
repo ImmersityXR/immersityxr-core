@@ -1,11 +1,11 @@
 # ===========================================================================
-# Traefik 2.x Static Configuration
+# Traefik 3.3 Static Configuration
 # ===========================================================================
 
 # API and Dashboard
 api:
   dashboard: true
-  insecure: true  # Enable dashboard on port 8080 (disable in production)
+  insecure: true # Enable dashboard on port 8080 (disable in production)
 
 # Entry Points
 entryPoints:
@@ -13,12 +13,16 @@ entryPoints:
     address: ":80"
   websecure:
     address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
 
 # Docker Provider
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
+    # Ensures Traefik uses the 'proxy' network to communicate with other containers
     network: proxy
 
 # Let's Encrypt Certificate Resolver
@@ -26,29 +30,15 @@ certificatesResolvers:
   letsencrypt:
     acme:
       # Email is configured via docker-compose.yml using ACME_EMAIL from .env
+      # Note: Storage path must match the volume mount in docker-compose.yml
       storage: /acme.json
-      # Use HTTP challenge (port 80 must be open)
       httpChallenge:
         entryPoint: web
-      # Alternative: Use TLS challenge (if you prefer)
-      # tlsChallenge: {}
-      # Alternative: Use DNS challenge (requires DNS provider API)
-      # dnsChallenge:
-      #   provider: cloudflare
-      #   delayBeforeCheck: 0
 
 # Logging
 log:
   level: INFO  # DEBUG, INFO, WARN, ERROR
-  
+
 accessLog:
   filePath: "/dev/stdout"
   format: common
-
-
-
-
-
-
-
-
