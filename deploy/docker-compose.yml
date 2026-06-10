@@ -52,6 +52,10 @@ services:
       - RELAY_ORIGINS=${RELAY_ORIGINS}
       - RELAY_CLIENT_SECRET=${RELAY_CLIENT_SECRET}
       - RELAY_ADMIN_SECRET=${RELAY_ADMIN_SECRET}
+      - RTC_STUN_URLS=${RTC_STUN_URLS}
+      - RTC_TURN_URL=${RTC_TURN_URL}
+      - RTC_TURN_USERNAME=${RTC_TURN_USERNAME}
+      - RTC_TURN_CREDENTIAL=${RTC_TURN_CREDENTIAL}
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.immersity-relay.loadbalancer.server.port=80"

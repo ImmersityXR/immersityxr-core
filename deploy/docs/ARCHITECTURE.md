@@ -136,8 +136,16 @@ Suggested shape for the new "browse WebXR environments" app:
   explicitly experimental.
 - Run it side-by-side with the old portal (new subdomain) until parity.
 
+### Phase 2.5 — Voice/video via WebRTC (signaling + web layer done)
+The relay's `/rtc` namespace and the client web layer are ported from
+David Tamayo's fork (see Related forks below); what remains is the in-editor
+call UI in immersity-unity (`docs/WEBRTC-PORT.md` there has the contract)
+and, for off-campus participants, standing up a TURN server (`RTC_TURN_*`
+in this repo's `.env` — coturn on the VPS is the usual choice).
+
 ### Phase 3 — Protocol & engine upgrades (after the new frontend)
-- **Socket.IO 2 → 4** across relay + frontend + Unity template, in lockstep.
+- **Socket.IO 2 → 4** across relay + frontend + Unity template, in lockstep
+  (RelayTesting fork is a working reference).
 - **Unity 2020.3 → 2022/6000 LTS** and current WebXR Export; budget real QA
   time, the WebXR initialization code is sensitive (see recent commits).
 - Automate Unity build upload to the buildserver (CI), replacing the manual
@@ -145,7 +153,50 @@ Suggested shape for the new "browse WebXR environments" app:
 - Decide the asset-storage future: stay on S3 or migrate to campus object
   storage; the backend's `aws.js` is the only integration point.
 
-## 5. Azure / external dependencies to inventory before fully moving on-campus
+## 5. Related forks worth knowing about
+
+### David Tamayo's KomodoSandbox + RelayTesting (reviewed June 2026)
+
+A pair of forks containing the most substantial independent Komodo work we
+know of, developed Jan–Apr 2024:
+
+- **[KomodoSandbox](https://github.com/davtamay/KomodoSandbox)** — forked
+  from `gelic-idealab/impress`, restructured as a standalone Unity project
+- **[RelayTesting](https://github.com/davtamay/RelayTesting)** — the
+  matching komodo-relay fork with his WebRTC signaling server
+
+**Three valuable bodies of work in them:**
+
+1. **WebRTC mesh voice/video/screen-share** — multi-peer offer/answer/ICE
+   over socket.io signaling; mic mute, camera toggle, screen share, device
+   switching; per-peer video painted onto Unity textures
+   (video → canvas → `texImage2D`); and a `requestAnimationFrame` hijack so
+   video keeps updating inside WebXR sessions. *Status: ported into our
+   stack June 2026* — the signaling now lives in immersity-relay as the
+   `/rtc` namespace (Socket.IO 2.x, per-session rooms, shared-secret auth,
+   server-provided ICE config), and the client web layer
+   (`webrtc.js`, `webrtcUnity.jslib`, `WebRTCVideoTexture.cs`) is staged in
+   immersity-unity. Remaining: in-editor call UI — see
+   `docs/WEBRTC-PORT.md` in immersity-unity.
+2. **A working Socket.IO 2→4 migration** — RelayTesting runs Socket.IO
+   4.7.2 with a migrated `sync.js` and matching 4.x client in the Unity
+   template. Use as the playbook for our Phase 3 protocol upgrade.
+3. **A working XR-stack modernization** — Unity 2023.2, WebXR Export
+   0.22.0 (vs. our 0.5.1-preview), XR Interaction Toolkit 3.0.1, XR Hands
+   1.4 with networked grab/scale. De-risks our Unity upgrade; target
+   Unity 6 LTS rather than the now-EOL 2023.2 when adopting.
+
+**Caveats:** abandoned mid-refactor in April 2024 (one-developer
+prototype); no authentication (ported code had auth added); STUN-only (no
+TURN — now configurable via `RTC_TURN_*` in this repo); mesh topology caps
+practical video calls at ~4–6 participants; his C# UI layer
+(`ShareMediaConnection` etc.) depends on third-party audio libs and his
+Unity 2023 UI stack, so it was treated as reference material rather than
+ported. If David is reachable through the volunteer network, his
+first-hand knowledge of the multi-peer ICE and WebXR rendering-loop edge
+cases is worth more than the code.
+
+## 6. Azure / external dependencies to inventory before fully moving on-campus
 
 - Azure Web App deployments (GitHub Actions in relay + portal repos) — retire
   once the VPS is primary.

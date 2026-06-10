@@ -33,6 +33,22 @@ module.exports = {
         adminSecret: process.env.RELAY_ADMIN_SECRET || ""
     },
 
+    // STUN/TURN servers for WebRTC voice/video (the /rtc namespace hands
+    // these to clients). Defaults to public Google STUN, which works when
+    // all participants can reach each other directly; set the RTC_TURN_*
+    // variables in .env to support participants behind strict NATs.
+    rtc: {
+        iceServers: [
+            {
+                urls: (process.env.RTC_STUN_URLS || 'stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302').split(' ')
+            }
+        ].concat(process.env.RTC_TURN_URL ? [{
+            urls: [process.env.RTC_TURN_URL],
+            username: process.env.RTC_TURN_USERNAME || '',
+            credential: process.env.RTC_TURN_CREDENTIAL || ''
+        }] : [])
+    },
+
     // Azure Speech-to-Text (optional - leave empty strings if not using)
     azure: {
         subscriptionKey: "",
