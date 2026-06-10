@@ -51,6 +51,8 @@ PORTAL_MYSQL_DATABASE=immersity
 PORTAL_MYSQL_USER=immersity
 PORTAL_MYSQL_PASSWORD=<strong password>
 PORTAL_MYSQL_ROOT_PASSWORD=<strong password>
+PORTAL_ADMIN_EMAIL=<your email>
+PORTAL_ADMIN_PASSWORD=<strong password>
 ```
 
 ### 2. Create the backend config
@@ -87,6 +89,7 @@ VUE_APP_API_BASE_URL=https://api.yourdomain.edu/
 VUE_APP_VR_CLIENT_BASE_URL=https://yourdomain.edu
 VUE_APP_RELAY_BASE_URL=https://yourdomain.edu
 VUE_APP_RTC_URL=
+VUE_APP_VR_AUTH_TOKEN=<same value as RELAY_CLIENT_SECRET in .env, if set>
 ```
 
 Notes:
@@ -105,8 +108,8 @@ Notes:
 
 The script validates the portal config before starting anything. On first
 start the backend initializes the database from the SQL scripts in the portal
-repo, including a **default admin account** (`admin@immersity.edu` /
-`password`) — log in and change this immediately.
+repo and creates the initial admin account from `PORTAL_ADMIN_EMAIL` /
+`PORTAL_ADMIN_PASSWORD` (there is no hardcoded default password).
 
 ## Day-to-day
 

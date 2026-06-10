@@ -65,18 +65,28 @@ Key cross-repo couplings:
 
 ## 3. Security checklist (do before campus-facing exposure)
 
-**P0 — open doors**
-- [ ] **Relay has no authentication at all.** Anyone who can reach the
-      server can join any session by guessing a numeric ID, and the `/admin`
-      Socket.IO namespace + dashboard are wide open
-      (`immersity-relay/admin.js` — literal `TODO: ADD AUTHENTICATION
-      HERE!!!`). Minimum fix: shared-secret token checked on `join`, and
-      basic auth (or removal) for `/admin`.
-- [ ] **Default admin account** `admin@immersity.edu` / `password` is seeded
-      by the portal DB init scripts. Change on first login; remove from
-      `02_InsertInitialData.sql` for real deployments.
-- [ ] **Relay CORS is `*:*`** in this repo's `immersity-relay/config.js`.
-      Restrict to your actual domains.
+**P0 — open doors** *(all three addressed June 2026 — see notes)*
+- [x] **Relay had no authentication at all.** The relay now supports
+      shared-secret auth (`config.auth.clientSecret` for `/sync` and
+      `/chat`; `config.auth.adminSecret` for `/admin`, which is now
+      deny-by-default). Configure via `RELAY_CLIENT_SECRET` /
+      `RELAY_ADMIN_SECRET` in this repo's `.env`. **Enforcement requires a
+      relay image built from source** (`docker compose build
+      immersity-relay`) until a new image is published — the 0.1.0 image on
+      Docker Hub predates auth. Clients pass the secret via `&auth=` on the
+      launch URL (the Unity template's `relay.js` forwards it; the portal
+      sends it when `VUE_APP_VR_AUTH_TOKEN` is set). This is a perimeter
+      control: the secret is shared per-deployment, not per-user —
+      portal-issued per-user tokens remain Phase 3 work.
+- [x] **Default admin account** (`admin@immersity.edu` / `password`) is no
+      longer seeded. The portal entrypoint creates the initial admin from
+      `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars (wired to
+      `PORTAL_ADMIN_*` in this repo's `.env`) on first initialization, and
+      refuses to initialize without them.
+- [x] **Relay CORS was `*:*`** in this repo's `immersity-relay/config.js`.
+      It now reads `RELAY_ORIGINS` from `.env` (deploy.sh requires it) and
+      falls back to localhost-only. Works with the existing 0.1.0 image,
+      since config.js is mounted at runtime.
 
 **P1 — weak crypto / hygiene**
 - [ ] Portal passwords are **client-side SHA1** stored as-is. Move to bcrypt

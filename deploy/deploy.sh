@@ -86,6 +86,22 @@ if [ -z "$(ls -A immersity-buildserver/builds/)" ]; then
     echo "   Upload your Unity WebGL build before accessing the site"
 fi
 
+# Relay security checks
+if [ -z "${RELAY_ORIGINS}" ]; then
+    echo -e "${COLOR_RED}Error: RELAY_ORIGINS must be set in .env${COLOR_RESET}"
+    echo "It restricts which sites may connect to the relay server. Example:"
+    echo "  RELAY_ORIGINS=https://${DOMAIN}:443"
+    echo "(add https://<portal domain>:443 too if you deploy the portal)"
+    exit 1
+fi
+echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Relay origins restricted to: ${RELAY_ORIGINS}"
+
+if [ -z "${RELAY_CLIENT_SECRET}" ]; then
+    echo -e "${COLOR_YELLOW}WARNING: RELAY_CLIENT_SECRET is empty - anyone who can reach the server can join sessions.${COLOR_RESET}"
+    echo "   Set it in .env and rebuild the relay from source to enforce it:"
+    echo "   docker compose build immersity-relay"
+fi
+
 # Portal checks (only when the portal profile is enabled in .env)
 PORTAL_ENABLED=0
 if [[ "${COMPOSE_PROFILES:-}" == *portal* ]]; then
@@ -127,6 +143,13 @@ if [[ "${COMPOSE_PROFILES:-}" == *portal* ]]; then
         exit 1
     fi
     echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Portal database credentials set"
+
+    if [ -z "${PORTAL_ADMIN_EMAIL}" ] || [ -z "${PORTAL_ADMIN_PASSWORD}" ]; then
+        echo -e "${COLOR_RED}Error: PORTAL_ADMIN_EMAIL and PORTAL_ADMIN_PASSWORD must be set in .env${COLOR_RESET}"
+        echo "They create the initial portal admin account on first start (there is no default password)."
+        exit 1
+    fi
+    echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Portal admin account configured"
 fi
 
 echo ""

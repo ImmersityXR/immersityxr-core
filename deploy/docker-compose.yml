@@ -33,6 +33,12 @@ services:
   # ===========================================================================
   immersity-relay:
     image: immersityxr/immersity-relay:0.1.0
+    # The published 0.1.0 image predates shared-secret auth support. To
+    # enforce RELAY_CLIENT_SECRET / RELAY_ADMIN_SECRET, build from a local
+    # checkout of immersity-relay: docker compose build immersity-relay
+    build:
+      context: ${RELAY_REPO_PATH:-../immersity-relay}
+    pull_policy: missing
     container_name: immersity-relay
     restart: always
     volumes:
@@ -43,6 +49,9 @@ services:
     environment:
       - NODE_ENV=production
       - TZ=America/Chicago
+      - RELAY_ORIGINS=${RELAY_ORIGINS}
+      - RELAY_CLIENT_SECRET=${RELAY_CLIENT_SECRET}
+      - RELAY_ADMIN_SECRET=${RELAY_ADMIN_SECRET}
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.immersity-relay.loadbalancer.server.port=80"
@@ -132,6 +141,9 @@ services:
       - MYSQL_USER=${PORTAL_MYSQL_USER}
       - MYSQL_PASSWORD=${PORTAL_MYSQL_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${PORTAL_MYSQL_ROOT_PASSWORD}
+      # Initial admin account, created on first database initialization only
+      - ADMIN_EMAIL=${PORTAL_ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${PORTAL_ADMIN_PASSWORD}
     volumes:
       # Persist the in-container MariaDB data directory between restarts
       - ./immersity-portal/mysql-data:/home/mysql
