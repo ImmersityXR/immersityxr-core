@@ -44,10 +44,24 @@ cd /immersity/portal/backend/db/scripts
 if mariadb -e "USE \`$MYSQL_DATABASE\`" 2>/dev/null; then
     echo "Database $MYSQL_DATABASE already exists. Skipping initialization to avoid seeding duplicate data."
 else
+    if [ -z "${ADMIN_EMAIL}" ] || [ -z "${ADMIN_PASSWORD}" ]; then
+        echo "ADMIN_EMAIL and ADMIN_PASSWORD must be set to initialize the database." >&2
+        echo "They create the initial admin account (there is no default password)." >&2
+        exit 2
+    fi
+
     mariadb-admin --verbose create "$MYSQL_DATABASE"
     mariadb --database="$MYSQL_DATABASE" < 01_CreateInitialTables.sql
     mariadb --database="$MYSQL_DATABASE" < 02_InsertInitialData.sql
     mariadb --database="$MYSQL_DATABASE" < 03_InsertDummyAssets.sql
+
+    # Create the initial admin account. Escape single quotes for SQL.
+    admin_email_sql=$(printf %s "$ADMIN_EMAIL" | sed "s/'/''/g")
+    admin_password_sql=$(printf %s "$ADMIN_PASSWORD" | sed "s/'/''/g")
+    echo "INSERT INTO KP_User (email, password, role_id, first_name, last_name) \
+          VALUES ('$admin_email_sql', SHA('$admin_password_sql'), 1, 'Admin', 'Immersity');" \
+        | mariadb --database="$MYSQL_DATABASE"
+    echo "Created initial admin account for $ADMIN_EMAIL."
 fi
 echo "CREATE USER IF NOT EXISTS $MYSQL_USER@localhost IDENTIFIED BY '$MYSQL_PASSWORD';" | mariadb
 echo "GRANT ALL PRIVILEGES ON $MYSQL_DATABASE.* TO $MYSQL_USER@localhost;" | mariadb

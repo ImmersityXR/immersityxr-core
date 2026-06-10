@@ -7,8 +7,8 @@ INSERT INTO KP_Session_Type (type_name)
 VALUES ('lab'),
        ('capture');
 
-INSERT INTO KP_User (email, password, role_id, first_name, last_name)
-VALUES ('admin@immersity.edu', SHA('password'), 1, 'Admin', 'Immersity');
+-- The initial admin user is created by entrypoint.sh from the ADMIN_EMAIL
+-- and ADMIN_PASSWORD environment variables (no hardcoded default password).
 
 INSERT INTO KP_Semester (year, period)
 VALUES (2020, 'Spring'),

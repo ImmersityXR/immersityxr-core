@@ -287,11 +287,14 @@ export default {
     startSession() {
       // TODO(rob): construct client path on mounted, and trigger update if build is changed
       // TODO(rob): set global flag when session started
+      // Shared secret the relay server may require from clients
+      // (relay config.auth.clientSecret); forwarded by the VR client's relay.js
+      const relayAuth = process.env.VUE_APP_VR_AUTH_TOKEN ? `&auth=${encodeURIComponent(process.env.VUE_APP_VR_AUTH_TOKEN)}` : '';
       if(this.captureId) {
         this.sessionId = 9999+this.sessionId;
-        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${this.userId}&session=${this.sessionId}&teacher=${this.teacher}&playback=${this.captureId}`;
+        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${this.userId}&session=${this.sessionId}&teacher=${this.teacher}&playback=${this.captureId}${relayAuth}`;
       } else {
-        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${this.userId}&session=${this.sessionId}&teacher=${this.teacher}`;
+        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${this.userId}&session=${this.sessionId}&teacher=${this.teacher}${relayAuth}`;
       }
       console.log('Starting session with client:', this.clientPath);
     },
