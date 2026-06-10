@@ -1,4 +1,5 @@
-FROM node:latest
+# Pinned to the active LTS line; node:latest pulls unpredictable majors
+FROM node:22
 
 COPY --chown=node:node ./package*.json /immersity/
 WORKDIR /immersity
