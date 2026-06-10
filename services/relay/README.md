@@ -48,6 +48,33 @@ You will need [Node.js](https://nodejs.org/en/download/) installed on your machi
 | [Instanbul](https://github.com/istanbuljs/nyc) | Code coverage | 
 | [Should.JS](https://github.com/shouldjs/should.js) | Easy-to-read assertions | 
 
+## Authentication
+
+The relay supports shared-secret authentication, configured in `config.js`:
+
+```js
+auth: {
+    clientSecret: "<long random phrase>",  // required for /sync and /chat when set
+    adminSecret: "<long random phrase>"    // required for /admin
+}
+```
+
+- **`clientSecret`** — when set, clients must pass the secret as an `auth`
+  query parameter on the Socket.IO connection
+  (e.g. `io(url + '/sync?auth=<secret>')` or `io(url, { query: { auth: secret } })`).
+  The Unity WebGL template's `relay.js` forwards the page's `?auth=` URL
+  parameter automatically, so deployments append `&auth=<secret>` to the
+  client launch URL. When left empty, connections are accepted as before and
+  a warning is logged at startup.
+- **`adminSecret`** — the `/admin` diagnostics namespace is deny-by-default:
+  while this is unset, **all** `/admin` connections are rejected. The admin
+  dashboard (`/public`) prompts for the secret on load.
+
+This is a perimeter control to keep uninvited clients off a deployment — the
+secret is shared by all clients of a deployment and visible to anyone who can
+load the client page. Per-user authentication (e.g. portal-issued JWTs) is
+future work.
+
 ## Footnotes
 
 [1] NOTE: The chat namespace is experimental and not ready for production usage.

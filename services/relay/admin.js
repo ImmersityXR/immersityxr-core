@@ -35,6 +35,8 @@
 
 var fromEntries = require('object.fromentries');
 
+const auth = require('./auth');
+
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors/Cyclic_object_value#examples
 function JSONStringifyCircular(obj) {
     const seen = new WeakSet();
@@ -55,10 +57,9 @@ module.exports = {
     init: function (io, logger, syncServer, chatServer) {
         var admin = io.of('/admin');
 
-        admin.use((socket, next) => {
-            //TODO(Brandon) - ADD AUTHENTICATION HERE!!! (should we use https://www.npmjs.com/package/socketio-auth ? )
-            next();
-        });
+        // Deny-by-default: connections are rejected unless config.auth.adminSecret
+        // is set and the client supplies it as the `auth` query parameter.
+        admin.use(auth.adminAuth(logger));
 
         admin.on('connection', function(socket) {
             //TODO finish or remove.

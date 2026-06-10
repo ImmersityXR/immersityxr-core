@@ -48,6 +48,7 @@ const Session = require("./session");
 
 const SocketRepairCenter = require("./socket-repair-center");
 const SocketActivityMonitor = require("./socket-activity-monitor");
+const auth = require("./auth");
 const chat = require("./chat");
 const { debug } = require("console");
 
@@ -2694,6 +2695,10 @@ module.exports = {
     this.sendStateCatchUpAction = function (socket, state) {
       socket.emit(ImmersitySendEvents.state, state);
     };
+
+    // Require the shared client secret (when configured) before accepting
+    // connections. See auth.js and config.auth.clientSecret.
+    io.of(SYNC_NAMESPACE).use(auth.clientAuth(SYNC_NAMESPACE, logger));
 
     // main relay handler
     io.of(SYNC_NAMESPACE).on(SocketIOEvents.connection, function (socket) {

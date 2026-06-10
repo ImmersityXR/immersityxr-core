@@ -37,12 +37,18 @@ const mkdirp = require('mkdirp');
 
 const speechToTextServer = require('./speech-to-text');
 
+const auth = require('./auth');
+
 var chats = new Map();
 
 module.exports = {
     init: function (io, logger) {
         // server namespace for chat signaling and messaging
         var chat = io.of('/chat');
+
+        // Require the shared client secret (when configured) before accepting
+        // connections. See auth.js and config.auth.clientSecret.
+        chat.use(auth.clientAuth('/chat', logger));
 
         chat.on('connection', function(socket) {
             // TODO(Brandon): log connection here

@@ -69,9 +69,29 @@ function isEmpty (obj) {
 
 window.onload = function () {
     localStorage.debug = '*';
-    
+
+    // The /admin namespace requires the shared secret from config.auth.adminSecret.
+    var adminSecret = sessionStorage.getItem('immersityAdminSecret');
+
+    if (!adminSecret) {
+        adminSecret = window.prompt('Enter the relay admin secret (config.auth.adminSecret):') || '';
+
+        sessionStorage.setItem('immersityAdminSecret', adminSecret);
+    }
+
     var adminSocket = io(RELAY_BASE_URL + '/admin', {
-        withCredentials: true   
+        withCredentials: true,
+        query: {
+            auth: adminSecret
+        }
+    });
+
+    adminSocket.on("error", function (message) {
+        if (message === 'unauthorized') {
+            sessionStorage.removeItem('immersityAdminSecret');
+
+            adminInfoEl.innerHTML = 'Unauthorized: wrong or missing admin secret. Reload the page to try again.';
+        }
     });
 
     adminSocket.on("adminInfo", function (info) {
