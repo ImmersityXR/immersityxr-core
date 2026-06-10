@@ -48,6 +48,28 @@ You will need [Node.js](https://nodejs.org/en/download/) installed on your machi
 | [Instanbul](https://github.com/istanbuljs/nyc) | Code coverage | 
 | [Should.JS](https://github.com/shouldjs/should.js) | Easy-to-read assertions | 
 
+## WebRTC signaling (/rtc)
+
+The `/rtc` namespace (`rtc.js`) provides signaling for peer-to-peer
+voice/video/screen sharing between clients in the same session: SDP
+offer/answer relay, trickle ICE, call rooms, and device-type negotiation.
+The protocol is ported from [David Tamayo's KomodoSandbox
+work](https://github.com/davtamay/RelayTesting), adapted to Socket.IO 2.x,
+scoped per session, and gated by the same shared client secret as `/sync`.
+
+Clients connect with query parameters `userName`, `client_id`, `session_id`
+(and `auth` when a client secret is configured). On connection the server
+emits `rtcConfig { iceServers }` from `config.rtc.iceServers`, so STUN/TURN
+servers are managed centrally — add a TURN server there for participants
+behind strict NATs.
+
+Smoke test (drives a real two-peer offer/answer/ICE handshake):
+
+```
+npm install --no-save socket.io-client@2
+node test/rtc-smoke-test.js
+```
+
 ## Authentication
 
 The relay supports shared-secret authentication, configured in `config.js`:

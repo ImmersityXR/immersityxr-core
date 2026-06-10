@@ -54,6 +54,8 @@ const syncServer = require('./sync');
 
 const chatServer = require('./chat');
 
+const rtcServer = require('./rtc');
+
 //TODO: rename to `diagnostics`
 const adminServer = require('./admin');
 
@@ -110,6 +112,8 @@ server.listen(PORT, {
 if (logger) logger.info(`Immersity relay is running on :${PORT}`);
 
 var chatNamespace = chatServer.init(io, logger);
+
+var rtcNamespace = rtcServer.init(io, logger);
 
 var adminNamespace = adminServer.init(io, logger, syncServer, chatServer);
 

@@ -24,6 +24,16 @@ module.exports = {
         // Empty string = /admin rejects ALL connections.
         adminSecret: ""
     },
+    rtc: {
+        // STUN/TURN servers handed to WebRTC clients connecting to /rtc.
+        // Empty array = public Google STUN servers (fine on one network;
+        // add a TURN server for participants behind strict NATs), e.g.:
+        // [
+        //     { urls: ['stun:stun.l.google.com:19302'] },
+        //     { urls: ['turn:turn.example.edu:3478'], username: '...', credential: '...' }
+        // ]
+        iceServers: []
+    },
     azure: {
         subscriptionKey: "",
         serviceRegion: ""
