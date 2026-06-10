@@ -10,7 +10,10 @@ This directory contains everything needed to deploy the complete Immersity VR en
 - **Auto-renewal** - Certificates renew automatically  
 - **HTTP to HTTPS redirect** - Automatic redirection  
 - **Unified configuration** - All configs in one place  
-- **Git-based deployment** - Version control for all configurations
+- **Git-based deployment** - Version control for all configurations  
+- **Optional web portal** - Deploy the Immersity Portal alongside the stack (see [docs/PORTAL.md](docs/PORTAL.md))
+
+> **New here?** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has a system map of all five Immersity repositories, a security checklist, and the modernization roadmap.
 
 ---
 

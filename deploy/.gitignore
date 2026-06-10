@@ -12,6 +12,10 @@ immersity-relay/captures/*
 immersity-buildserver/builds/*
 !immersity-buildserver/builds/.gitkeep
 
+# Portal secrets and database data
+immersity-portal/config.js
+immersity-portal/mysql-data/
+
 # Logs
 *.log
 

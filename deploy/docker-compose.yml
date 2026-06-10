@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # ===========================================================================
   # Traefik 3.3 - Reverse Proxy with Let's Encrypt
@@ -87,6 +85,70 @@ services:
       - "traefik.http.routers.buildserver-https.entrypoints=websecure"
       - "traefik.http.routers.buildserver-https.tls.certresolver=letsencrypt"
       - "traefik.http.routers.buildserver-https.priority=1"
+
+  # ===========================================================================
+  # Immersity Portal - Web Portal (optional)
+  # Enable by setting COMPOSE_PROFILES=portal in .env
+  # Requires the immersity-portal repo checked out next to this one
+  # (or set PORTAL_REPO_PATH). See docs/PORTAL.md for setup.
+  # ===========================================================================
+  immersity-portal-frontend:
+    build:
+      context: ${PORTAL_REPO_PATH:-../immersity-portal}/frontend
+    image: immersityxr/immersity-portal-frontend:local
+    container_name: immersity-portal-frontend
+    restart: always
+    profiles: ["portal"]
+    networks:
+      - proxy
+    environment:
+      - TZ=${TZ:-America/Chicago}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.immersity-portal-frontend.loadbalancer.server.port=80"
+
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.portal-http.rule=Host(`${PORTAL_DOMAIN}`)"
+      - "traefik.http.routers.portal-http.entrypoints=web"
+      - "traefik.http.routers.portal-http.middlewares=redirect-to-https"
+
+      # HTTPS
+      - "traefik.http.routers.portal-https.rule=Host(`${PORTAL_DOMAIN}`)"
+      - "traefik.http.routers.portal-https.entrypoints=websecure"
+      - "traefik.http.routers.portal-https.tls.certresolver=letsencrypt"
+
+  immersity-portal-backend:
+    build:
+      context: ${PORTAL_REPO_PATH:-../immersity-portal}/backend
+    image: immersityxr/immersity-portal-backend:local
+    container_name: immersity-portal-backend
+    restart: always
+    profiles: ["portal"]
+    networks:
+      - proxy
+    environment:
+      - TZ=${TZ:-America/Chicago}
+      - MYSQL_DATABASE=${PORTAL_MYSQL_DATABASE}
+      - MYSQL_USER=${PORTAL_MYSQL_USER}
+      - MYSQL_PASSWORD=${PORTAL_MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${PORTAL_MYSQL_ROOT_PASSWORD}
+    volumes:
+      # Persist the in-container MariaDB data directory between restarts
+      - ./immersity-portal/mysql-data:/home/mysql
+      - ./immersity-portal/config.js:/immersity/portal/backend/config.js:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.immersity-portal-backend.loadbalancer.server.port=4040"
+
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.portal-api-http.rule=Host(`${PORTAL_API_DOMAIN}`)"
+      - "traefik.http.routers.portal-api-http.entrypoints=web"
+      - "traefik.http.routers.portal-api-http.middlewares=redirect-to-https"
+
+      # HTTPS
+      - "traefik.http.routers.portal-api-https.rule=Host(`${PORTAL_API_DOMAIN}`)"
+      - "traefik.http.routers.portal-api-https.entrypoints=websecure"
+      - "traefik.http.routers.portal-api-https.tls.certresolver=letsencrypt"
 
   # ===========================================================================
   # Middleware Definitions
