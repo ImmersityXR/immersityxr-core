@@ -143,6 +143,23 @@ call UI in immersity-unity (`docs/WEBRTC-PORT.md` there has the contract)
 and, for off-campus participants, standing up a TURN server (`RTC_TURN_*`
 in this repo's `.env` — coturn on the VPS is the usual choice).
 
+### Phase 2.6 — Session persistence (capture half done)
+Two related gaps share one mechanism (an append-only event journal):
+- **Research capture durability — done (June 2026).** Recordings now stream
+  to disk as NDJSON with a manifest, flushed every 500 ms; interrupted
+  recordings are finalized on relay startup and stay usable; a converter
+  (`tools/export-capture.js` in immersity-relay) produces per-message-type
+  CSVs. Previously the whole recording lived in memory and was written once
+  at stop — a disruption lost everything.
+- **Late-join / rejoin state — remaining.** The relay's state catch-up
+  omits drawings (draw events are relayed, never stored) and all state is
+  in-memory (lost on relay restart). Plan: store strokes in session state,
+  reuse the capture writer as an always-on per-session journal + periodic
+  snapshots, restore sessions on startup, and make "recording" a labeled
+  time range of the journal instead of a separate buffer. Client side:
+  verify the Unity client applies catch-up on rejoin and add stroke
+  re-rendering.
+
 ### Phase 3 — Protocol & engine upgrades (after the new frontend)
 - **Socket.IO 2 → 4** across relay + frontend + Unity template, in lockstep
   (RelayTesting fork is a working reference).

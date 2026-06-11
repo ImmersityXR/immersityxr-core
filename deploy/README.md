@@ -500,8 +500,12 @@ docker compose up -d immersity-relay --build
 # List all capture sessions
 ls -la ~/immersity-deploy/immersity-relay/captures/
 
-# View specific capture data
-cat ~/immersity-deploy/immersity-relay/captures/test123/*/data | jq .
+# View specific capture data (one JSON message per line + a manifest)
+jq -s . ~/immersity-deploy/immersity-relay/captures/test123/*/data.ndjson
+cat ~/immersity-deploy/immersity-relay/captures/test123/*/manifest.json
+
+# Legacy captures (recorded before the streaming format) are a single JSON file:
+# cat ~/immersity-deploy/immersity-relay/captures/test123/*/data | jq .
 ```
 
 ### Updating from Git
