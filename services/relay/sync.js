@@ -48,6 +48,7 @@ const Session = require("./session");
 
 const SocketRepairCenter = require("./socket-repair-center");
 const SocketActivityMonitor = require("./socket-activity-monitor");
+const CaptureWriter = require("./capture-writer");
 const auth = require("./auth");
 const chat = require("./chat");
 const { debug } = require("console");
@@ -332,14 +333,28 @@ module.exports = {
     if (session && !session.isRecording) {
       session.isRecording = true;
       session.recordingStart = Date.now();
-      let path = this.getCapturePath(session_id, session.recordingStart, "");
-      fs.mkdir(path, { recursive: true }, (err) => {
-        if (err)
-          if (this.logger)
-            this.logger.warn(`Error creating capture path: ${err}`);
-      });
       let capture_id = session_id + "_" + session.recordingStart;
       session.capture_id = capture_id;
+
+      // Stream messages to disk as they arrive (instead of holding the whole
+      // recording in memory and writing once at stop, which lost everything
+      // on a crash or disruption). See capture-writer.js.
+      try {
+        session.captureWriter = new CaptureWriter(
+          this.getCapturePath(session_id, session.recordingStart, ""),
+          capture_id,
+          session_id,
+          session.recordingStart,
+          this.logger
+        );
+      } catch (e) {
+        if (this.logger)
+          this.logger.error(`Failed to start capture writer: ${e}`);
+        session.isRecording = false;
+        session.capture_id = null;
+        return;
+      }
+
       if (pool) {
         pool.query(
           "INSERT INTO captures(capture_id, session_id, start) VALUES(?, ?, ?)",
@@ -366,45 +381,24 @@ module.exports = {
 
   // define end_recording event handler, use on socket event as well as on server cleanup for empty sessions
   end_recording: function (pool, session_id) {
+    // The session-cleanup path doesn't have the pool in scope; fall back to
+    // the one captured at init so the capture end event still reaches the
+    // database.
+    pool = pool || this.pool;
+
     if (session_id) {
       let session = this.sessions.get(session_id);
       if (session && session.isRecording) {
         session.isRecording = false;
         if (this.logger) this.logger.info(`Capture ended: ${session_id}`);
-        // write out the buffers if not empty, but only up to where the cursor is
 
-        // NOTE(rob): deprecated, use messages.
-        // let pos_writer = session.writers.pos;
-        // if (pos_writer.cursor > 0) {
-        //     let path = this.getCapturePath(session_id, session.recordingStart, 'pos');
-        //     let wstream = fs.createWriteStream(path, { flags: 'a' });
-        //     wstream.write(pos_writer.buffer.slice(0, pos_writer.cursor));
-        //     wstream.close();
-        //     pos_writer.cursor = 0;
-        // }
-        // let int_writer = session.writers.int;
-        // if (int_writer.cursor > 0) {
-        //     let path = this.getCapturePath(session_id, session.recordingStart, 'int');
-        //     let wstream = fs.createWriteStream(path, { flags: 'a' });
-        //     wstream.write(int_writer.buffer.slice(0, int_writer.cursor));
-        //     wstream.close();
-        //     int_writer.cursor = 0;
-        // }
-
-        // write out message buffer.
-        let path = this.getCapturePath(
-          session_id,
-          session.recordingStart,
-          "data"
-        ); // [capturesDirectoryHere]/[session_id_here]/[session.recordingStartHere]/data
-        fs.writeFile(path, JSON.stringify(session.message_buffer), (e) => {
-          if (e) {
-            console.log(`Error writing message buffer: ${e}`);
-          }
-        });
-        //TODO(Brandon): add success event here. Possibly notify Unity client.
-        // reset the buffer.
-        session.message_buffer = [];
+        // Flush remaining messages, close the stream, and finalize the
+        // manifest. Data has been streaming to disk throughout the
+        // recording (see capture-writer.js).
+        if (session.captureWriter) {
+          session.captureWriter.end();
+          session.captureWriter = null;
+        }
 
         // write the capture end event to database
         if (pool) {
@@ -485,18 +479,10 @@ module.exports = {
         return;
       }
 
-      if (session.message_buffer) {
-        // TODO(rob): find optimal buffer size
-        // if (session.message_buffer.length < MESSAGE_BUFFER_MAX_SIZE) {
-        //     this.session.message_buffer.push(data)
-        // } else
-
-        session.message_buffer.push(data);
-
-        // DEBUG(rob):
-        // let mb_str = JSON.stringify(session.message_buffer);
-        // let bytes = new util.TextEncoder().encode(mb_str).length;
-        // console.log(`Session ${data.session_id} message buffer size: ${bytes} bytes`);
+      // Stream to disk via the capture writer (bounded memory; survives
+      // crashes and disruptions). Replaces the unbounded message_buffer.
+      if (session.captureWriter) {
+        session.captureWriter.record(data);
       }
     } else {
       this.logErrorSessionClientSocketAction(
@@ -1553,7 +1539,10 @@ module.exports = {
       `Stopping recording for empty session`
     );
 
-    this.end_recording(session_id);
+    // (was `this.end_recording(session_id)` - the session id landed in the
+    // pool parameter and the real session id was undefined, so recordings
+    // of sessions that emptied out were silently dropped)
+    this.end_recording(this.pool, session_id);
   },
 
   // clean up session from sessions map if empty, write
@@ -2484,6 +2473,17 @@ module.exports = {
     }
 
     this.logger = logger;
+
+    // keep the pool reachable for code paths outside socket handlers
+    // (e.g. ending a recording when a session empties out)
+    this.pool = pool;
+
+    // Finalize any recordings left open by a crash or restart; their
+    // streamed data is already on disk and stays usable.
+    CaptureWriter.finalizeOrphans(
+      path.join(__dirname, config.capture.path),
+      logger
+    );
 
     if (!this.logger) {
       console.error("Failed to init logger. Exiting.");

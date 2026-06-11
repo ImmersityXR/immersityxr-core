@@ -1,6 +1,6 @@
 // Standalone smoke test for the /rtc WebRTC signaling namespace.
 //
-// Run with: node test/rtc-smoke-test.js
+// Run with: node tests/rtc-smoke-test.js
 //
 // Starts a relay on port 3997 with an in-memory config (does not read or
 // write config.js) and drives a full two-peer offer/answer/ICE handshake,

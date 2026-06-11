@@ -67,7 +67,44 @@ Smoke test (drives a real two-peer offer/answer/ICE handshake):
 
 ```
 npm install --no-save socket.io-client@2
-node test/rtc-smoke-test.js
+node tests/rtc-smoke-test.js
+```
+
+## Session capture (research data logging)
+
+While a session is recording, every message is **streamed to disk as it
+arrives** (`capture-writer.js`), instead of being held in memory and written
+only when recording stops. A crash, network disruption, or redeploy
+mid-recording costs at most the last flush interval (500 ms) — everything
+else is already on disk.
+
+Each recording produces:
+
+```
+captures/<session_id>/<recording_start>/
+  data.ndjson     one JSON message per line, appended continuously
+  manifest.json   capture_id, start/end, status, message_count
+```
+
+- `manifest.json` `status` is `recording` while in progress, `complete` on a
+  clean stop, or `interrupted` if the server went down mid-recording — on
+  startup the relay finds orphaned recordings and finalizes them
+  automatically. Interrupted captures remain fully usable.
+- NDJSON loads directly into analysis tools:
+  - pandas: `pd.read_json('data.ndjson', lines=True)`
+  - jq: `jq -s '.' data.ndjson`
+- For spreadsheet-friendly output, split a capture into per-message-type CSV
+  files (also reads the legacy single-JSON `data` format):
+
+  ```
+  node tools/export-capture.js captures/<session_id>/<recording_start>
+  ```
+
+Smoke test (covers the interrupted-recording recovery path and a
+9,000-message burst):
+
+```
+node tests/capture-smoke-test.js
 ```
 
 ## Authentication
