@@ -56,6 +56,12 @@ class Session {
     //     }
     // };
     this.message_buffer = [];
+    // draw strokes, keyed by stroke id; replayed to late joiners and
+    // persisted in state snapshots (see sync.js applyDrawMessageToState)
+    this.strokes = {};
+    this.strokeOrder = 0;
+    // set when shared state changes; cleared when a snapshot is written
+    this.stateDirty = false;
   }
 
   getId() {

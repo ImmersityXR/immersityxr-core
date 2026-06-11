@@ -41,4 +41,15 @@ module.exports = {
     capture: {
         path: './captures/',
     },
+    persistence: {
+        // Periodically snapshot each session's shared state (entities,
+        // scene, draw strokes) to disk so it survives relay restarts and
+        // empty sessions. Late joiners and rejoining clients receive the
+        // restored state through the normal state catch-up.
+        enabled: true,
+        path: './sessions/',
+        snapshotIntervalMs: 10000,
+        // stored state expires after this many hours (default: 7 days)
+        ttlHours: 168,
+    },
 };

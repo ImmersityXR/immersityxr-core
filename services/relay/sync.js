@@ -49,6 +49,7 @@ const Session = require("./session");
 const SocketRepairCenter = require("./socket-repair-center");
 const SocketActivityMonitor = require("./socket-activity-monitor");
 const CaptureWriter = require("./capture-writer");
+const SessionPersistence = require("./session-persistence");
 const auth = require("./auth");
 const chat = require("./chat");
 const { debug } = require("console");
@@ -760,6 +761,8 @@ module.exports = {
 
         session.entities.push(entity);
       }
+
+      session.stateDirty = true;
     }
   },
 
@@ -784,6 +787,8 @@ module.exports = {
       if (!session.hasClient(client_id)) {
         return;
       }
+
+      session.stateDirty = true;
 
       // entity should be rendered
       if (interaction_type == INTERACTION_RENDER) {
@@ -1561,6 +1566,16 @@ module.exports = {
 
     this.try_to_end_recording(session_id);
 
+    // final snapshot so the session's shared state can be restored when
+    // someone joins again later (within the configured TTL)
+    if (this.persistence) {
+      let session = this.sessions.get(session_id);
+
+      if (session && session.stateDirty) {
+        this.persistence.snapshot(session);
+      }
+    }
+
     this.sessions.delete(session_id);
   },
 
@@ -1606,6 +1621,23 @@ module.exports = {
     this.sessions.set(session_id, new Session(session_id));
 
     session = this.sessions.get(session_id);
+
+    // Restore shared state (entities, scene, draw strokes) from the last
+    // snapshot, if one exists and hasn't expired - covers both relay
+    // restarts and sessions that emptied out and were cleaned up.
+    if (this.persistence) {
+      let snapshot = this.persistence.loadSnapshot(session_id);
+
+      if (snapshot) {
+        session.entities = snapshot.entities || [];
+
+        session.scene = snapshot.scene || null;
+
+        session.strokes = snapshot.strokes || {};
+
+        session.strokeOrder = snapshot.strokeOrder || 0;
+      }
+    }
 
     return session;
   },
@@ -2274,10 +2306,93 @@ module.exports = {
     // get reference to session and parse message payload for state updates, if needed.
     if (type == ImmersityMessages.interaction.type) {
       this.applyInteractionMessageToState(session, message.targetEntity_id, message.interactionType);
+
+      session.stateDirty = true;
     }
 
     if (data.type == ImmersityMessages.sync.type) {
       this.applySyncMessageToState(session, message);
+
+      session.stateDirty = true;
+    }
+
+    // draw strokes are part of session state so late joiners can see them
+    if (data.type == "draw") {
+      this.applyDrawMessageToState(session, data);
+    }
+  },
+
+  // Store draw messages in session state, keyed by stroke, so they can be
+  // replayed to late-joining or rejoining clients through the normal
+  // `message` relay (the client's live draw handler reconstructs them
+  // exactly as if it had watched the drawing happen).
+  applyDrawMessageToState: function (session, data) {
+    let draw = data.message;
+
+    if (!draw || draw.strokeId === undefined || draw.strokeType === undefined) {
+      return;
+    }
+
+    if (!session.strokes) {
+      session.strokes = {};
+
+      session.strokeOrder = 0;
+    }
+
+    let strokeKey = draw.strokeId.toString();
+
+    // see Entity_Type in the Unity client: Line = 10 (segment),
+    // LineEnd = 11, LineDelete = 12, LineRender = 13, LineNotRender = 14
+    if (draw.strokeType == 12) {
+      delete session.strokes[strokeKey];
+
+      session.stateDirty = true;
+
+      return;
+    }
+
+    let stroke = session.strokes[strokeKey];
+
+    if (!stroke) {
+      stroke = session.strokes[strokeKey] = {
+        order: session.strokeOrder++,
+        packets: []
+      };
+    }
+
+    stroke.packets.push(data);
+
+    session.stateDirty = true;
+  },
+
+  // Replay every stored draw stroke to a single socket (a late joiner or a
+  // rejoining client), in the order the strokes were started.
+  replayStrokesToSocket: function (socket, session_id) {
+    let session = this.sessions.get(session_id);
+
+    if (!session || !session.strokes) {
+      return;
+    }
+
+    let strokes = Object.values(session.strokes).sort((a, b) => a.order - b.order);
+
+    let packetCount = 0;
+
+    strokes.forEach((stroke) => {
+      stroke.packets.forEach((packet) => {
+        socket.emit(ImmersitySendEvents.message, packet);
+
+        packetCount += 1;
+      });
+    });
+
+    if (packetCount > 0) {
+      this.logInfoSessionClientSocketAction(
+        session_id,
+        null,
+        socket.id,
+        `Replayed ${strokes.length} draw strokes (${packetCount} packets) for state catch-up`
+      );
     }
   },
   
@@ -2318,6 +2433,8 @@ module.exports = {
     );
       
     this.sendStateCatchUpAction(socket, result.state);
+
+    this.replayStrokesToSocket(socket, session_id);
   },
 
   addClientToSessionIfNeeded: function (socket, session, client_id) {
@@ -2484,6 +2601,22 @@ module.exports = {
       path.join(__dirname, config.capture.path),
       logger
     );
+
+    // Periodic session-state snapshots, so shared state (entities, scene,
+    // draw strokes) survives relay restarts. See session-persistence.js.
+    let persistenceConfig = config.persistence || {};
+
+    if (persistenceConfig.enabled !== false) {
+      this.persistence = new SessionPersistence(
+        path.join(__dirname, persistenceConfig.path || "./sessions/"),
+        logger,
+        persistenceConfig
+      );
+
+      this.persistence.start(this.sessions);
+    } else {
+      this.persistence = null;
+    }
 
     if (!this.logger) {
       console.error("Failed to init logger. Exiting.");
@@ -2797,6 +2930,11 @@ module.exports = {
         try {
           // emit versioned state data
           socket.emit(ImmersitySendEvents.state, state); // Behavior as of 10/7/21: Sends the state only to the client who requested it.
+
+          // draw strokes are not part of the state payload; replay them
+          // through the normal message relay so the client's live draw
+          // handler reconstructs them with no client-side changes
+          self.replayStrokesToSocket(socket, session_id);
         } catch (err) {
           this.logErrorSessionClientSocketAction(
             session_id,

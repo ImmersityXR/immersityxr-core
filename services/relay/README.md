@@ -107,6 +107,31 @@ Smoke test (covers the interrupted-recording recovery path and a
 node tests/capture-smoke-test.js
 ```
 
+## Session persistence (late join / rejoin / restart)
+
+Shared session state — entity positions, lock/visibility, scene, and **draw
+strokes** — survives beyond the sockets that created it:
+
+- Draw messages are stored per stroke in session state
+  (`applyDrawMessageToState`) and **replayed to any client that requests
+  state catch-up**, through the normal `message` relay — so late joiners
+  and rejoining clients see existing drawings with no client-side changes
+  (the live draw handler reconstructs them).
+- Session state is **snapshotted to disk** every 10 seconds when it changes
+  (`session-persistence.js`, atomic writes to `sessions/<id>/state.json`)
+  and restored when the session is recreated — whether after a relay
+  restart or after the session emptied out. Stored state expires after a
+  TTL (default 7 days).
+- Configure via `config.persistence` (`enabled`, `path`,
+  `snapshotIntervalMs`, `ttlHours`). Clients/sockets are never persisted —
+  only the shared environment.
+
+Smoke test (real clients: draw → late join → simulated restart → TTL):
+
+```
+node tests/persistence-smoke-test.js
+```
+
 ## Authentication
 
 The relay supports shared-secret authentication, configured in `config.js`:

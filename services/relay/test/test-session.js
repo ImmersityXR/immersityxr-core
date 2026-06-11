@@ -120,7 +120,13 @@ describe("Session", function (done) {
         assert.deepStrictEqual(session.seq, expectedSession.seq);
 
         assert.deepStrictEqual(session.message_buffer, expectedSession.message_buffer);
-    });   
+
+        assert.deepStrictEqual(session.strokes, {});
+
+        assert.deepStrictEqual(session.strokeOrder, 0);
+
+        assert.deepStrictEqual(session.stateDirty, false);
+    });
 
     it("should append a valid client to an empty session", function () {
         let session = new Session();
