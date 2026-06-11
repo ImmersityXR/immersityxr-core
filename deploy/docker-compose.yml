@@ -43,6 +43,9 @@ services:
     restart: always
     volumes:
       - ./immersity-relay/captures:/immersity/captures
+      # session state snapshots (entities, scene, draw strokes) - lets
+      # shared state survive relay restarts and container recreation
+      - ./immersity-relay/sessions:/immersity/sessions
       - ./immersity-relay/config.js:/immersity/config.js:ro
     networks:
       - proxy
@@ -56,6 +59,7 @@ services:
       - RTC_TURN_URL=${RTC_TURN_URL}
       - RTC_TURN_USERNAME=${RTC_TURN_USERNAME}
       - RTC_TURN_CREDENTIAL=${RTC_TURN_CREDENTIAL}
+      - SESSION_STATE_TTL_HOURS=${SESSION_STATE_TTL_HOURS}
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.immersity-relay.loadbalancer.server.port=80"

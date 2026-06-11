@@ -8,6 +8,9 @@ immersity-proxy/acme.json
 immersity-relay/captures/*
 !immersity-relay/captures/.gitkeep
 
+# Session state snapshots
+immersity-relay/sessions/
+
 # Unity builds (too large for git)
 immersity-buildserver/builds/*
 !immersity-buildserver/builds/.gitkeep

@@ -151,14 +151,17 @@ Two related gaps share one mechanism (an append-only event journal):
   (`tools/export-capture.js` in immersity-relay) produces per-message-type
   CSVs. Previously the whole recording lived in memory and was written once
   at stop — a disruption lost everything.
-- **Late-join / rejoin state — remaining.** The relay's state catch-up
-  omits drawings (draw events are relayed, never stored) and all state is
-  in-memory (lost on relay restart). Plan: store strokes in session state,
-  reuse the capture writer as an always-on per-session journal + periodic
-  snapshots, restore sessions on startup, and make "recording" a labeled
-  time range of the journal instead of a separate buffer. Client side:
-  verify the Unity client applies catch-up on rejoin and add stroke
-  re-rendering.
+- **Late-join / rejoin state — done (June 2026).** Draw strokes are now
+  stored in session state and replayed to any client requesting state
+  catch-up through the normal message relay (zero Unity client changes —
+  the live draw handler reconstructs them). Session state (entities,
+  scene, strokes) is snapshotted to disk every 10s when dirty and restored
+  when a session is recreated — after a relay restart or after the session
+  emptied out — with a configurable TTL (default 7 days,
+  `SESSION_STATE_TTL_HOURS` in this repo's `.env`). The snapshots live on
+  the `immersity-relay/sessions/` volume; back it up alongside captures.
+  Possible follow-on: make "recording" a labeled time range of an
+  always-on journal instead of a separate start/stop buffer.
 
 ### Phase 3 — Protocol & engine upgrades (after the new frontend)
 - **Socket.IO 2 → 4** across relay + frontend + Unity template, in lockstep
