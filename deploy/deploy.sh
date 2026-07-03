@@ -106,12 +106,12 @@ fi
 PORTAL_ENABLED=0
 if [[ "${COMPOSE_PROFILES:-}" == *portal* ]]; then
     PORTAL_ENABLED=1
-    PORTAL_PATH="${PORTAL_REPO_PATH:-../immersity-portal}"
+    PORTAL_PATH="../portal"
 
     if [ ! -d "${PORTAL_PATH}" ]; then
         echo -e "${COLOR_RED}Error: portal repo not found at ${PORTAL_PATH}${COLOR_RESET}"
-        echo "Clone it (git clone https://github.com/ImmersityXR/immersity-portal.git)"
-        echo "or set PORTAL_REPO_PATH in .env"
+        echo "The portal should be at ../portal inside this repository."
+        echo "Is this a complete checkout of the immersity monorepo?"
         exit 1
     fi
     echo -e "${COLOR_GREEN}[OK]${COLOR_RESET} Portal repo found at ${PORTAL_PATH}"

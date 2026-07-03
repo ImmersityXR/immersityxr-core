@@ -37,7 +37,7 @@ services:
     # enforce RELAY_CLIENT_SECRET / RELAY_ADMIN_SECRET, build from a local
     # checkout of immersity-relay: docker compose build immersity-relay
     build:
-      context: ${RELAY_REPO_PATH:-../immersity-relay}
+      context: ../services/relay
     pull_policy: missing
     container_name: immersity-relay
     restart: always
@@ -80,6 +80,9 @@ services:
   # ===========================================================================
   immersity-buildserver:
     image: immersityxr/immersity-buildserver:0.1.0
+    build:
+      context: ../services/buildserver
+    pull_policy: missing
     container_name: immersity-buildserver
     restart: always
     volumes:
@@ -106,12 +109,11 @@ services:
   # ===========================================================================
   # Immersity Portal - Web Portal (optional)
   # Enable by setting COMPOSE_PROFILES=portal in .env
-  # Requires the immersity-portal repo checked out next to this one
-  # (or set PORTAL_REPO_PATH). See docs/PORTAL.md for setup.
+  # Built from ../portal in this repository. See docs/PORTAL.md for setup.
   # ===========================================================================
   immersity-portal-frontend:
     build:
-      context: ${PORTAL_REPO_PATH:-../immersity-portal}/frontend
+      context: ../portal/frontend
     image: immersityxr/immersity-portal-frontend:local
     container_name: immersity-portal-frontend
     restart: always
@@ -136,7 +138,7 @@ services:
 
   immersity-portal-backend:
     build:
-      context: ${PORTAL_REPO_PATH:-../immersity-portal}/backend
+      context: ../portal/backend
     image: immersityxr/immersity-portal-backend:local
     container_name: immersity-portal-backend
     restart: always
