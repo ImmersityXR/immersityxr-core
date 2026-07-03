@@ -1,0 +1,28 @@
+# Environment and secrets
+.env
+
+# Let's Encrypt certificates
+immersity-proxy/acme.json
+
+# Captures (recorded sessions)
+immersity-relay/captures/*
+!immersity-relay/captures/.gitkeep
+
+# Session state snapshots
+immersity-relay/sessions/
+
+# Unity builds (too large for git)
+immersity-buildserver/builds/*
+!immersity-buildserver/builds/.gitkeep
+
+# Portal secrets and database data
+immersity-portal/config.js
+immersity-portal/mysql-data/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
