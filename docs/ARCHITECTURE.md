@@ -100,13 +100,14 @@ Key cross-repo couplings:
       server-side (requires a migration path for existing users).
 - [ ] Relay's MySQL connection uses `rejectUnauthorized: false` (TLS cert
       validation disabled).
-- [ ] Both relay and portal-backend images bake in `root:Docker!` SSH
-      passwords (an Azure App Service convention). Harmless if port 2222 is
-      never published — verify it isn't. Azure is retired (July 2026, see
-      section 6), so the sshd install, `root:Docker!` password, and
-      `sshd_config` can now be stripped from the relay, buildserver, and
-      portal-backend images (Dockerfiles + entrypoints); rebuild and smoke
-      the containers when doing so.
+- [x] **`root:Docker!` SSH baked into images** — removed (July 2026). The
+      relay, buildserver, and portal-backend images installed sshd, set the
+      `root:Docker!` password, and started sshd on boot (an Azure App Service
+      convention). With Azure retired (see section 6) the sshd install,
+      password, `sshd_config`, and `EXPOSE 2222` are stripped from all three
+      Dockerfiles and entrypoints. openrc stays in portal-backend (mariadb
+      runs as an openrc service). The `docker-build` CI workflow builds all
+      images on change and boots the build server, so this stays verified.
 - [ ] Traefik dashboard runs in insecure mode on :8080 (bound to localhost;
       confirm that on the VPS, or disable per the README's Security Notes).
 - [ ] Buildserver WebDAV upload (PUT/DELETE enabled in

@@ -8,17 +8,9 @@ COPY ./entrypoint.sh ./buildserver-entrypoint.sh
 
 RUN apk update \
     && apk upgrade \
-    && apk add openrc \
-    && apk add bash \
-    && apk add openssh
+    && apk add bash
 
-RUN echo "root:Docker!" | chpasswd \
-    && chmod u+x ./buildserver-entrypoint.sh
-
-COPY sshd_config /etc/ssh/
-
-RUN openrc default \
-    && rc-update add sshd
+RUN chmod u+x ./buildserver-entrypoint.sh
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

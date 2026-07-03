@@ -11,18 +11,13 @@ RUN npm install
 COPY --chown=node:node server/ .
 EXPOSE 4040
 
-# === install and run ssh ===
+# === install openrc (needed to run mariadb as a service) ===
 
 USER root
 RUN apk add openrc \
-    && apk add bash \
-    && apk add openssh
+    && apk add bash
 
-RUN echo "root:Docker!" | chpasswd
-
-COPY sshd_config /etc/ssh/
-
-# === install and run mysql === 
+# === install and run mysql ===
 
 COPY ./db/scripts /immersity/portal/backend/db/scripts
 
