@@ -1,0 +1,26 @@
+version: "3.7"
+services:
+  immersity-relay:
+    build: .
+    image: immersity-relay:latest
+    container_name: immersity-relay
+    restart: "always"
+    volumes: 
+        - ../captures:/immersity/captures
+    labels:
+      - "traefik.frontend.rule=Host:relay.immersity-dev.library.illinois.edu"
+      - "traefik.backend=immersity-relay"
+      - "traefik.port=80"
+      - "traefik.enable=false"
+      - "traefik.docker.network=proxy"
+    networks: 
+      - proxy
+      - immersity_internal
+    ports: 
+      - 80:80
+
+networks: 
+  proxy:
+    external: true
+  immersity_internal:
+    external: true

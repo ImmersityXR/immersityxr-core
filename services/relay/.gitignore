@@ -1,0 +1,8 @@
+.vscode/
+captures/
+node_modules/
+config.js
+*.log
+log.txt
+.nyc_output
+sessions/
