@@ -234,9 +234,11 @@ cases is worth more than the code.
   Actions workflows that, on push to master, built each service image,
   pushed it to `immersityxr.azurecr.io`, and deployed to Web App instances
   named `*-Test` (ImmersityRelay-Test, ImmersityBuild-Test,
-  ImmersityPortal*-Test). The workflow files are archived in git history at
-  the tag `archive/azure-webapp-workflows` (e.g.
-  `git show archive/azure-webapp-workflows:services/relay/.github/workflows/master_ImmersityRelay-Test.yml`).
+  ImmersityPortal*-Test). The workflow files are archived in git history —
+  commit `12feb87` is the last commit containing them (also tagged
+  `archive/azure-webapp-workflows`), e.g.
+  `git show 12feb87:services/relay/.github/workflows/master_ImmersityRelay-Test.yml`,
+  and they remain in the archived original repos.
   Remaining cleanup happens outside this repo: delete or stop the `*-Test`
   Web Apps in the Azure portal, and let the `AzureAppService_*` GitHub
   secrets die with the archived source repos. The docker-compose deployment
