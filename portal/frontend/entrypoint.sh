@@ -1,10 +1,10 @@
 #!/bin/sh
-ls -a | grep -w "\.env\.production"
-if $? ; then
-    echo "missing .env.production file"
+# Warn (without failing the build) when the env files that bake in the
+# service URLs are absent - see docs/PORTAL.md for how to create them.
+if [ ! -f .env.production ]; then
+    echo "warning: missing .env.production file"
 fi
 
-ls -a | grep -w "\.env\.development"
-if $? ; then
-    echo "missing .env.development file"
+if [ ! -f .env.development ]; then
+    echo "warning: missing .env.development file"
 fi

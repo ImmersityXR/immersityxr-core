@@ -14,7 +14,9 @@ on:
       - 'deploy/docker-compose.yml'
       - '.github/workflows/docker-build.yml'
   push:
-    branches: [main]
+    # playground is the current working branch for the monorepo preview;
+    # drop it here once work moves to PRs against main
+    branches: [main, playground]
     paths:
       - 'services/relay/**'
       - 'services/buildserver/**'
