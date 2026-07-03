@@ -1,0 +1,68 @@
+name: docker-build
+
+# Builds every service image so a change to a Dockerfile, entrypoint, or
+# app that breaks the image is caught in review. The relay's runtime is
+# additionally exercised by relay-tests.yml; this workflow only proves the
+# images build (and that the build server still boots).
+
+on:
+  pull_request:
+    paths:
+      - 'services/relay/**'
+      - 'services/buildserver/**'
+      - 'portal/**'
+      - 'deploy/docker-compose.yml'
+      - '.github/workflows/docker-build.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/relay/**'
+      - 'services/buildserver/**'
+      - 'portal/**'
+      - 'deploy/docker-compose.yml'
+      - '.github/workflows/docker-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: relay
+            context: services/relay
+          - name: buildserver
+            context: services/buildserver
+          - name: portal-backend
+            context: portal/backend
+          - name: portal-frontend
+            context: portal/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          load: true
+          tags: immersity-${{ matrix.name }}:ci
+
+      - name: Smoke test build server boots
+        if: matrix.name == 'buildserver'
+        run: |
+          docker run -d --name buildserver-smoke -p 8081:80 immersity-buildserver:ci
+          for i in $(seq 1 10); do
+            if curl -fsS http://localhost:8081/ >/dev/null; then
+              echo "build server responded"
+              docker rm -f buildserver-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "build server did not respond in time" >&2
+          docker logs buildserver-smoke
+          docker rm -f buildserver-smoke
+          exit 1
