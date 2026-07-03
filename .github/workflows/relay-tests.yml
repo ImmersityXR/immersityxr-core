@@ -1,0 +1,35 @@
+name: relay-tests
+
+on:
+  pull_request:
+    paths:
+      - 'services/relay/**'
+  push:
+    branches: [main]
+    paths:
+      - 'services/relay/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm install --no-save socket.io-client@2
+      - name: Unit and integration tests (mocha)
+        run: |
+          cp config.template.js config.js
+          npm test
+          rm config.js
+      - name: RTC signaling smoke test
+        run: node tests/rtc-smoke-test.js
+      - name: Capture durability smoke test
+        run: node tests/capture-smoke-test.js
+      - name: Session persistence smoke test
+        run: node tests/persistence-smoke-test.js
