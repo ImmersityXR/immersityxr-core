@@ -34,8 +34,8 @@ services:
   immersity-relay:
     image: immersityxr/immersity-relay:0.1.0
     # The published 0.1.0 image predates shared-secret auth support. To
-    # enforce RELAY_CLIENT_SECRET / RELAY_ADMIN_SECRET, build from a local
-    # checkout of immersity-relay: docker compose build immersity-relay
+    # enforce RELAY_CLIENT_SECRET / RELAY_ADMIN_SECRET, build from this
+    # repository's sources: docker compose build immersity-relay
     build:
       context: ../services/relay
     pull_policy: missing

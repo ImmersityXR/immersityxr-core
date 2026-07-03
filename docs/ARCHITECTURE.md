@@ -1,8 +1,15 @@
 # Immersity System Architecture & Modernization Briefing
 
-*Prepared June 2026. Covers all five ImmersityXR repositories as they stand
-today, for planning the move to University of Illinois VPS hosting and a
+*Prepared June 2026. Covers all five ImmersityXR repositories as they stood
+at the time, for planning the move to University of Illinois VPS hosting and a
 refreshed front end.*
+
+> **Monorepo note:** four of the five repositories described below now live
+> in this repository — `immersity-deploy` → [`deploy/`](../deploy/),
+> `immersity-relay` → [`services/relay/`](../services/relay/),
+> `immersity-build` → [`services/buildserver/`](../services/buildserver/),
+> `immersity-portal` → [`portal/`](../portal/). Repo names in the text are
+> kept as historical references; `immersity-unity` remains separate.
 
 Immersity (formerly **Project Komodo**, gelic-idealab / IDEA Lab) is a
 multi-user WebXR education platform: instructors schedule VR lab sessions,

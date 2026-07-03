@@ -98,7 +98,7 @@ standard practice even in monorepo-first organizations.
 ## Migration plan
 
 The mechanical steps are **scripted and rehearsed**:
-[`tools/migrate-to-monorepo.sh`](../tools/migrate-to-monorepo.sh) assembles
+[`deploy/tools/migrate-to-monorepo.sh`](../deploy/tools/migrate-to-monorepo.sh) assembles
 the monorepo from the four repos (history-preserving `git filter-repo`
 imports, in-repo compose rewiring with drift assertions, path-filtered CI)
 and has been validated end-to-end — the generated repo's compose config

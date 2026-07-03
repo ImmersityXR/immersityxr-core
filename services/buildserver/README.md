@@ -1,21 +1,26 @@
-# Komodo Buildserver
+# Immersity Buildserver
 
-## What is it? 
-The buildserver serves a `builds` directory with the different versioned and custom builds for Komodo VR clients. It runs in a docker container, so you will have to map the host directory containing builds to the container. 
+An nginx static file server for Unity WebGL builds. It serves a `builds`
+directory containing the versioned (and custom) builds of the Immersity VR
+client.
 
-## Configure the buildserver
-You will need to set the correct URL for the traefik `host` parameter in `docker-compose.yml` (eg. 'vr.komodo.edu'). This is the same endpoint used in Komodo Portal for embedding the client on session pages. 
-```
-      - "traefik.frontend.rule=Host:< URL FOR VR CLIENT ENDPOINT >"
-```
-You will need to create a `builds` directory, which is mapped by default in `docker-compose.yml`.
-```
-    volumes: 
-      - ./builds:/usr/share/nginx/html
-```
+## Deployment
 
-## Pushing builds
+The buildserver runs as the `immersity-buildserver` service in
+[`deploy/docker-compose.yml`](../../deploy/docker-compose.yml), built from
+this directory and routed through the Traefik proxy at the deployment's
+root domain. The compose file mounts `deploy/immersity-buildserver/builds/`
+into the container at `/usr/share/nginx/html`.
 
-*Coming soon (TM)
+See the [deploy README](../../deploy/README.md) for how to download builds
+from the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases),
+place them in the builds directory, and create clean URLs with symlinks.
 
-For now, use an [SFTP client](https://cyberduck.io/) to copy builds directly to your buildserver. 
+## Uploading builds
+
+nginx has WebDAV enabled (`default.conf` allows PUT/DELETE), and
+`upload-build.sh <directory> <host>` uploads a build directory with curl.
+
+**Note:** WebDAV has no authentication of its own. Keep it unreachable
+through the proxy, or copy builds to the server with scp/SFTP instead —
+see the security checklist in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).

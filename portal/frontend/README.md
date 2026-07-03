@@ -1,6 +1,6 @@
 # Immersity Portal - Frontend
 
-[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
+[Learn more about the Immersity Platform](../../docs/ARCHITECTURE.md)
 
 ## What is it?
 As a part of Immersity Portal, the frontend provides web views for users to interact, it includes several web pages such as login page, dashboard page, course detail page, etc. The frontend is based on `Vue` framework.
@@ -18,8 +18,8 @@ Prerequisite:
 
 1. Clone this repository
  ```bash
- git clone https://github.com/ImmersityXR/immersity-portal.git 
- cd immersity-portal/frontend
+ git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+ cd immersity/portal/frontend
  ```
 2. Install dependencies
 ```bash

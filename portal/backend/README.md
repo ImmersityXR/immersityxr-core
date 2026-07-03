@@ -1,6 +1,6 @@
 # Immersity Portal - Backend
 
-[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
+[Learn more about the Immersity Platform](../../docs/ARCHITECTURE.md)
 
 ## What is it?
 As a part of Immersity Portal, the backend served as a API to support the necessary data requested from the frontend and interacted with database to query the data. The backend is based on Node.js/Express. 
@@ -19,8 +19,8 @@ Prerequisite:
 
 1. Clone this repository
  ```bash
- git clone https://github.com/ImmersityXR/immersity-portal.git 
- cd immersity-portal/backend
+ git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+ cd immersity/portal/backend
  ```
 2. Install dependencies
 ```bash
