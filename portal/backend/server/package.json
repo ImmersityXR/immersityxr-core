@@ -1,0 +1,35 @@
+{
+  "name": "immersity-portal-backend",
+  "version": "1.2.2",
+  "description": "Back end for Project Immersity web portal",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "debug": "nodemon index.js --inspect=0.0.0.0",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.552.0",
+    "body-parser": "^1.19.0",
+    "connect-multiparty": "^2.2.0",
+    "cookie-parser": "^1.4.5",
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "express-router": "0.0.1",
+    "express-session": "^1.17.0",
+    "jsonfile": "^5.0.0",
+    "jsonwebtoken": "^8.5.1",
+    "moment": "^2.29.1",
+    "mysql2": "^2.3.0",
+    "swagger-ui-express": "^4.1.4",
+    "twilio": "^3.57.0",
+    "util": "^0.12.3",
+    "uuid": "^7.0.3"
+  },
+  "devDependencies": {
+    "fs": "0.0.1-security"
+  }
+}

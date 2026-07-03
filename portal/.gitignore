@@ -1,0 +1,9 @@
+.idea/
+.DS_Store
+frontend/package-lock.json
+backend/package-lock.json
+frontend/dist
+node_modules
+backend/db/.env*
+backend/.env
+backend/setenv.sh

@@ -1,0 +1,17 @@
+# This Docker compose file serves as a base. To use it with networks, please see...
+# - docker-compose.override.yml
+# - docker-compose.dev.yml
+
+# examples of using this file: 
+#     $ docker-compose up --build
+#     $ docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
+
+services:
+
+  backend:
+    container_name: immersity-portal-backend
+    restart: always
+
+  frontend:
+    container_name: immersity-portal-frontend
+    restart: always

@@ -1,0 +1,40 @@
+# This Docker (auto) override file creates top-level networks and connects to them in the service level.
+
+# examples of using this file: 
+#     $ docker-compose up --build
+#     $ docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
+
+# to verify the environment variables are interpolated correctly:
+#     $ docker compose config
+#     $ docker compose -f docker-compose.yml -f docker-compose.override.yml config
+
+services:
+
+  backend:
+    build: ./backend
+    labels:
+      - "traefik.frontend.rule=Host:api.immersity-dev.library.illinois.edu"
+      - "traefik.backend=immersity-portal-backend"
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.port=4040"
+    networks:
+      - proxy
+      - immersity_internal
+
+  frontend:
+    build: ./frontend
+    labels:
+      - "traefik.frontend.rule=Host:immersity-dev.library.illinois.edu"
+      - "traefik.backend=immersity-portal-frontend"
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+    networks:
+      - proxy
+      - immersity_internal
+
+networks:
+  proxy:
+    external: true
+  immersity_internal:
+    external: true
