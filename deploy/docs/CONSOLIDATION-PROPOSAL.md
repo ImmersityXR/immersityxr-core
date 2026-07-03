@@ -88,30 +88,43 @@ standard practice even in monorepo-first organizations.
 - **Old links and clones.** Mitigated by archiving (not deleting) the old
   repos — GitHub archives stay readable and searchable, and each gets a
   pointer README.
-- **History.** `git subtree add` (or `git filter-repo`) preserves full commit
-  history of every repo inside the monorepo. No history is lost.
+- **History.** Every repo's full commit history is rewritten into the
+  monorepo with `git filter-repo`, so `git log -- services/relay` shows the
+  original relay commits. No history is lost. (Verified: 500+ commits
+  browsable per path in the rehearsal run.)
 - **In-flight work.** Mitigated by sequencing: nothing moves until the four
   open PRs (deploy #4, relay #7, unity #8, portal #1) are merged.
 
 ## Migration plan
 
+The mechanical steps are **scripted and rehearsed**:
+[`tools/migrate-to-monorepo.sh`](../tools/migrate-to-monorepo.sh) assembles
+the monorepo from the four repos (history-preserving `git filter-repo`
+imports, in-repo compose rewiring with drift assertions, path-filtered CI)
+and has been validated end-to-end — the generated repo's compose config
+validates with the portal profile enabled and the relay test suite passes
+inside it. Because the monorepo is a *generated artifact*, a preview can be
+stood up at any time (e.g. an org repo named `immersity-preview`) without
+touching the existing repos, then regenerated fresh when the team commits.
+
 1. **Land the open PRs** (they're cross-referenced against the current
    layout).
-2. **Create the `immersity` repo**; import each repo with history:
-   `git subtree add --prefix=services/relay <relay-remote> main` (etc.).
-3. **Fix conventions while moving:** single default branch (`main`
-   everywhere, including immersity-unity), compose build contexts to
-   in-repo paths, delete deploy's duplicated relay/buildserver copies,
-   refresh stale README sections.
-4. **CI:** path-filtered workflows per service; relay tests run on every PR
-   touching `services/relay/`; image builds tagged with the git SHA.
+2. **Run `tools/migrate-to-monorepo.sh`** and push the result (as the
+   preview first, or directly as `immersity` once agreed).
+3. **Prose pass:** the script rewires paths but deliberately leaves
+   human-facing docs (clone instructions in deploy/README.md, docs/PORTAL.md)
+   for a human read-through.
+4. **CI follow-ups:** the relay test workflow ships with the script; image
+   publishing workflows (registry choice, credentials) are a separate
+   decision.
 5. **Archive** the four old repos (read-only) with pointer READMEs.
    `immersity-unity` continues as-is, renaming its default branch to `main`
    if we adopt that convention.
 6. **Update the VPS deployment** to clone the monorepo (the deploy flow is
    otherwise unchanged: `cd deploy && ./deploy.sh`).
 
-Estimated effort: one focused day for steps 2–5, plus a team sanity pass.
+Estimated effort: the scripted part takes minutes; the prose pass and team
+sanity check are the real work (an afternoon).
 
 ## Alternative considered: minimal consolidation
 
