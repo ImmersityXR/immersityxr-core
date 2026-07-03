@@ -102,7 +102,11 @@ Key cross-repo couplings:
       validation disabled).
 - [ ] Both relay and portal-backend images bake in `root:Docker!` SSH
       passwords (an Azure App Service convention). Harmless if port 2222 is
-      never published — verify it isn't — and remove when Azure is retired.
+      never published — verify it isn't. Azure is retired (July 2026, see
+      section 6), so the sshd install, `root:Docker!` password, and
+      `sshd_config` can now be stripped from the relay, buildserver, and
+      portal-backend images (Dockerfiles + entrypoints); rebuild and smoke
+      the containers when doing so.
 - [ ] Traefik dashboard runs in insecure mode on :8080 (bound to localhost;
       confirm that on the VPS, or disable per the README's Security Notes).
 - [ ] Buildserver WebDAV upload (PUT/DELETE enabled in
@@ -225,8 +229,18 @@ cases is worth more than the code.
 
 ## 6. Azure / external dependencies to inventory before fully moving on-campus
 
-- Azure Web App deployments (GitHub Actions in relay + portal repos) — retire
-  once the VPS is primary.
+- Azure Web App deployments — **retired (July 2026)**. These were an early
+  deployment test: Azure's Deployment Center generated per-repo GitHub
+  Actions workflows that, on push to master, built each service image,
+  pushed it to `immersityxr.azurecr.io`, and deployed to Web App instances
+  named `*-Test` (ImmersityRelay-Test, ImmersityBuild-Test,
+  ImmersityPortal*-Test). The workflow files are archived in git history at
+  the tag `archive/azure-webapp-workflows` (e.g.
+  `git show archive/azure-webapp-workflows:services/relay/.github/workflows/master_ImmersityRelay-Test.yml`).
+  Remaining cleanup happens outside this repo: delete or stop the `*-Test`
+  Web Apps in the Azure portal, and let the `AzureAppService_*` GitHub
+  secrets die with the archived source repos. The docker-compose deployment
+  in `deploy/` is the only supported path.
 - Azure Container Registry (`immersityxr.azurecr.io`) vs Docker Hub
   (`immersityxr/*`) — pick one home for images.
 - Azure Cognitive Services Speech (relay speech-to-text; optional, currently
