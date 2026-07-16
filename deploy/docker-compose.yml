@@ -1,9 +1,12 @@
 services:
   # ===========================================================================
-  # Traefik 3.3 - Reverse Proxy with Let's Encrypt
+  # Traefik 3.6 - Reverse Proxy with Let's Encrypt
+  # (v3.6.1+ required: earlier releases pin Docker API 1.24, which
+  # Docker Engine 29+ rejects - the docker provider then sees no
+  # containers and every request 404s)
   # ===========================================================================
   immersity-proxy:
-    image: traefik:v3.3
+    image: traefik:v3.6
     container_name: immersity-proxy
     restart: always
     ports:
@@ -176,7 +179,7 @@ services:
   # Middleware Definitions
   # ===========================================================================
   traefik-middlewares:
-    image: traefik:v3.3
+    image: traefik:v3.6
     container_name: traefik-middlewares
     restart: "no"
     command: ["version"]
