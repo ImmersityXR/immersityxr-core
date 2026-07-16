@@ -31,6 +31,12 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
 
+      # HTTP -> HTTPS redirect middleware, defined here because the docker
+      # provider only reads labels from running containers - this container
+      # is always up
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
   # ===========================================================================
   # Immersity Relay - WebSocket/Socket.IO Server
   # ===========================================================================
@@ -174,21 +180,6 @@ services:
       - "traefik.http.routers.portal-api-https.rule=Host(`${PORTAL_API_DOMAIN}`)"
       - "traefik.http.routers.portal-api-https.entrypoints=websecure"
       - "traefik.http.routers.portal-api-https.tls.certresolver=letsencrypt"
-
-  # ===========================================================================
-  # Middleware Definitions
-  # ===========================================================================
-  traefik-middlewares:
-    image: traefik:v3.6
-    container_name: traefik-middlewares
-    restart: "no"
-    command: ["version"]
-    networks:
-      - proxy
-    labels:
-      # Redirect HTTP to HTTPS
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
 
 networks:
   proxy:
