@@ -18,7 +18,7 @@ Prerequisite:
 
 1. Clone this repository
  ```bash
- git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+ git clone https://github.com/ImmersityXR/immersity-core.git immersity
  cd immersity/portal/frontend
  ```
 2. Install dependencies

@@ -19,7 +19,7 @@ _______________
 #### Getting started
 You will need [Node.js](https://nodejs.org/en/download/) installed on your machine.
 1. Clone the monorepo
-    * `git clone https://github.com/ImmersityXR/immersity-preview.git immersity`
+    * `git clone https://github.com/ImmersityXR/immersity-core.git immersity`
     * `cd immersity/services/relay/`
 
 2. Configure the Docker container

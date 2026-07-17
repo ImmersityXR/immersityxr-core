@@ -1,10 +1,10 @@
 # Immersity
 
-> **EXPERIMENTAL PREVIEW** — this repository is a generated
-> rehearsal of the consolidation proposed in
-> [docs/CONSOLIDATION-PROPOSAL.md](docs/CONSOLIDATION-PROPOSAL.md).
-> The five existing repositories remain the source of truth. This repo may
-> be regenerated or deleted at any time; do not build on it yet.
+This repository is the **source of truth** for the Immersity web stack —
+the monorepo consolidation proposed in
+[docs/CONSOLIDATION-PROPOSAL.md](docs/CONSOLIDATION-PROPOSAL.md) and
+adopted in July 2026. All new work on the deploy stack, relay, build
+server, and portal happens here.
 
 Immersity (formerly Project Komodo) is a multi-user WebXR education
 platform: instructors schedule VR lab sessions, students join them in the
@@ -40,4 +40,6 @@ enabling the web portal.
 This repository was assembled from the original
 `immersity-deploy`, `immersity-relay`, `immersity-build`, and
 `immersity-portal` repositories with full commit history preserved
-(`git log -- <path>` works across the import boundary).
+(`git log -- <path>` works across the import boundary). See
+[docs/CONSOLIDATION-PROPOSAL.md](docs/CONSOLIDATION-PROPOSAL.md) for the
+rationale and migration record.

@@ -1,7 +1,9 @@
 # Proposal: Consolidate to Two Repositories
 
-*Drafted June 2026 for team discussion. Status: **proposed** — nothing moves
-until the team agrees and the four open PRs land.*
+*Drafted June 2026 for team discussion. Status: **adopted, July 2026** —
+implemented as [`immersity-core`](https://github.com/ImmersityXR/immersity-core),
+the repository this document now lives in. Kept as the record of the
+rationale and migration plan.*
 
 ## TL;DR
 
@@ -136,8 +138,9 @@ move, but the larger move only gets more expensive with time.
 
 ## Decision checklist
 
-- [ ] Team agrees on two-repo end state (or chooses the minimal alternative)
-- [ ] Naming: monorepo is `immersity` (alternatives welcome)
-- [ ] Default branch convention: `main`
+- [x] Team agrees on two-repo end state (or chooses the minimal alternative)
+- [x] Naming: monorepo is `immersity-core` (chosen over the proposed `immersity`)
+- [x] Default branch convention: `main`
 - [ ] Open PRs merged
-- [ ] Migration date set (avoid mid-semester research sessions)
+- [ ] Archive the four original repos read-only with pointer READMEs
+- [ ] Update the VPS deployment to clone `immersity-core`

@@ -62,7 +62,7 @@ Perfect for first-time setup or quick deployment.
 ssh youruser@yourdomain.edu
 
 # Clone the monorepo and enter the deploy directory
-git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+git clone https://github.com/ImmersityXR/immersity-core.git immersity
 cd immersity/deploy
 ```
 
@@ -199,7 +199,7 @@ For those who want more control or need detailed explanations, here's the step-b
 ssh youruser@yourdomain.edu
 
 # Clone the monorepo and enter the deploy directory
-git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+git clone https://github.com/ImmersityXR/immersity-core.git immersity
 cd immersity/deploy
 ```
 
