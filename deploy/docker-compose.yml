@@ -1,9 +1,12 @@
 services:
   # ===========================================================================
-  # Traefik 3.3 - Reverse Proxy with Let's Encrypt
+  # Traefik 3.6 - Reverse Proxy with Let's Encrypt
+  # (v3.6.1+ required: earlier releases pin Docker API 1.24, which
+  # Docker Engine 29+ rejects - the docker provider then sees no
+  # containers and every request 404s)
   # ===========================================================================
   immersity-proxy:
-    image: traefik:v3.3
+    image: traefik:v3.6
     container_name: immersity-proxy
     restart: always
     ports:
@@ -28,14 +31,20 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
 
+      # HTTP -> HTTPS redirect middleware, defined here because the docker
+      # provider only reads labels from running containers - this container
+      # is always up
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
   # ===========================================================================
   # Immersity Relay - WebSocket/Socket.IO Server
   # ===========================================================================
   immersity-relay:
     image: immersityxr/immersity-relay:0.1.0
     # The published 0.1.0 image predates shared-secret auth support. To
-    # enforce RELAY_CLIENT_SECRET / RELAY_ADMIN_SECRET, build from a local
-    # checkout of immersity-relay: docker compose build immersity-relay
+    # enforce RELAY_CLIENT_SECRET / RELAY_ADMIN_SECRET, build from this
+    # repository's sources: docker compose build immersity-relay
     build:
       context: ../services/relay
     pull_policy: missing
@@ -171,21 +180,6 @@ services:
       - "traefik.http.routers.portal-api-https.rule=Host(`${PORTAL_API_DOMAIN}`)"
       - "traefik.http.routers.portal-api-https.entrypoints=websecure"
       - "traefik.http.routers.portal-api-https.tls.certresolver=letsencrypt"
-
-  # ===========================================================================
-  # Middleware Definitions
-  # ===========================================================================
-  traefik-middlewares:
-    image: traefik:v3.3
-    container_name: traefik-middlewares
-    restart: "no"
-    command: ["version"]
-    networks:
-      - proxy
-    labels:
-      # Redirect HTTP to HTTPS
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
 
 networks:
   proxy:

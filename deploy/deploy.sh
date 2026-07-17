@@ -21,7 +21,7 @@ echo -e "${COLOR_RESET}"
 # Check if running from correct directory
 if [ ! -f "docker-compose.yml" ]; then
     echo -e "${COLOR_RED}Error: docker-compose.yml not found${COLOR_RESET}"
-    echo "Please run this script from the immersity-deployment directory"
+    echo "Please run this script from the deploy/ directory of the immersity repository"
     exit 1
 fi
 

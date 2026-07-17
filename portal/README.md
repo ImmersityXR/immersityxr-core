@@ -1,6 +1,6 @@
 # Immersity Portal
 
-[Learn more about the Immersity Platform](https://github.com/ImmersityXR/immersity-docs)
+[Learn more about the Immersity Platform](../docs/ARCHITECTURE.md)
 
 ## What is it?
 Immersity Portal is a web service for instructors to deploy social virtual reality education apps. Instructors can easily deploy a classroom session, manage sessions and upload assets. Students can join in the classroom session to receive the instruction. This repo contains both backend and frontend. The frontend provides web views for users to interact, while the backend served as a API to support the necessary data requested from the frontend. 
@@ -19,16 +19,16 @@ Prerequisite:
 
 Clone this repository
  ```bash
- git clone https://github.com/ImmersityXR/immersity-portal.git 
- cd immersity-portal/
+ git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+ cd immersity/portal/
  ```
 
 This repo contains two parts: frontend and backend. You need to set up these two parts seperatively and run them on different port. 
 
 #### Frontend
-Visit [here](https://github.com/ImmersityXR/immersity-portal/tree/master/frontend) to get more details about the frontend.
+Visit [frontend/](./frontend/README.md) to get more details about the frontend.
 #### Backend
-Visit [here](https://github.com/ImmersityXR/immersity-portal/tree/master/backend) to get more details about the backend.
+Visit [backend/](./backend/README.md) to get more details about the backend.
 
 ______________
 <a name="deployment"></a>

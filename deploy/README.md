@@ -11,9 +11,9 @@ This directory contains everything needed to deploy the complete Immersity VR en
 - **HTTP to HTTPS redirect** - Automatic redirection  
 - **Unified configuration** - All configs in one place  
 - **Git-based deployment** - Version control for all configurations  
-- **Optional web portal** - Deploy the Immersity Portal alongside the stack (see [docs/PORTAL.md](docs/PORTAL.md))
+- **Optional web portal** - Deploy the Immersity Portal alongside the stack (see [docs/PORTAL.md](../docs/PORTAL.md))
 
-> **New here?** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has a system map of all five Immersity repositories, a security checklist, and the modernization roadmap.
+> **New here?** [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) has a system map of the whole platform, a security checklist, and the modernization roadmap.
 
 ---
 
@@ -47,7 +47,7 @@ A **unified deployment** with:
 - Traefik 2.x with Let's Encrypt - Automatic HTTPS
 - No manual certificates needed
 - Git-based configuration management
-- Uses Docker images: `immersityxr/immersity-relay:0.1.0` and `immersityxr/immersity-buildserver:0.1.0`
+- Relay and build server images are built from this repository (`services/relay/`, `services/buildserver/`)
 
 ---
 
@@ -61,9 +61,9 @@ Perfect for first-time setup or quick deployment.
 # SSH into your VM
 ssh youruser@yourdomain.edu
 
-# Clone the repository
-git clone https://github.com/ImmersityXR/immersity-deploy.git
-cd immersity-deploy
+# Clone the monorepo and enter the deploy directory
+git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+cd immersity/deploy
 ```
 
 ### Step 2: Configure Environment
@@ -91,33 +91,35 @@ TZ=America/Chicago                     # Your timezone
 
 **Download from GitHub Releases:**
 
-1. Visit the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases)
-2. Download the desired version (e.g., v0.5.8, v0.5.7)
+1. Visit the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases)
+2. Download the desired version
 3. Place the build in the builds folder:
 
 ```bash
 # Navigate to builds directory
-cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+cd ~/immersity/deploy/immersity-buildserver/builds
 
-# Download and extract build (example using v0.5.8)
-wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm%2Fv0.5.8/v0.5.8.zip
-unzip v0.5.8.zip
-rm v0.5.8.zip
+# Download and extract a release (substitute the tag/asset you want)
+wget https://github.com/ImmersityXR/immersity-unity/releases/download/<tag>/<build>.zip
+unzip <build>.zip
+rm <build>.zip
 
-# Or copy from existing deployment if available
-cp -R ~/workspace-immersity/immersity-deployment/immersity-buildserver/builds/your-build-folder ./
+# Or copy from an existing deployment if available
+cp -R /path/to/old-deployment/immersity-buildserver/builds/your-build-folder ./
 
 # Or upload from local machine
-# scp -r ./your-unity-build youruser@yourdomain.edu:~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+# scp -r ./your-unity-build youruser@yourdomain.edu:~/immersity/deploy/immersity-buildserver/builds/
 
 # Verify builds are in place
-ls -la ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds/
+ls -la ~/immersity/deploy/immersity-buildserver/builds/
 ```
 
 **Note:** 
 - Unity builds are large and should NOT be committed to Git
 - The `.gitkeep` file ensures the builds directory structure is tracked
 - Multiple build versions can coexist in the builds folder
+- Older builds were published under the project's previous name at
+  [gelic-idealab/komodo-unity](https://github.com/gelic-idealab/komodo-unity/releases)
 
 ### Step 4: Deploy!
 
@@ -151,8 +153,8 @@ That's it! Your Immersity VR environment is live at `https://yourdomain.edu`
 ## Directory Structure
 
 ```
-immersity-deploy/
-├── docker-compose.yml          # Main deployment file
+deploy/                         # This directory (in the immersity monorepo)
+├── docker-compose.yml          # Main deployment file (builds services from ../services and ../portal)
 ├── env.example                 # Environment variables template
 ├── deploy.sh                   # Automated deployment script
 ├── down.sh                     # Shutdown and cleanup script
@@ -160,12 +162,17 @@ immersity-deploy/
 ├── immersity-proxy/           # Traefik configuration
 │   ├── traefik.yml            # Traefik static config
 │   └── acme.json              # Let's Encrypt certificates (auto-generated)
-├── immersity-relay/           # Relay server
+├── immersity-relay/           # Relay server runtime files
 │   ├── config.js              # Relay configuration
-│   └── captures/              # Recorded sessions (auto-created)
-└── immersity-buildserver/     # Static file server
+│   ├── captures/              # Recorded sessions (auto-created)
+│   └── sessions/              # Session state snapshots (auto-created)
+└── immersity-buildserver/     # Static file server runtime files
     └── builds/                # Unity WebGL builds
 ```
+
+The service source code lives elsewhere in the repository
+(`services/relay/`, `services/buildserver/`, `portal/`); this directory
+holds only deployment configuration and runtime data.
 
 ---
 
@@ -175,9 +182,9 @@ immersity-deploy/
 - **Domain name** pointing to your VM's public IP
 - **Ports 80 and 443 open** in firewall (required for Let's Encrypt HTTP challenge)
 - **Git** installed on the VM
-- Docker images are pulled automatically from Docker Hub:
-  - `immersityxr/immersity-relay:0.1.0`
-  - `immersityxr/immersity-buildserver:0.1.0`
+- Relay and build server images are built from this repository on first
+  deploy (the published `immersityxr/*:0.1.0` images predate shared-secret
+  auth support; run `docker compose build` to rebuild from source)
 
 ---
 
@@ -191,9 +198,9 @@ For those who want more control or need detailed explanations, here's the step-b
 # SSH into your VM
 ssh youruser@yourdomain.edu
 
-# Clone the repository
-git clone https://github.com/ImmersityXR/immersity-deploy.git
-cd immersity-deploy
+# Clone the monorepo and enter the deploy directory
+git clone https://github.com/ImmersityXR/immersity-preview.git immersity
+cd immersity/deploy
 ```
 
 ### 2. Configure Environment
@@ -221,16 +228,16 @@ Unity WebGL builds must be downloaded and placed in the `immersity-buildserver/b
 
 **Download from GitHub Releases:**
 
-Visit the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases) and download the desired version.
+Visit the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases) and download the desired version.
 
 ```bash
 # Navigate to builds directory
-cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+cd ~/immersity/deploy/immersity-buildserver/builds
 
-# Download and extract build (example using v0.5.8)
-wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm%2Fv0.5.8/v0.5.8.zip
-unzip v0.5.8.zip
-rm v0.5.8.zip
+# Download and extract a release (substitute the tag/asset you want)
+wget https://github.com/ImmersityXR/immersity-unity/releases/download/<tag>/<build>.zip
+unzip <build>.zip
+rm <build>.zip
 
 # Verify build is in place
 ls -la
@@ -240,7 +247,7 @@ ls -la
 - Unity builds are large (10-100+ MB) and should NOT be committed to Git
 - The `.gitkeep` file ensures the builds directory structure is tracked in Git
 - Multiple build versions can coexist in the builds folder
-- Check the [releases page](https://github.com/gelic-idealab/komodo-unity/releases) for the latest version
+- Check the [releases page](https://github.com/ImmersityXR/immersity-unity/releases) for the latest version
 
 ### 4. Create Docker Network
 
@@ -253,7 +260,7 @@ docker network create proxy
 ### 5. Deploy
 
 ```bash
-cd ~/immersity-deploy
+cd ~/immersity/deploy
 
 # Option 1: Use the automated deploy script (recommended)
 ./deploy.sh
@@ -294,7 +301,7 @@ docker logs immersity-relay --tail 50
 docker logs immersity-buildserver --tail 50
 
 # Check captures directory
-ls -la ~/immersity-deploy/immersity-relay/captures/
+ls -la ~/immersity/deploy/immersity-relay/captures/
 ```
 
 Should see 3 running containers:
@@ -404,16 +411,16 @@ docker logs immersity-proxy -f
 
 ### Update Unity Build
 
-Download the latest Unity build from the [Komodo Unity releases page](https://github.com/gelic-idealab/komodo-unity/releases) and place it in the builds directory.
+Download the latest Unity build from the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases) and place it in the builds directory.
 
 ```bash
 # Navigate to builds directory
-cd ~/workspace-immersity/immersity-deploy/immersity-buildserver/builds
+cd ~/immersity/deploy/immersity-buildserver/builds
 
-# Download new build version (example using v0.5.8)
-wget https://github.com/gelic-idealab/komodo-unity/releases/download/upm%2Fv0.5.8/v0.5.8.zip
-unzip v0.5.8.zip
-rm v0.5.8.zip
+# Download and extract a new build version
+wget https://github.com/ImmersityXR/immersity-unity/releases/download/<tag>/<build>.zip
+unzip <build>.zip
+rm <build>.zip
 
 # Verify new build is in place
 ls -la
@@ -422,7 +429,7 @@ ls -la
 **Important:** 
 - No container restart needed - NGINX serves files directly
 - Builds should NOT be committed to Git (they're in .gitignore)
-- Check the [releases page](https://github.com/gelic-idealab/komodo-unity/releases) for the latest version
+- Check the [releases page](https://github.com/ImmersityXR/immersity-unity/releases) for the latest version
 
 ### Create Clean URLs with Symbolic Links
 
@@ -439,7 +446,7 @@ https://yourdomain.edu/unity/index.html?session=test123&client=1
 **How to create:**
 
 ```bash
-cd ~/immersity-deploy/immersity-buildserver/builds
+cd ~/immersity/deploy/immersity-buildserver/builds
 
 # Create symbolic link
 ln -s james-working/builds/live unity
@@ -484,8 +491,6 @@ If capture doesn't work after creating symlink:
 - Clear browser cache: `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac)
 - Or open in incognito/private browsing mode
 
-**See full documentation** in `IMMERSITY_DEPLOYMENT_GUIDE.md` section "Creating Clean URLs with Symbolic Links" for more details.
-
 ### Update Relay Server
 
 If you rebuild the `immersity-relay` image:
@@ -498,14 +503,14 @@ docker compose up -d immersity-relay --build
 
 ```bash
 # List all capture sessions
-ls -la ~/immersity-deploy/immersity-relay/captures/
+ls -la ~/immersity/deploy/immersity-relay/captures/
 
 # View specific capture data (one JSON message per line + a manifest)
-jq -s . ~/immersity-deploy/immersity-relay/captures/test123/*/data.ndjson
-cat ~/immersity-deploy/immersity-relay/captures/test123/*/manifest.json
+jq -s . ~/immersity/deploy/immersity-relay/captures/test123/*/data.ndjson
+cat ~/immersity/deploy/immersity-relay/captures/test123/*/manifest.json
 
 # Legacy captures (recorded before the streaming format) are a single JSON file:
-# cat ~/immersity-deploy/immersity-relay/captures/test123/*/data | jq .
+# cat ~/immersity/deploy/immersity-relay/captures/test123/*/data | jq .
 ```
 
 ### Updating from Git
@@ -514,7 +519,7 @@ Pull the latest changes from the repository:
 
 ```bash
 # Pull latest changes
-cd ~/immersity-deploy
+cd ~/immersity/deploy
 git pull
 
 # Restart services to apply changes
@@ -684,10 +689,10 @@ docker logs immersity-proxy | grep -i acme
 docker logs immersity-relay --tail 100
 
 # Verify config
-cat ~/immersity-deploy/immersity-relay/config.js
+cat ~/immersity/deploy/immersity-relay/config.js
 
 # Check permissions
-ls -la ~/immersity-deploy/immersity-relay/captures/
+ls -la ~/immersity/deploy/immersity-relay/captures/
 
 # Test capture manually
 # Start capture: curl -X POST http://yourdomain.edu/sync/start_recording/1001
@@ -704,5 +709,5 @@ ls -la ~/immersity-deploy/immersity-relay/captures/
 
 ---
 
-**© 2024 Immersity XR. This is a unified, single-repository deployment for Immersity VR.**
+**© Immersity XR. This directory deploys the full Immersity stack from the monorepo.**
 

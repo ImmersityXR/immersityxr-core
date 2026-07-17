@@ -1,9 +1,0 @@
-services:
-  komodo_buildserver:
-    build: .
-    container_name: komodo_buildserver
-    restart: "always"
-    volumes: 
-      - ./builds:/usr/share/nginx/html
-    ports:
-      - 80:80

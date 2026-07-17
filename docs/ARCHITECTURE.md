@@ -1,8 +1,15 @@
 # Immersity System Architecture & Modernization Briefing
 
-*Prepared June 2026. Covers all five ImmersityXR repositories as they stand
-today, for planning the move to University of Illinois VPS hosting and a
+*Prepared June 2026. Covers all five ImmersityXR repositories as they stood
+at the time, for planning the move to University of Illinois VPS hosting and a
 refreshed front end.*
+
+> **Monorepo note:** four of the five repositories described below now live
+> in this repository — `immersity-deploy` → [`deploy/`](../deploy/),
+> `immersity-relay` → [`services/relay/`](../services/relay/),
+> `immersity-build` → [`services/buildserver/`](../services/buildserver/),
+> `immersity-portal` → [`portal/`](../portal/). Repo names in the text are
+> kept as historical references; `immersity-unity` remains separate.
 
 Immersity (formerly **Project Komodo**, gelic-idealab / IDEA Lab) is a
 multi-user WebXR education platform: instructors schedule VR lab sessions,
@@ -93,9 +100,14 @@ Key cross-repo couplings:
       server-side (requires a migration path for existing users).
 - [ ] Relay's MySQL connection uses `rejectUnauthorized: false` (TLS cert
       validation disabled).
-- [ ] Both relay and portal-backend images bake in `root:Docker!` SSH
-      passwords (an Azure App Service convention). Harmless if port 2222 is
-      never published — verify it isn't — and remove when Azure is retired.
+- [x] **`root:Docker!` SSH baked into images** — removed (July 2026). The
+      relay, buildserver, and portal-backend images installed sshd, set the
+      `root:Docker!` password, and started sshd on boot (an Azure App Service
+      convention). With Azure retired (see section 6) the sshd install,
+      password, `sshd_config`, and `EXPOSE 2222` are stripped from all three
+      Dockerfiles and entrypoints. openrc stays in portal-backend (mariadb
+      runs as an openrc service). The `docker-build` CI workflow builds all
+      images on change and boots the build server, so this stays verified.
 - [ ] Traefik dashboard runs in insecure mode on :8080 (bound to localhost;
       confirm that on the VPS, or disable per the README's Security Notes).
 - [ ] Buildserver WebDAV upload (PUT/DELETE enabled in
@@ -218,8 +230,20 @@ cases is worth more than the code.
 
 ## 6. Azure / external dependencies to inventory before fully moving on-campus
 
-- Azure Web App deployments (GitHub Actions in relay + portal repos) — retire
-  once the VPS is primary.
+- Azure Web App deployments — **retired (July 2026)**. These were an early
+  deployment test: Azure's Deployment Center generated per-repo GitHub
+  Actions workflows that, on push to master, built each service image,
+  pushed it to `immersityxr.azurecr.io`, and deployed to Web App instances
+  named `*-Test` (ImmersityRelay-Test, ImmersityBuild-Test,
+  ImmersityPortal*-Test). The workflow files are archived in git history —
+  commit `12feb87` is the last commit containing them (also tagged
+  `archive/azure-webapp-workflows`), e.g.
+  `git show 12feb87:services/relay/.github/workflows/master_ImmersityRelay-Test.yml`,
+  and they remain in the archived original repos.
+  Remaining cleanup happens outside this repo: delete or stop the `*-Test`
+  Web Apps in the Azure portal, and let the `AzureAppService_*` GitHub
+  secrets die with the archived source repos. The docker-compose deployment
+  in `deploy/` is the only supported path.
 - Azure Container Registry (`immersityxr.azurecr.io`) vs Docker Hub
   (`immersityxr/*`) — pick one home for images.
 - Azure Cognitive Services Speech (relay speech-to-text; optional, currently

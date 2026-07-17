@@ -66,8 +66,5 @@ fi
 echo "CREATE USER IF NOT EXISTS $MYSQL_USER@localhost IDENTIFIED BY '$MYSQL_PASSWORD';" | mariadb
 echo "GRANT ALL PRIVILEGES ON $MYSQL_DATABASE.* TO $MYSQL_USER@localhost;" | mariadb
 
-rc-service sshd start
-rc-update add sshd
-
 cd /immersity/portal/backend
 node index.js

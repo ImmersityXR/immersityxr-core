@@ -12,8 +12,7 @@ and only runs the proxy, relay, and build server.
 | Portal frontend (Vue SPA via nginx) | `immersity-portal-frontend` | `https://PORTAL_DOMAIN` |
 | Portal backend (Express API + MariaDB) | `immersity-portal-backend` | `https://PORTAL_API_DOMAIN` |
 
-Both are built from your local checkout of the
-[immersity-portal](https://github.com/ImmersityXR/immersity-portal) repository
+Both are built from [`portal/`](../portal/) in this repository
 and routed through the existing Traefik proxy with automatic Let's Encrypt
 certificates. The portal's MariaDB runs inside the backend container (that's
 how its Dockerfile is built today); its data directory is persisted to
@@ -29,14 +28,9 @@ how its Dockerfile is built today); its data directory is persisted to
    Let's Encrypt issues a separate certificate per hostname, so both records
    must exist before you deploy. Remember the rate limit (5 certs/week) —
    use the staging CA if you're experimenting.
-3. The portal repo cloned **next to this one** (or anywhere, with
-   `PORTAL_REPO_PATH` set accordingly):
 
-   ```bash
-   cd ..
-   git clone https://github.com/ImmersityXR/immersity-portal.git
-   cd immersity-deploy
-   ```
+The portal source is part of this repository (`portal/`) — there is nothing
+extra to clone.
 
 ## Setup
 
@@ -46,7 +40,6 @@ how its Dockerfile is built today); its data directory is persisted to
 COMPOSE_PROFILES=portal
 PORTAL_DOMAIN=portal.yourdomain.edu
 PORTAL_API_DOMAIN=api.yourdomain.edu
-PORTAL_REPO_PATH=../immersity-portal
 PORTAL_MYSQL_DATABASE=immersity
 PORTAL_MYSQL_USER=immersity
 PORTAL_MYSQL_PASSWORD=<strong password>
@@ -74,12 +67,13 @@ This file is gitignored; never commit it.
 ### 3. Create the frontend env file
 
 The Vue frontend bakes its service URLs in **at image build time** from
-`frontend/.env.development` in the portal repo (its Dockerfile runs
-`npm run build-dev`, which uses development mode):
+`portal/frontend/.env.development` (its Dockerfile runs
+`npm run build-dev`, which uses development mode). From the `deploy/`
+directory:
 
 ```bash
-cp ../immersity-portal/frontend/.env.development.template \
-   ../immersity-portal/frontend/.env.development
+cp ../portal/frontend/.env.development.template \
+   ../portal/frontend/.env.development
 ```
 
 Set the values to your deployed endpoints:
@@ -107,9 +101,10 @@ Notes:
 ```
 
 The script validates the portal config before starting anything. On first
-start the backend initializes the database from the SQL scripts in the portal
-repo and creates the initial admin account from `PORTAL_ADMIN_EMAIL` /
-`PORTAL_ADMIN_PASSWORD` (there is no hardcoded default password).
+start the backend initializes the database from the SQL scripts in
+`portal/backend/db/` and creates the initial admin account from
+`PORTAL_ADMIN_EMAIL` / `PORTAL_ADMIN_PASSWORD` (there is no hardcoded
+default password).
 
 ## Day-to-day
 
