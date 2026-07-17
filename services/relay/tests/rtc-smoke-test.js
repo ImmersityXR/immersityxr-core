@@ -43,7 +43,7 @@ process.on('SIGINT', () => process.exit(130));
 
 const app = require('express')();
 const server = require('http').createServer(app);
-const io = require('socket.io')(server, { cors: { origin: '*' } });
+const io = require('socket.io')(server, { cors: { origin: '*' }, allowEIO3: true });
 const winston = require('winston');
 const logger = winston.createLogger({ transports: [new winston.transports.Console({ level: 'error' })] });
 
@@ -81,9 +81,18 @@ server.listen(3997, async () => {
         const bad = connect('eve', 99, 'sess1', 'wrong');
 
         bad.on('connect', () => { pass('auth: wrong token rejected', false); bad.close(); res(); });
+        // middleware rejection surfaces as 'error' on 2.x clients and as
+        // 'connect_error' on 4.x clients
         bad.on('error', () => { pass('auth: wrong token rejected', true); bad.close(); res(); });
+        bad.on('connect_error', () => { pass('auth: wrong token rejected', true); bad.close(); res(); });
 
-        setTimeout(res, 2500);
+        setTimeout(() => {
+            if (!('auth: wrong token rejected' in results)) {
+                pass('auth: wrong token rejected', false);
+            }
+            bad.close();
+            res();
+        }, 2500);
     });
 
     // two peers in session 100, a bystander in session 200
