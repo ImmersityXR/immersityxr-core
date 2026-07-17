@@ -1,7 +1,7 @@
 # Proposal: Consolidate to Two Repositories
 
 *Drafted June 2026 for team discussion. Status: **adopted, July 2026** —
-implemented as [`immersity-core`](https://github.com/ImmersityXR/immersity-core),
+implemented as [`immersityxr-core`](https://github.com/ImmersityXR/immersityxr-core),
 the repository this document now lives in. Kept as the record of the
 rationale and migration plan.*
 
@@ -9,7 +9,7 @@ rationale and migration plan.*
 
 Merge `immersity-deploy`, `immersity-relay`, `immersity-build`, and
 `immersity-portal` into a single **`immersity`** monorepo (with full commit
-history preserved). Keep **`immersity-unity`** as its own repository. Archive
+history preserved). Keep **`immersityxr-unity`** as its own repository. Archive
 the old repos read-only.
 
 ## Why now
@@ -55,10 +55,10 @@ immersity/                      ← one monorepo for everything web
 └── frontend-next/              ← the new WebXR environment browser,
                                    when that work starts
 
-immersity-unity/                ← stays a separate repository
+immersityxr-unity/                ← stays a separate repository
 ```
 
-### Why immersity-unity stays separate
+### Why immersityxr-unity stays separate
 
 Different tooling (Unity, not npm), different contributor profile, large
 binary assets, Unity-license CI, and the WebGL build already crosses the
@@ -120,7 +120,7 @@ touching the existing repos, then regenerated fresh when the team commits.
    publishing workflows (registry choice, credentials) are a separate
    decision.
 5. **Archive** the four old repos (read-only) with pointer READMEs.
-   `immersity-unity` continues as-is, renaming its default branch to `main`
+   `immersityxr-unity` continues as-is, renaming its default branch to `main`
    if we adopt that convention.
 6. **Update the VPS deployment** to clone the monorepo (the deploy flow is
    otherwise unchanged: `cd deploy && ./deploy.sh`).
@@ -139,8 +139,8 @@ move, but the larger move only gets more expensive with time.
 ## Decision checklist
 
 - [x] Team agrees on two-repo end state (or chooses the minimal alternative)
-- [x] Naming: monorepo is `immersity-core` (chosen over the proposed `immersity`)
+- [x] Naming: monorepo is `immersityxr-core` (chosen over the proposed `immersity`)
 - [x] Default branch convention: `main`
 - [ ] Open PRs merged
 - [ ] Archive the four original repos read-only with pointer READMEs
-- [ ] Update the VPS deployment to clone `immersity-core`
+- [ ] Update the VPS deployment to clone `immersityxr-core`

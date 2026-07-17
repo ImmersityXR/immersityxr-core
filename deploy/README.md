@@ -62,7 +62,7 @@ Perfect for first-time setup or quick deployment.
 ssh youruser@yourdomain.edu
 
 # Clone the monorepo and enter the deploy directory
-git clone https://github.com/ImmersityXR/immersity-core.git immersity
+git clone https://github.com/ImmersityXR/immersityxr-core.git immersity
 cd immersity/deploy
 ```
 
@@ -91,7 +91,7 @@ TZ=America/Chicago                     # Your timezone
 
 **Download from GitHub Releases:**
 
-1. Visit the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases)
+1. Visit the [immersityxr-unity releases page](https://github.com/ImmersityXR/immersityxr-unity/releases)
 2. Download the desired version
 3. Place the build in the builds folder:
 
@@ -100,7 +100,7 @@ TZ=America/Chicago                     # Your timezone
 cd ~/immersity/deploy/immersity-buildserver/builds
 
 # Download and extract a release (substitute the tag/asset you want)
-wget https://github.com/ImmersityXR/immersity-unity/releases/download/<tag>/<build>.zip
+wget https://github.com/ImmersityXR/immersityxr-unity/releases/download/<tag>/<build>.zip
 unzip <build>.zip
 rm <build>.zip
 
@@ -199,7 +199,7 @@ For those who want more control or need detailed explanations, here's the step-b
 ssh youruser@yourdomain.edu
 
 # Clone the monorepo and enter the deploy directory
-git clone https://github.com/ImmersityXR/immersity-core.git immersity
+git clone https://github.com/ImmersityXR/immersityxr-core.git immersity
 cd immersity/deploy
 ```
 
@@ -228,14 +228,14 @@ Unity WebGL builds must be downloaded and placed in the `immersity-buildserver/b
 
 **Download from GitHub Releases:**
 
-Visit the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases) and download the desired version.
+Visit the [immersityxr-unity releases page](https://github.com/ImmersityXR/immersityxr-unity/releases) and download the desired version.
 
 ```bash
 # Navigate to builds directory
 cd ~/immersity/deploy/immersity-buildserver/builds
 
 # Download and extract a release (substitute the tag/asset you want)
-wget https://github.com/ImmersityXR/immersity-unity/releases/download/<tag>/<build>.zip
+wget https://github.com/ImmersityXR/immersityxr-unity/releases/download/<tag>/<build>.zip
 unzip <build>.zip
 rm <build>.zip
 
@@ -247,7 +247,7 @@ ls -la
 - Unity builds are large (10-100+ MB) and should NOT be committed to Git
 - The `.gitkeep` file ensures the builds directory structure is tracked in Git
 - Multiple build versions can coexist in the builds folder
-- Check the [releases page](https://github.com/ImmersityXR/immersity-unity/releases) for the latest version
+- Check the [releases page](https://github.com/ImmersityXR/immersityxr-unity/releases) for the latest version
 
 ### 4. Create Docker Network
 
@@ -411,14 +411,14 @@ docker logs immersity-proxy -f
 
 ### Update Unity Build
 
-Download the latest Unity build from the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases) and place it in the builds directory.
+Download the latest Unity build from the [immersityxr-unity releases page](https://github.com/ImmersityXR/immersityxr-unity/releases) and place it in the builds directory.
 
 ```bash
 # Navigate to builds directory
 cd ~/immersity/deploy/immersity-buildserver/builds
 
 # Download and extract a new build version
-wget https://github.com/ImmersityXR/immersity-unity/releases/download/<tag>/<build>.zip
+wget https://github.com/ImmersityXR/immersityxr-unity/releases/download/<tag>/<build>.zip
 unzip <build>.zip
 rm <build>.zip
 
@@ -429,7 +429,7 @@ ls -la
 **Important:** 
 - No container restart needed - NGINX serves files directly
 - Builds should NOT be committed to Git (they're in .gitignore)
-- Check the [releases page](https://github.com/ImmersityXR/immersity-unity/releases) for the latest version
+- Check the [releases page](https://github.com/ImmersityXR/immersityxr-unity/releases) for the latest version
 
 ### Create Clean URLs with Symbolic Links
 

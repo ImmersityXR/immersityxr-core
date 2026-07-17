@@ -13,7 +13,7 @@ root domain. The compose file mounts `deploy/immersity-buildserver/builds/`
 into the container at `/usr/share/nginx/html`.
 
 See the [deploy README](../../deploy/README.md) for how to download builds
-from the [immersity-unity releases page](https://github.com/ImmersityXR/immersity-unity/releases),
+from the [immersityxr-unity releases page](https://github.com/ImmersityXR/immersityxr-unity/releases),
 place them in the builds directory, and create clean URLs with symlinks.
 
 ## Uploading builds

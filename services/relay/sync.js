@@ -1833,7 +1833,7 @@ module.exports = {
     const { session_id, client_id } = this.whoDisconnected(socket);
 
     if (session_id == null) {
-      //socket not found in our records. This will happen for immersity-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
+      //socket not found in our records. This will happen for immersityxr-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
       this.logInfoSessionClientSocketAction(
         null,
         null,
@@ -1845,7 +1845,7 @@ module.exports = {
     }
 
     if (client_id == null) {
-      //client not found in our records. This will happen for immersity-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
+      //client not found in our records. This will happen for immersityxr-unity versions v0.3.2 and below, which handle "sync" actions on the main server namespace.
       this.logInfoSessionClientSocketAction(
         null,
         null,

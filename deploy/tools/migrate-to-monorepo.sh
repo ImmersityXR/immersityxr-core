@@ -104,7 +104,7 @@ browser or a headset, and a relay server synchronizes everyone in real time.
 | \`docs/\` | Architecture briefing, setup guides, proposals |
 
 The Unity client lives separately in
-[immersity-unity](https://github.com/ImmersityXR/immersity-unity) — see
+[immersityxr-unity](https://github.com/ImmersityXR/immersityxr-unity) — see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together.
 
 ## Quick start (deploy the stack)

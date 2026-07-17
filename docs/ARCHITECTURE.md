@@ -9,7 +9,7 @@ refreshed front end.*
 > `immersity-relay` → [`services/relay/`](../services/relay/),
 > `immersity-build` → [`services/buildserver/`](../services/buildserver/),
 > `immersity-portal` → [`portal/`](../portal/). Repo names in the text are
-> kept as historical references; `immersity-unity` remains separate.
+> kept as historical references; `immersityxr-unity` remains separate.
 
 Immersity (formerly **Project Komodo**, gelic-idealab / IDEA Lab) is a
 multi-user WebXR education platform: instructors schedule VR lab sessions,
@@ -39,7 +39,7 @@ synchronizes everyone in real time.
              Relay server (/sync /chat /admin)
              multiplayer state · capture/playback
 
- immersity-unity ──(WebGL build, manual upload)──► buildserver builds/
+ immersityxr-unity ──(WebGL build, manual upload)──► buildserver builds/
 ```
 
 **The contract that makes a new front end easy:** the portal launches a VR
@@ -54,7 +54,7 @@ is a drop-in replacement.
 | Repo | Role | Stack | Last activity | Health |
 |---|---|---|---|---|
 | immersity-deploy | Single-VM deployment of the whole stack | docker compose, Traefik 3.3, Let's Encrypt | Apr 2026 | Good — most current repo |
-| immersity-unity | XR client (WebGL/WebXR) | Unity 2020.3.49 LTS, de-panther WebXR 0.5.1-preview | Feb 2026 | Active; Unity LTS past EOL, preview packages |
+| immersityxr-unity | XR client (WebGL/WebXR) | Unity 2020.3.49 LTS, de-panther WebXR 0.5.1-preview | Feb 2026 | Active; Unity LTS past EOL, preview packages |
 | immersity-portal | Web portal: courses, labs, assets, users, metrics + REST API | Vue 2.6 / Vuetify 2 frontend; Express 4 + MariaDB backend | May 2025 | Works; frontend on EOL foundations |
 | immersity-relay | Realtime sync: sessions, state, capture/playback, chat | Node.js, Socket.IO 2.3, Express, optional MySQL | Apr 2025 | Works; Socket.IO EOL, no auth |
 | immersity-build | Static server for Unity WebGL builds | nginx:stable-alpine, WebDAV upload | Apr 2025 | Simple and fine; README stale |
@@ -151,7 +151,7 @@ Suggested shape for the new "browse WebXR environments" app:
 ### Phase 2.5 — Voice/video via WebRTC (signaling + web layer done)
 The relay's `/rtc` namespace and the client web layer are ported from
 David Tamayo's fork (see Related forks below); what remains is the in-editor
-call UI in immersity-unity (`docs/WEBRTC-PORT.md` there has the contract)
+call UI in immersityxr-unity (`docs/WEBRTC-PORT.md` there has the contract)
 and, for off-campus participants, standing up a TURN server (`RTC_TURN_*`
 in this repo's `.env` — coturn on the VPS is the usual choice).
 
@@ -208,8 +208,8 @@ know of, developed Jan–Apr 2024:
    `/rtc` namespace (Socket.IO 2.x, per-session rooms, shared-secret auth,
    server-provided ICE config), and the client web layer
    (`webrtc.js`, `webrtcUnity.jslib`, `WebRTCVideoTexture.cs`) is staged in
-   immersity-unity. Remaining: in-editor call UI — see
-   `docs/WEBRTC-PORT.md` in immersity-unity.
+   immersityxr-unity. Remaining: in-editor call UI — see
+   `docs/WEBRTC-PORT.md` in immersityxr-unity.
 2. **A working Socket.IO 2→4 migration** — RelayTesting runs Socket.IO
    4.7.2 with a migrated `sync.js` and matching 4.x client in the Unity
    template. Use as the playbook for our Phase 3 protocol upgrade.
