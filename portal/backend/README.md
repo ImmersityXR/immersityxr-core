@@ -1,9 +1,9 @@
-# Immersity Portal - Backend
+# ImmersityXR Portal - Backend
 
-[Learn more about the Immersity Platform](../../docs/ARCHITECTURE.md)
+[Learn more about the ImmersityXR Platform](../../docs/ARCHITECTURE.md)
 
 ## What is it?
-As a part of Immersity Portal, the backend served as a API to support the necessary data requested from the frontend and interacted with database to query the data. The backend is based on Node.js/Express. 
+As a part of ImmersityXR Portal, the backend served as a API to support the necessary data requested from the frontend and interacted with database to query the data. The backend is based on Node.js/Express. 
 
 1. [Development](#development)
 2. [Test](#test)
@@ -34,12 +34,12 @@ node index.js
 ______________
 <a name="test"></a>
 ### Test
-The recommended Immersity test users `Postman`, more details can see [here](https://learning.postman.com/docs/getting-started/introduction/).
+The recommended ImmersityXR test users `Postman`, more details can see [here](https://learning.postman.com/docs/getting-started/introduction/).
 
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended ImmersityXR deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
 
 # Azure App Service
 ## Persistence

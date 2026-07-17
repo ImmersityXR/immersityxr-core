@@ -146,7 +146,7 @@
                         v-model="build"
                         :value="build"
                         :items="builds"
-                        hint="Set the Immersity version for this lab"
+                        hint="Set the ImmersityXR version for this lab"
                         persistent-hint
                         dense
                       ></v-select>

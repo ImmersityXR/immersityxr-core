@@ -1,5 +1,5 @@
 // ===========================================================================
-// Immersity Relay Server Configuration
+// ImmersityXR Relay Server Configuration
 // ===========================================================================
 // Values come from environment variables set in docker-compose.yml / .env.
 

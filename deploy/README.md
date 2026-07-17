@@ -1,6 +1,6 @@
-# Immersity Unified Deployment
+# ImmersityXR Unified Deployment
 
-This directory contains everything needed to deploy the complete Immersity VR environment with a single `docker compose up` command.
+This directory contains everything needed to deploy the complete ImmersityXR VR environment with a single `docker compose up` command.
 
 ## Features
 
@@ -11,7 +11,7 @@ This directory contains everything needed to deploy the complete Immersity VR en
 - **HTTP to HTTPS redirect** - Automatic redirection  
 - **Unified configuration** - All configs in one place  
 - **Git-based deployment** - Version control for all configurations  
-- **Optional web portal** - Deploy the Immersity Portal alongside the stack (see [docs/PORTAL.md](../docs/PORTAL.md))
+- **Optional web portal** - Deploy the ImmersityXR Portal alongside the stack (see [docs/PORTAL.md](../docs/PORTAL.md))
 
 > **New here?** [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) has a system map of the whole platform, a security checklist, and the modernization roadmap.
 
@@ -146,7 +146,7 @@ curl -I https://yourdomain.edu
 
 Open browser: `https://yourdomain.edu/your-build/index.html?session=test&client=1`
 
-That's it! Your Immersity VR environment is live at `https://yourdomain.edu`
+That's it! Your ImmersityXR VR environment is live at `https://yourdomain.edu`
 
 ---
 
@@ -709,5 +709,5 @@ ls -la ~/immersity/deploy/immersity-relay/captures/
 
 ---
 
-**© Immersity XR. This directory deploys the full Immersity stack from the monorepo.**
+**© ImmersityXR. This directory deploys the full ImmersityXR stack from the monorepo.**
 

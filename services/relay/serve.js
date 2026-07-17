@@ -109,7 +109,7 @@ server.listen(PORT, {
     pingTimeout: 30000
 });
 
-if (logger) logger.info(`Immersity relay is running on :${PORT}`);
+if (logger) logger.info(`ImmersityXR relay is running on :${PORT}`);
 
 var chatNamespace = chatServer.init(io, logger);
 

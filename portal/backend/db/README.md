@@ -1,5 +1,5 @@
-# Immersity DB
-Docker and initialization scripts for the Immersity MySQL database, supporting the platform portal, relay server, and data pipeline. 
+# ImmersityXR DB
+Docker and initialization scripts for the ImmersityXR MySQL database, supporting the platform portal, relay server, and data pipeline. 
 
 Copy `.env.template` to a new file and name it .env`, and fill out the values.
 

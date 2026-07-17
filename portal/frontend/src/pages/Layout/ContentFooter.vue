@@ -5,7 +5,7 @@
         <ul>
           <li>
             <a href="">
-              Immersity
+              ImmersityXR
             </a>
           </li>
           <li>
@@ -28,7 +28,7 @@
       <div class="copyright text-center">
         &copy; {{ new Date().getFullYear() }}
         <a href="https://www.creative-tim.com/?ref=mdf-vuejs" target="_blank"
-          >Project Immersity</a
+          >Project ImmersityXR</a
         >, presented with <i class="fa fa-heart heart"></i> for a new way of learning with VR
       </div>
     </div>

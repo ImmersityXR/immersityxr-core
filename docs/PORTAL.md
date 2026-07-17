@@ -1,6 +1,6 @@
 # Deploying the Web Portal
 
-The Immersity Portal (course/lab management, asset library, session launcher)
+The ImmersityXR Portal (course/lab management, asset library, session launcher)
 can be deployed as part of this stack as an **opt-in compose profile**. With the
 profile disabled (the default), `docker compose up` behaves exactly as before
 and only runs the proxy, relay, and build server.

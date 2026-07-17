@@ -1,12 +1,12 @@
-# Immersity
+# ImmersityXR
 
-This repository is the **source of truth** for the Immersity web stack —
+This repository is the **source of truth** for the ImmersityXR web stack —
 the monorepo consolidation proposed in
 [docs/CONSOLIDATION-PROPOSAL.md](docs/CONSOLIDATION-PROPOSAL.md) and
 adopted in July 2026. All new work on the deploy stack, relay, build
 server, and portal happens here.
 
-Immersity (formerly Project Komodo) is a multi-user WebXR education
+ImmersityXR (formerly Project Komodo) is a multi-user WebXR education
 platform: instructors schedule VR lab sessions, students join them in the
 browser or a headset, and a relay server synchronizes everyone in real time.
 

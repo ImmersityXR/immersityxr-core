@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # =============================================================================
-# Immersity Monorepo Migration Script
+# ImmersityXR Monorepo Migration Script
 # =============================================================================
 # Assembles the `immersity` monorepo from the four web repositories, with
 # full commit history preserved via `git subtree add`. The output is a build
@@ -87,9 +87,9 @@ if [ "$PREVIEW" = "1" ]; then
 fi
 
 cat > README.md <<EOF
-# Immersity
+# ImmersityXR
 
-${BANNER}Immersity (formerly Project Komodo) is a multi-user WebXR education
+${BANNER}ImmersityXR (formerly Project Komodo) is a multi-user WebXR education
 platform: instructors schedule VR lab sessions, students join them in the
 browser or a headset, and a relay server synchronizes everyone in real time.
 

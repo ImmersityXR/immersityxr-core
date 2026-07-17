@@ -27,7 +27,7 @@ const routes = [
     name: "Login",
     component: LoginPage,
     meta: {
-      title: "Log In — Immersity"
+      title: "Log In — ImmersityXR"
     }
   },
   // User logout
@@ -37,7 +37,7 @@ const routes = [
     component: LogoutPage,
     meta: {
       requireLogin: true,
-      title: "Logging out... (Immersity)"
+      title: "Logging out... (ImmersityXR)"
     }
   },
   // Go to about page
@@ -46,7 +46,7 @@ const routes = [
     name: "About",
     component: AboutPage,
     meta: {
-      title: "About — Immersity"
+      title: "About — ImmersityXR"
     }
   },
   // Go to dashboard page
@@ -62,7 +62,7 @@ const routes = [
         component: LandingPage,
         meta: {
           requireLogin: true,
-          title: "Dashboard — Immersity"
+          title: "Dashboard — ImmersityXR"
         }
       },
       // Get course details
@@ -72,7 +72,7 @@ const routes = [
         component: CourseDetail,
         meta: {
           requireLogin: true,
-          title: "Course — Immersity"
+          title: "Course — ImmersityXR"
         }
       },
       // Create new lab
@@ -82,7 +82,7 @@ const routes = [
         component: LabCreate,
         meta: {
           requireLogin: true,
-          title: "Create Lab — Immersity"
+          title: "Create Lab — ImmersityXR"
         }
       },
       // Edit lab by lab id
@@ -92,7 +92,7 @@ const routes = [
         component: LabEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Lab — Immersity"
+          title: "Edit Lab — ImmersityXR"
         }
       },
       // Go to the lab detail page by course id and lab id
@@ -102,7 +102,7 @@ const routes = [
         component: LabDetail,
         meta: {
           requireLogin: true,
-          title: "Lab — Immersity"
+          title: "Lab — ImmersityXR"
         }
       },
       // Go to the assets page
@@ -112,7 +112,7 @@ const routes = [
         component: AssetsPage,
         meta: {
           requireLogin: true,
-          title: "All Assets — Immersity"
+          title: "All Assets — ImmersityXR"
         }
       },
       // Go to the admin view page
@@ -122,7 +122,7 @@ const routes = [
         component: AdminPage,
         meta: {
           requireLogin: true,
-          title: "Admin — Immersity"
+          title: "Admin — ImmersityXR"
         }
       },
       // Create new user
@@ -132,7 +132,7 @@ const routes = [
         component: UserCreate,
         meta: {
           requireLogin: true,
-          title: "Create User — Immersity"
+          title: "Create User — ImmersityXR"
         }
       },
       // Edit user by user id
@@ -142,7 +142,7 @@ const routes = [
         component: UserEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Users — Immersity"
+          title: "Edit Users — ImmersityXR"
         }
       },
       // Edit multiple users in admin page
@@ -152,7 +152,7 @@ const routes = [
         component: MultipleUsersEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Users — Immersity"
+          title: "Edit Users — ImmersityXR"
         }
       },
       // Create new course in admin page
@@ -162,7 +162,7 @@ const routes = [
         component: CourseCreate,
         meta: {
           requireLogin: true,
-          title: "Create Course — Immersity"
+          title: "Create Course — ImmersityXR"
         }
       },
       // Edit course by course id
@@ -172,7 +172,7 @@ const routes = [
         component: CourseEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Course — Immersity"
+          title: "Edit Course — ImmersityXR"
         }
       },
       // Edit multiple course in admin page
@@ -182,7 +182,7 @@ const routes = [
         component: MultipleCoursesEdit,
         meta: {
           requireLogin: true,
-          title: "Edit Courses — Immersity"
+          title: "Edit Courses — ImmersityXR"
         }
       },
       // Create new asset
@@ -192,7 +192,7 @@ const routes = [
         component: AssetCreate,
         meta: {
           requireLogin: true,
-          title: "Upload Asset — Immersity"
+          title: "Upload Asset — ImmersityXR"
         }
       },
       // Get assets details by asset id
@@ -211,7 +211,7 @@ const routes = [
         component: MetricsPage,
         meta: {
           requireLogin: true,
-          title: "Metrics — Immersity"
+          title: "Metrics — ImmersityXR"
         }
       },
       // {
@@ -228,7 +228,7 @@ const routes = [
         component: resetUser,
         meta: {
           requireLogin: true,
-          title: "Account — Immersity"
+          title: "Account — ImmersityXR"
         },
       },
       // User Profile page
@@ -238,7 +238,7 @@ const routes = [
         component: UserProfilePage,
         meta: {
           requireLogin: true,
-          title: "Account — Immersity"
+          title: "Account — ImmersityXR"
         }
       },
     ]

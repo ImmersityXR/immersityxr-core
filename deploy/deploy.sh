@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ===========================================================================
-# Immersity Unified Deployment Script
+# ImmersityXR Unified Deployment Script
 # ===========================================================================
 
 set -e  # Exit on error
@@ -14,7 +14,7 @@ COLOR_BLUE='\033[0;34m'
 
 echo -e "${COLOR_BLUE}"
 echo "======================================================================="
-echo "  Immersity VR Deployment"
+echo "  ImmersityXR VR Deployment"
 echo "======================================================================="
 echo -e "${COLOR_RESET}"
 

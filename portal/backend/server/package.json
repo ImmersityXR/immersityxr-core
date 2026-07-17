@@ -1,7 +1,7 @@
 {
   "name": "immersity-portal-backend",
   "version": "1.2.2",
-  "description": "Back end for Project Immersity web portal",
+  "description": "Back end for Project ImmersityXR web portal",
   "private": true,
   "main": "index.js",
   "scripts": {

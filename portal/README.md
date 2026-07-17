@@ -1,9 +1,9 @@
-# Immersity Portal
+# ImmersityXR Portal
 
-[Learn more about the Immersity Platform](../docs/ARCHITECTURE.md)
+[Learn more about the ImmersityXR Platform](../docs/ARCHITECTURE.md)
 
 ## What is it?
-Immersity Portal is a web service for instructors to deploy social virtual reality education apps. Instructors can easily deploy a classroom session, manage sessions and upload assets. Students can join in the classroom session to receive the instruction. This repo contains both backend and frontend. The frontend provides web views for users to interact, while the backend served as a API to support the necessary data requested from the frontend. 
+ImmersityXR Portal is a web service for instructors to deploy social virtual reality education apps. Instructors can easily deploy a classroom session, manage sessions and upload assets. Students can join in the classroom session to receive the instruction. This repo contains both backend and frontend. The frontend provides web views for users to interact, while the backend served as a API to support the necessary data requested from the frontend. 
 
 1. [Development](#development)
 2. [Deployment](#deployment)
@@ -33,4 +33,4 @@ Visit [backend/](./backend/README.md) to get more details about the backend.
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended ImmersityXR deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  

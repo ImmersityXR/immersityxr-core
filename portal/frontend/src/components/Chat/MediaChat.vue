@@ -365,7 +365,7 @@ export default {
         },
         connectedToServer(id) {
             this.isconnectedToServer = true;
-            console.log('Connected to Immersity RTC server, joining with peerId:', id);
+            console.log('Connected to ImmersityXR RTC server, joining with peerId:', id);
             // emit the `join` event to start peerjs signaling process with existing clients
             this.socket.emit('join', [this.sessionId, this.userId, id, this.firstName+' '+this.lastName]);
         },

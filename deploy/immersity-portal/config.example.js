@@ -1,4 +1,4 @@
-// Immersity Portal backend configuration.
+// ImmersityXR Portal backend configuration.
 //
 // Copy this file to config.js in the same directory and fill in the values.
 // It is mounted into the portal backend container at

@@ -38,7 +38,7 @@ services:
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
 
   # ===========================================================================
-  # Immersity Relay - WebSocket/Socket.IO Server
+  # ImmersityXR Relay - WebSocket/Socket.IO Server
   # ===========================================================================
   immersity-relay:
     image: immersityxr/immersity-relay:0.1.0
@@ -85,7 +85,7 @@ services:
       - "traefik.http.routers.relay-https.priority=100"
 
   # ===========================================================================
-  # Immersity Build Server - Static File Server (NGINX)
+  # ImmersityXR Build Server - Static File Server (NGINX)
   # ===========================================================================
   immersity-buildserver:
     image: immersityxr/immersity-buildserver:0.1.0
@@ -116,7 +116,7 @@ services:
       - "traefik.http.routers.buildserver-https.priority=1"
 
   # ===========================================================================
-  # Immersity Portal - Web Portal (optional)
+  # ImmersityXR Portal - Web Portal (optional)
   # Enable by setting COMPOSE_PROFILES=portal in .env
   # Built from ../portal in this repository. See docs/PORTAL.md for setup.
   # ===========================================================================

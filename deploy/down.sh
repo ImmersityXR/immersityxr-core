@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ===========================================================================
-# Immersity Unified Shutdown and Cleanup Script
+# ImmersityXR Unified Shutdown and Cleanup Script
 # ===========================================================================
 
 set -e  # Exit on error
@@ -14,7 +14,7 @@ COLOR_BLUE='\033[0;34m'
 
 echo -e "${COLOR_BLUE}"
 echo "======================================================================="
-echo "  Immersity VR Shutdown & Cleanup"
+echo "  ImmersityXR VR Shutdown & Cleanup"
 echo "======================================================================="
 echo -e "${COLOR_RESET}"
 

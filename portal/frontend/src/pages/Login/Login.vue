@@ -44,7 +44,7 @@
             <div class="landing-img">
               <div class="landing-logo">
                 <p class="title1 display-2 white--text">
-                  Welcome to Immersity
+                  Welcome to ImmersityXR
                 </p>
                 <p class="title2 headline white--text font-italic">
                   A new way of learning with VR

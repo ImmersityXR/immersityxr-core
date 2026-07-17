@@ -1,4 +1,4 @@
-# Immersity System Architecture & Modernization Briefing
+# ImmersityXR System Architecture & Modernization Briefing
 
 *Prepared June 2026. Covers all five ImmersityXR repositories as they stood
 at the time, for planning the move to University of Illinois VPS hosting and a
@@ -11,7 +11,7 @@ refreshed front end.*
 > `immersity-portal` → [`portal/`](../portal/). Repo names in the text are
 > kept as historical references; `immersityxr-unity` remains separate.
 
-Immersity (formerly **Project Komodo**, gelic-idealab / IDEA Lab) is a
+ImmersityXR (formerly **Project Komodo**, gelic-idealab / IDEA Lab) is a
 multi-user WebXR education platform: instructors schedule VR lab sessions,
 students join them in the browser (or a headset browser), and a relay server
 synchronizes everyone in real time.

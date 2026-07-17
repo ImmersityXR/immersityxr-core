@@ -17,7 +17,7 @@ services:
     labels:
       - "traefik.enable=false"
     volumes: 
-      - ~/Immersity\ XR/volumes/mysql:/home/mysql
+      - ~/ImmersityXR\ XR/volumes/mysql:/home/mysql
     ports:
       - 4040:4040
 

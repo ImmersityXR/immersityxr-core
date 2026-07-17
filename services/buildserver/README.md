@@ -1,7 +1,7 @@
-# Immersity Buildserver
+# ImmersityXR Buildserver
 
 An nginx static file server for Unity WebGL builds. It serves a `builds`
-directory containing the versioned (and custom) builds of the Immersity VR
+directory containing the versioned (and custom) builds of the ImmersityXR VR
 client.
 
 ## Deployment

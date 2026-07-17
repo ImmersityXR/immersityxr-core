@@ -1,11 +1,11 @@
-# Immersity Relay Server
+# ImmersityXR Relay Server
 
-[Learn more about the Immersity Platform](../../docs/ARCHITECTURE.md)
+[Learn more about the ImmersityXR Platform](../../docs/ARCHITECTURE.md)
 
 ## What is it?
 The relay server facilitates client communication during multiplayer sessions. It allows clients to join session namespaces or 'rooms', propagates client updates (including positions within the VR scene and interactions with entities or other clients), coordinates chat sessions (including text and voice/video/screen) [1], maintains session state (including active clients, entity and scene state, session properties), and captures data during session recording. 
 
-- [Immersity Relay Server](#immersity-relay-server)
+- [ImmersityXR Relay Server](#immersity-relay-server)
   - [What is it?](#what-is-it)
     - [Development](#development)
       - [Getting started](#getting-started)
@@ -176,4 +176,4 @@ OR
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended ImmersityXR deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  

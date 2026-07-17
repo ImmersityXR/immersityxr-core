@@ -1,9 +1,9 @@
-# Immersity Portal - Frontend
+# ImmersityXR Portal - Frontend
 
-[Learn more about the Immersity Platform](../../docs/ARCHITECTURE.md)
+[Learn more about the ImmersityXR Platform](../../docs/ARCHITECTURE.md)
 
 ## What is it?
-As a part of Immersity Portal, the frontend provides web views for users to interact, it includes several web pages such as login page, dashboard page, course detail page, etc. The frontend is based on `Vue` framework.
+As a part of ImmersityXR Portal, the frontend provides web views for users to interact, it includes several web pages such as login page, dashboard page, course detail page, etc. The frontend is based on `Vue` framework.
 
 1. [Development](#development)
 2. [Deployment](#deployment)
@@ -38,4 +38,4 @@ npm run serve
 ______________
 <a name="deployment"></a>
 ### Deployment
-The recommended Immersity deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
+The recommended ImmersityXR deployment uses [Docker](https://www.docker.com/products/container-runtime) and docker-compose.  
