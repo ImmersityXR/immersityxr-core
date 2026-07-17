@@ -60,9 +60,12 @@ is a drop-in replacement.
 | immersity-build | Static server for Unity WebGL builds | nginx:stable-alpine, WebDAV upload | Apr 2025 | Simple and fine; README stale |
 
 Key cross-repo couplings:
-- **Socket.IO 2.x protocol** is shared by the relay, the portal frontend
-  (`socket.io-client` 2.3), and the Unity WebGL template (`socket.io.js`).
-  Upgrading to 4.x must happen in all three at once.
+- **Socket.IO protocol** is shared by the relay, the portal frontend
+  (`socket.io-client`), and the Unity/Godot web templates (`socket.io.js`).
+  *Upgraded to 4.x in lockstep (July 2026).* The relay keeps
+  `allowEIO3: true` so Unity builds still carrying the 2.x client keep
+  working; drop that flag (in `services/relay/serve.js`) once every
+  deployed build ships the 4.x `socket.io.js`.
 - The Unity WebGL template's `relay.js` resolves the relay/API URLs at
   runtime; the portal frontend bakes its URLs in at build time.
 - 3D assets live in an **AWS S3 bucket** (`vrcat-assets`, us-east-2),
@@ -176,8 +179,13 @@ Two related gaps share one mechanism (an append-only event journal):
   always-on journal instead of a separate start/stop buffer.
 
 ### Phase 3 — Protocol & engine upgrades (after the new frontend)
-- **Socket.IO 2 → 4** across relay + frontend + Unity template, in lockstep
-  (RelayTesting fork is a working reference).
+- **Socket.IO 2 → 4** — done (July 2026). Relay server, portal frontend
+  client, and both web templates (Unity + Godot) run 4.x; the relay accepts
+  legacy 2.x clients via `allowEIO3` until deployed builds are refreshed.
+  The Unity template's `relay.js` maps the jslib's 2.x reconnection event
+  names onto the 4.x Manager, so existing builds only need the template
+  files (`socket.io.js`, `relay.js`) swapped in their build folder — no
+  Unity rebuild.
 - **Unity 2020.3 → 2022/6000 LTS** and current WebXR Export; budget real QA
   time, the WebXR initialization code is sensitive (see recent commits).
 - Automate Unity build upload to the buildserver (CI), replacing the manual

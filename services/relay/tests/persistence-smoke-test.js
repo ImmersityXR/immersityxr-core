@@ -54,7 +54,7 @@ process.on('SIGINT', () => process.exit(130));
 
 const app = require('express')();
 const server = require('http').createServer(app);
-const io = require('socket.io')(server, { origins: '*:*' });
+const io = require('socket.io')(server, { cors: { origin: '*' }, allowEIO3: true });
 const winston = require('winston');
 const logger = winston.createLogger({ transports: [new winston.transports.Console({ level: 'error' })] });
 

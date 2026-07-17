@@ -2228,7 +2228,9 @@ module.exports = {
       );
     }
 
-    let roomIds = Object.keys(socket.rooms);
+    // socket.io 4: socket.rooms is a Set of room names (still including the
+    // socket's own id, as in 2.x).
+    let roomIds = Array.from(socket.rooms);
 
     return roomIds.includes(session_id);
   },
@@ -2687,9 +2689,9 @@ module.exports = {
     };
 
     this.makeSocketLeaveSessionAction = function (session_id, socket) {
-      socket.leave(session_id.toString(), (err) => {
-        this.failedToLeaveAction(session_id, `Failed to leave during bump: ${err}.`, socket);
-      });
+      // socket.io 4: leave() is synchronous with the in-memory adapter and
+      // no longer reports errors via callback.
+      socket.leave(session_id.toString());
     };
 
     // TODO(Brandon) -- review if this function is needed. I detached it 10/16/21.
@@ -2721,28 +2723,19 @@ module.exports = {
         `Processing request to join session.`
       );
 
-      socket.join(session_id.toString(), (err) => {
-        self.addSocketAndClientToSession(
-          err,
-          socket,
-          session_id,
-          client_id,
-          true
-        );
-      });
+      socket.join(session_id.toString());
+
+      self.addSocketAndClientToSession(
+        null,
+        socket,
+        session_id,
+        client_id,
+        true
+      );
     };
 
     this.joinSocketToRoomAction = function (session_id, socket) {
-      socket.join(session_id.toString(), (err) => {
-        if (err) {
-          self.logErrorSessionClientSocketAction(
-            session_id,
-            null,
-            socket.id,
-            `Tried to join socket to SocketIO room. Error: ${err}`
-          );
-        }
-      });
+      socket.join(session_id.toString());
     };
 
     this.failedToJoinAction = function (session_id, reason, socket) {
@@ -2763,9 +2756,9 @@ module.exports = {
     //TODO(Brandon) -- somewhere, handle request to leave and log to server output.
 
     this.requestToLeaveSessionAction = function (session_id, client_id, socket) {
-      socket.leave(session_id.toString(), (err) => {
-        self.tryToRemoveSocketAndClientFromSessionThenNotifyLeft(err, session_id, client_id, socket);
-      });
+      socket.leave(session_id.toString());
+
+      self.tryToRemoveSocketAndClientFromSessionThenNotifyLeft(null, session_id, client_id, socket);
     };
 
     this.failedToLeaveAction = function (session_id, reason, socket) {
@@ -2820,9 +2813,9 @@ module.exports = {
       );
 
       //TODO -- do we need to rejoin it manually?
-      socket.join(session_id.toString(), (err) => {
-        self.processReconnectionAttempt(err, socket, session_id, client_id);
-      });
+      socket.join(session_id.toString());
+
+      self.processReconnectionAttempt(null, socket, session_id, client_id);
     };
 
     this.sendStateCatchUpAction = function (socket, state) {
