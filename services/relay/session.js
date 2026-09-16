@@ -156,6 +156,8 @@ class Session {
     }
 
     this.clients.splice(index, 1);
+
+    return true;
   }
 
   removeDuplicateClients(client_id) {
