@@ -1573,7 +1573,10 @@ module.exports = {
 
   // clean up session from sessions map if empty, write
   cleanUpSessionIfEmpty: function (session_id) {
-    if (this.getNumClientInstancesForSession(session_id) >= 0) {
+    // This used to call getNumClientInstancesForSession(session_id) with no
+    // client_id - the instance count of client `undefined`, always 0 - and
+    // then bail on `>= 0`, so no session was ever cleaned up.
+    if (this.getTotalNumInstancesForAllClientsForSession(session_id) > 0) {
       // don't clean up if there are still clients in the session
       return;
     }
@@ -2898,6 +2901,45 @@ module.exports = {
         }
 
         self.requestToJoinSessionAction(session_id, client_id, socket);
+      });
+
+      // The client's Leave button emits this with the same [session_id,
+      // client_id] payload as join. requestToLeaveSessionAction existed but
+      // nothing ever registered a handler for the event, so an explicit
+      // leave was silently ignored and the client stayed in the session.
+      socket.on(ImmersityXRReceiveEvents.leave, function (data) {
+        let session_id = data && data[0];
+
+        let client_id = data && data[1];
+
+        self.logInfoSessionClientSocketAction(
+          session_id,
+          client_id,
+          socket.id,
+          `Asked to leave`
+        );
+
+        if (!client_id || !session_id) {
+          self.connectionAuthorizationErrorAction(
+            socket,
+            "You must provide a client ID and a session ID to leave a session."
+          );
+
+          return;
+        }
+
+        if (!self.requestToLeaveSessionAction) {
+          self.logErrorSessionClientSocketAction(
+            session_id,
+            client_id,
+            socket.id,
+            `in socket.on(${ImmersityXRReceiveEvents.leave}), requestToLeaveSessionAction callback was not provided`
+          );
+
+          return;
+        }
+
+        self.requestToLeaveSessionAction(session_id, client_id, socket);
       });
 
       // When a client requests a state catch-up, send the current session state. Supports versioning.

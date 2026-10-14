@@ -230,7 +230,7 @@ class Session {
       return -1;
     }
 
-    return session.clients.length;
+    return this.clients.length;
   }
 
   getClientIdFromSocket(socket) {
