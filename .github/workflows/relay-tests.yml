@@ -33,3 +33,5 @@ jobs:
         run: node tests/capture-smoke-test.js
       - name: Session persistence smoke test
         run: node tests/persistence-smoke-test.js
+      - name: Disconnect cleanup smoke test
+        run: node tests/disconnect-smoke-test.js
