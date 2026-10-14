@@ -156,6 +156,8 @@ class Session {
     }
 
     this.clients.splice(index, 1);
+
+    return true;
   }
 
   removeDuplicateClients(client_id) {
@@ -228,7 +230,7 @@ class Session {
       return -1;
     }
 
-    return session.clients.length;
+    return this.clients.length;
   }
 
   getClientIdFromSocket(socket) {
