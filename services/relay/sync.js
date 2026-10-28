@@ -1218,6 +1218,27 @@ module.exports = {
       return;
     }
 
+    // Resolve the session explicitly. This function used to rely on the
+    // `session` global that createSession leaks (sync.js is not in strict
+    // mode), which only happened to point at the right session when a
+    // caller had just run getOrCreateSession for the same session_id.
+    let session = this.sessions.get(session_id);
+
+    if (!session) {
+      reason = `tryToRemoveSocketAndClientFromSessionThenNotifyLeft: no such session ${session_id}`;
+
+      this.logErrorSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        reason
+      );
+
+      this.failedToLeaveAction(session_id, reason, socket);
+
+      return;
+    }
+
     success = session.removeSocket(socket);
 
     if (!success) {
@@ -1552,7 +1573,10 @@ module.exports = {
 
   // clean up session from sessions map if empty, write
   cleanUpSessionIfEmpty: function (session_id) {
-    if (this.getNumClientInstancesForSession(session_id) >= 0) {
+    // This used to call getNumClientInstancesForSession(session_id) with no
+    // client_id - the instance count of client `undefined`, always 0 - and
+    // then bail on `>= 0`, so no session was ever cleaned up.
+    if (this.getTotalNumInstancesForAllClientsForSession(session_id) > 0) {
       // don't clean up if there are still clients in the session
       return;
     }
@@ -1759,12 +1783,15 @@ module.exports = {
   },
 
   whoDisconnected: function (socket) {
-    for (var s in this.sessions) {
-      const session_id = s[0];
-
-      let session = s[1];
-
-      let { success, isInSession } = isSocketInSession(session_id, socket);
+    // this.sessions is a Map (session_id -> Session). The old code used
+    // `for (var s in this.sessions)`, which iterates a Map's enumerable
+    // properties - there are none - so the loop never ran and this function
+    // always returned null/null. Every disconnect was then treated as an
+    // unknown (pre-v0.3.2) client and skipped, so clients were never removed
+    // from their session: the leaked entries became ghost avatars in every
+    // later joiner's state catch-up.
+    for (const [session_id, session] of this.sessions) {
+      let { success, isInSession } = this.isSocketInSession(session_id, socket);
 
       if (!success || !isInSession) {
         // This isn't the right session, so keep looking.
@@ -1856,48 +1883,20 @@ module.exports = {
       return true;
     }
 
-    if (this.doTryReconnecting(reason)) {
-      this.logErrorSessionClientSocketAction(
-        null,
-        null,
-        socket.id,
-        `-    trying to reconnect and rejoin user. Reason: ${reason}`
-      );
-
-      // Try to reconnect the socket
-      let success = this.reconnectAction(
-        reason,
-        socket,
-        session_id,
-        client_id,
-        session
-      );
-
-      if (!success) {
-        this.socketActivityMonitor.addOrUpdate(socket.id);
-
-        this.socketRepairCenter.add(socket);
-
-        return false;
-      }
-
-      return true;
-    }
-
-    this.logErrorSessionClientSocketAction(
-      null,
-      null,
-      socket.id,
-      `-    not trying to reconnect user. Reason: ${reason}`
-    );
-
-    // Try to reconnect the socket
-    let success = this.reconnectAction(
-      reason,
-      socket,
+    // A socket that reached `disconnect` is gone for good - Socket.IO never
+    // resumes a disconnected socket object. A returning client always comes
+    // back on a fresh socket and is re-added to its session by the repair
+    // center (which also re-sends the state catch-up) or by an explicit
+    // re-join. The old code here "reconnected" the dead socket for reasons
+    // like `transport close` (an abruptly closed tab), re-adding its client
+    // record to the session; that record was then never removed, the session
+    // could never empty out, and every later joiner received the stale
+    // client in the state catch-up and spawned a ghost avatar for it.
+    this.logInfoSessionClientSocketAction(
       session_id,
       client_id,
-      session
+      socket.id,
+      `-    removing disconnected client. Reason: ${reason}`
     );
 
     this.tryToRemoveSocketAndClientFromSessionThenNotifyLeft(null, session_id, client_id, socket);
@@ -2902,6 +2901,45 @@ module.exports = {
         }
 
         self.requestToJoinSessionAction(session_id, client_id, socket);
+      });
+
+      // The client's Leave button emits this with the same [session_id,
+      // client_id] payload as join. requestToLeaveSessionAction existed but
+      // nothing ever registered a handler for the event, so an explicit
+      // leave was silently ignored and the client stayed in the session.
+      socket.on(ImmersityXRReceiveEvents.leave, function (data) {
+        let session_id = data && data[0];
+
+        let client_id = data && data[1];
+
+        self.logInfoSessionClientSocketAction(
+          session_id,
+          client_id,
+          socket.id,
+          `Asked to leave`
+        );
+
+        if (!client_id || !session_id) {
+          self.connectionAuthorizationErrorAction(
+            socket,
+            "You must provide a client ID and a session ID to leave a session."
+          );
+
+          return;
+        }
+
+        if (!self.requestToLeaveSessionAction) {
+          self.logErrorSessionClientSocketAction(
+            session_id,
+            client_id,
+            socket.id,
+            `in socket.on(${ImmersityXRReceiveEvents.leave}), requestToLeaveSessionAction callback was not provided`
+          );
+
+          return;
+        }
+
+        self.requestToLeaveSessionAction(session_id, client_id, socket);
       });
 
       // When a client requests a state catch-up, send the current session state. Supports versioning.
