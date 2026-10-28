@@ -157,33 +157,6 @@ const ImmersityXRMessages = {
     }
 };
 
-// see https://socket.io/docs/v2/server-api/index.html
-
-const DisconnectKnownReasons = {
-  // the disconnection was initiated by the server
-  "server namespace disconnect": {
-    doReconnect: false,
-  },
-  // The socket was manually disconnected using socket.disconnect()
-  "client namespace disconnect": {
-    doReconnect: false,
-  },
-  // The connection was closed (example: the user has lost connection, or the network was changed from WiFi to 4G)
-  "transport close": {
-    doReconnect: true,
-  },
-  // The connection has encountered an error (example: the server was killed during a HTTP long-polling cycle)
-  "transport error": {
-    doReconnect: true,
-  },
-  // The server did not send a PING within the pingInterval + pingTimeout range.
-  "ping timeout": {
-    doReconnect: true,
-  },
-};
-
-const doReconnectOnUnknownReason = true;
-
 module.exports = {
   // NOTE(rob): deprecated. sessions must use message_buffer.
   // // write buffers are multiples of corresponding chunks
@@ -1644,7 +1617,7 @@ module.exports = {
 
     this.sessions.set(session_id, new Session(session_id));
 
-    session = this.sessions.get(session_id);
+    let session = this.sessions.get(session_id);
 
     // Restore shared state (entities, scene, draw strokes) from the last
     // snapshot, if one exists and hasn't expired - covers both relay
@@ -1664,47 +1637,6 @@ module.exports = {
     }
 
     return session;
-  },
-
-  processReconnectionAttempt: function (err, socket, session_id, client_id) {
-    this.logInfoSessionClientSocketAction(
-      session_id,
-      client_id,
-      socket.id,
-      "Processing reconnection attempt."
-    );
-
-    this.getOrCreateSession(session_id);
-
-    let success = this.addSocketAndClientToSession(err, socket, session_id, client_id);
-
-    if (!success) {
-      this.logInfoSessionClientSocketAction(
-        session_id,
-        client_id,
-        socket.id,
-        "failed to reconnect"
-      );
-
-      this.tryToRemoveSocketAndClientFromSessionAndNotifyLeft(socket, session_id, client_id);
-
-      this.disconnectSocket(socket, session_id, client_id);
-
-      this.cleanUpSessionIfEmpty(session_id);
-
-      return false;
-    }
-
-    ////TODO does this need to be called here???? this.bumpOldSockets(session_id, client_id, socket.id);
-
-    this.logInfoSessionClientSocketAction(
-      session_id,
-      client_id,
-      socket.id,
-      "successfully reconnected"
-    );
-
-    return true;
   },
 
   // Remove this function once we upgrade the server and client to use the "/sync" namespace
@@ -1813,15 +1745,6 @@ module.exports = {
     };
   },
 
-  doTryReconnecting: function (reason) {
-    if (doReconnectOnUnknownReason) {
-      return true;
-    }
-
-    return (DisconnectKnownReasons.hasOwnProperty(reason) &&
-    DisconnectKnownReasons[reason].doReconnect);
-  },
-
   handleDisconnecting: function(socket, reason) {
   },
 
@@ -1844,17 +1767,6 @@ module.exports = {
       socket.id,
       `Disconnecting.`
     );
-
-    if (!this.reconnectAction) {
-      this.logErrorSessionClientSocketAction(
-        null,
-        null,
-        socket.id,
-        `in handleDisconnect, reconnectAction callback was not provided`
-      );
-
-      return false;
-    }
 
     // Check disconnect event reason and handle
     const { session_id, client_id } = this.whoDisconnected(socket);
@@ -2799,29 +2711,6 @@ module.exports = {
 
     this.stateErrorAction = function (socket, message) {
       socket.emit(ImmersityXRSendEvents.stateError, message);
-    };
-
-    // returns true for successful reconnection
-    this.reconnectAction = function (
-      reason,
-      socket,
-      session_id,
-      client_id,
-      session
-    ) {
-      self.logInfoSessionClientSocketAction(
-        session_id,
-        client_id,
-        socket.id,
-        `Client was disconnected; attempting to reconnect. Disconnect reason: , clients: ${JSON.stringify(
-          session.getClients()
-        )}`
-      );
-
-      //TODO -- do we need to rejoin it manually?
-      socket.join(session_id.toString(), (err) => {
-        self.processReconnectionAttempt(err, socket, session_id, client_id);
-      });
     };
 
     this.sendStateCatchUpAction = function (socket, state) {
