@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm install --no-save socket.io-client@2
+      - run: npm --prefix tests install
       - name: Unit and integration tests (mocha)
         run: |
           cp config.template.js config.js
