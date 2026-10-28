@@ -27,6 +27,8 @@ jobs:
           cp config.template.js config.js
           npm test
           rm config.js
+      - name: Auth gating smoke test
+        run: node tests/auth-smoke-test.js
       - name: RTC signaling smoke test
         run: node tests/rtc-smoke-test.js
       - name: Capture durability smoke test
