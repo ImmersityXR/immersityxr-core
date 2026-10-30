@@ -15,9 +15,9 @@ identity for every connection. It has three parts:
 - **A. Deterministic sub-object ids.** Every client derives the ids of a
   model's parts from the model's id and the glTF file itself, not from a
   local counter.
-- **B. Spawn and despawn.** The relay assigns instance ids, resolves catalog
-  ids to model URLs, decides who may spawn and move what, and replays
-  instances to late joiners.
+- **B. Spawn and despawn.** The relay assigns instance ids, resolves items
+  from the lab's catalog sets to model URLs, decides who may spawn and who
+  holds each object, and replays instances to late joiners.
 - **C. Per-user relay tokens.** The portal signs a short-lived token naming
   the user, session and role. The relay verifies it on connect and stops
   trusting the ids inside messages. It depends on a prerequisite, **C0**,
@@ -204,26 +204,38 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
 
 | Event | Payload | Rules |
 |---|---|---|
-| `spawn` | `{ requestId, catalogId, position: [x,y,z], rotation: [x,y,z,w], persist?: bool }` | The sender must have joined the session. Any role may spawn (`config.spawn.policy`, default `any`; `teacher` restricts it). `catalogId` must exist in the relay's loaded catalog. Limits: at most `config.spawn.maxInstances` per session (default 50) and `config.spawn.maxPerClient` live instances per client (default 5), so one person cannot fill the session, plus a rate limit of `config.spawn.ratePerMinute` per client (default 10). `persist: true` requires the teacher role. |
+| `spawn` | `{ requestId, item, position: [x,y,z], rotation: [x,y,z,w], persist?: bool }`, where `item` is `"<set>/<asset id>"`, e.g. `"health-life-sciences/syringe"` | The sender must have joined the session. Any role may spawn (`config.spawn.policy`, default `any`; `teacher` restricts it). `item` must exist in one of the session's catalog sets. Limits: at most `config.spawn.maxInstances` per session (default 50) and `config.spawn.maxPerClient` live instances per client (default 5), so one person cannot fill the session, plus a rate limit of `config.spawn.ratePerMinute` per client (default 10). `persist: true` requires the teacher role. |
 | `despawn` | `{ instanceId }` | Allowed for the instance's creator or a teacher. |
 
 **Relay → clients**
 
 | Event | Payload | Sent to |
 |---|---|---|
-| `spawned` | `{ requestId, instanceId, catalogId, modelUrl, isWholeObject, scale, creator, position, rotation, persist, createdAt }` | Whole session, sender included. `requestId` lets the sender match its request. |
+| `spawned` | `{ requestId, instanceId, item, modelUrl, isWholeObject, scale, creator, position, rotation, persist, createdAt }` | Whole session, sender included. `requestId` lets the sender match its request. |
 | `spawnFailed` | `{ requestId, reason }` | Sender only |
 | `despawned` | `{ instanceId, reason }`, where `reason` is `requested`, `creatorLeft` or `expired` | Whole session |
 
 ### Relay behaviour
 
-- **Catalog.**
-  - The relay loads the catalog from `config.catalog.url` at startup and
-    refreshes it on an interval.
-  - It resolves `catalogId` to `modelUrl` itself. Clients never send a URL,
+- **Catalog sets.**
+  - A *set* is one published `catalog.json` with its own `id` (for example
+    `core` or `health-life-sciences`). Asset ids only need to be unique
+    within a set, which is why spawns name `set/id`.
+  - A session's sets are the **core set**, which every lab gets
+    (`config.catalog.core`), plus the lab's own sets. Labs store their set
+    list in the portal. Until the portal is running, `config.catalog.defaultSets`
+    applies to every session.
+  - The relay fetches each set's URL once and caches it for all sessions that
+    use it, refreshing on an interval. A large set therefore costs one copy in
+    memory, not one per session. Set URLs must be on
+    `config.catalog.allowedHosts`, since every headset will download what
+    they list.
+  - The relay resolves `item` to `modelUrl` itself. Clients never send a URL,
     so nobody can make every headset download an arbitrary file.
-  - If the catalog cannot be loaded, the relay rejects spawns with
-    `catalogUnavailable`.
+  - State catch-up (version 3) includes the session's `catalogs` as
+    `[{ id, url }]`, so clients can show a model browser from the same sets.
+  - If a set cannot be loaded, the relay rejects spawns from it with
+    `catalogUnavailable`. Other sets keep working.
 - **Instance ids.** A per-session counter starting at 800,000, stored with
   the session so ids are never reused within a session, even after a relay
   restart.
@@ -240,13 +252,21 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
   - Clients asking for version 2 or older get the current payload and never
     see instances. Those clients log "entity not found" for spawned ids, which
     is harmless.
-- **Who may move what.**
-  - Today a `LOCK` interaction only marks an entity as locked. For spawned
-    instances and their parts, the relay records `lockedBy` and accepts a
-    `LOCK` only if the entity is unlocked or already held by the same client.
+- **Who may move what.** This applies to **every** networked entity: lab
+  asset roots and parts as well as spawned instances (decided October 2026).
+  - Today a `LOCK` interaction only marks an entity as locked, and nothing
+    stops a second person grabbing it. The relay now records `lockedBy` and
+    accepts a `LOCK` only if the entity is unlocked or already held by the
+    same client.
+  - A refused `LOCK` is not broadcast. The relay sends the requester
+    `lockDenied { entityId, holder }`, and the client drops its grab and
+    snaps the object back to the latest relayed position.
   - While an entity is locked, the relay drops position updates for it from
     anyone else.
   - Locks are released on `LOCK_END`, and when the holder disconnects.
+  - Unlocked entities can be moved by anyone, as today.
+  - Older builds ignore `lockDenied`. They keep moving the object locally,
+    but the relay drops their updates, so nobody else sees the conflict.
 - **Creator leaves.**
   - Instances without `persist` are removed when their creator has been
     disconnected for `config.spawn.creatorGraceSeconds` (default 60). The
@@ -265,6 +285,8 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
   approach as Hubs's `storedUpdates`, and the same gate the state catch-up fix
   uses (`isAssetImportFinished`).
 - On `despawned`, destroy the instance and drop any buffered updates for it.
+- On `lockDenied`, release the grab and return the object to its last
+  relayed position.
 - **UI:** the first version only needs a list of catalog entries with a
   spawn button, available to everyone, plus a remove action on instances the
   user created (teachers: on all instances). A thumbnail browser can follow,
@@ -279,7 +301,9 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
   - the rate limit;
   - a sender who has not joined.
 - A late joiner receives `instances` before `entities`.
-- A lock held by one client causes another client's updates to be dropped.
+- A lock held by one client causes another client's `LOCK` to get
+  `lockDenied` and its updates to be dropped, for lab assets and spawned
+  instances alike.
 - A creator leaving despawns its instances after the grace period, and a
   reconnect within the grace period does not.
 - A persisted instance survives a snapshot save and restore.
@@ -289,8 +313,9 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
 
 ### C0. Prerequisite: authenticate the portal API
 
-This ships on its own, first. If the portal is reachable anywhere today, it
-is urgent.
+This ships on its own, before anything else in the portal, and before the
+portal is reachable by users. Any existing portal deployment that is
+reachable today should be taken offline or fixed first.
 
 - Add middleware that verifies the login cookie on every route except
   `POST /users/login`, `GET /users/initial`, `GET /users/logout` and
@@ -370,6 +395,20 @@ POST /labs/:labId/relay-token   (cookie auth)
     identity. They drop and log any mismatch, and only emit to the room the
     socket actually joined.
   - The socket repair path uses `socket.data.identity`, never payload ids.
+- **Identity without tokens.** The portal is not running yet, so the relay
+  must also work without tokens (`shared-secret` and `none` modes):
+  - The socket's first successful `join` binds `socket.data.identity` to the
+    `client` and `session` it joined with. From then on the same checks
+    apply as with a token. A socket can no longer act as several users or
+    reach other sessions. Claiming someone else's id at join is still
+    possible until tokens ship.
+  - `config.auth.teacherSecret` is an optional second shared secret. A
+    socket that connects with it gets the `teacher` role, and teacher launch
+    links carry it in place of the student secret. Without it, every
+    shared-secret socket is a student.
+  - Client ids are the `client` URL parameter today and portal user ids once
+    tokens ship. They must be integers either way, because the Unity
+    client builds draw stroke ids from them.
 - **Roles.**
   - `start_recording`, `end_recording` and `playback` require the `teacher`
     or `admin` role.
@@ -380,8 +419,8 @@ POST /labs/:labId/relay-token   (cookie auth)
   | Mode | Behaviour |
   |---|---|
   | `none` | No authentication, as today with no secret set. |
-  | `shared-secret` | Today's behaviour. |
-  | `token-or-shared-secret` | Accept either. Identity from a token is enforced; shared-secret sockets get today's behaviour, with no teacher role. |
+  | `shared-secret` | Today's secret check, plus identity binding at join and the optional teacher secret. |
+  | `token-or-shared-secret` | Accept either. Token sockets take identity and role from the token; shared-secret sockets behave as in `shared-secret`. |
   | `token` | Token only. |
 
   Deploy in `token-or-shared-secret` until no old builds remain, then switch
@@ -434,7 +473,7 @@ A capture stays a directory with a manifest and an NDJSON event stream.
 | `entityIds` | `"gltf-node"`, meaning rule A |
 | `startedBy` | Client id of the teacher who started it (from the token, Part C) |
 | `assets` | The lab's asset list at start: `asset_id`, `path`, `is_whole_object`, `scale`. The relay fetches it from the portal (`GET {config.portal.url}/labs/{session}`) when configured; otherwise the field is omitted and playback falls back to the portal's current list. |
-| `catalog` | URL and a hash of the `catalog.json` the relay had loaded, so spawned instances resolve to the same models |
+| `catalogs` | Each of the session's catalog sets as `{ id, url, hash }`, so spawned instances resolve to the same models |
 | `status` | `recording`, `complete` or `interrupted`, as today |
 
 **Events.** Every line is `{ t, seq, kind, client, data }`:
@@ -486,21 +525,24 @@ That is a follow-up, as is research export of captures through the portal's
 
 ## Rollout
 
-Each step is its own PR and can ship independently, in this order:
+Each step is its own PR. The portal is not running yet, so everything that
+does not need it comes first:
 
-1. **C0. Portal API auth.** Portal only. Do first and soon.
-2. **A. Id rule, with D. Capture format v2.** Unity and Godot import paths,
+1. **A. Id rule, with D. Capture format v2.** Unity and Godot import paths,
    catalog validator, portal upload check, relay snapshot handling and
    capture writer. Ship A and D together, since both change what recorded
    ids mean. Switch each lab to the new client build when it deploys.
-3. **C1–C3. Tokens,** in `token-or-shared-secret` mode. Touches the portal,
-   the relay, and both client templates (`relay.js`, `immersity.js`).
-4. **B. Spawn and despawn.** Relay, both clients, a relay config pointing at
-   the catalog. Spawning works without C, since anyone may spawn, but until
-   C ships the relay cannot tell teachers apart. Persisting and removing
-   other people's instances stay disabled until then, and creators are
-   identified by the ids in their messages, which can be spoofed.
-5. **Switch** production to `auth.mode = token` once old builds are retired.
+2. **C3, relay side only.** Identity binding at join, payload checks, the
+   teacher secret, and role checks on recording. Works in `shared-secret`
+   mode with no portal.
+3. **B. Spawn, despawn and relay-enforced locks.** Relay, both clients, and a
+   relay config naming the core and default catalog sets. Teacher actions
+   use the teacher secret from step 2.
+4. **C0, C1 and C2. Portal API auth and tokens.** Must ship before the portal
+   is reachable by users, and C0 before anything else in the portal. Then
+   run the relay in `token-or-shared-secret` mode.
+5. **Switch** production to `auth.mode = token` once old builds are retired
+   and labs are launched from the portal.
 
 ## Decisions
 
@@ -523,6 +565,16 @@ Each step is its own PR and can ship independently, in this order:
   the capture format to change (Part D).
 - **Token delivery by URL fragment** (decided October 2026), as described in
   C2. `postMessage` was the alternative.
+- **Catalogs are sets, chosen per lab, on top of a core set** (decided
+  October 2026). This keeps each lab's model list short and relevant instead
+  of one ever-growing relay-wide list. Until the portal is running, a relay
+  default list stands in for per-lab choices. The asset catalog repository
+  publishes each set as its own `catalog.json` with an `id`.
+- **Relay-enforced locks on all entities** (decided October 2026), not only
+  spawned instances. See Part B, Who may move what.
+- **Client ids are portal user ids once the portal runs** (decided October
+  2026). Until then the relay binds each socket to the `client` id it first
+  joins with (Part C3, Identity without tokens).
 - **Who may spawn:** anyone in the session (decided October 2026). Teachers
   can remove any instance and are the only ones who can make an instance
   persist. The per-client cap and rate limit keep one person from filling
@@ -531,11 +583,11 @@ Each step is its own PR and can ship independently, in this order:
 
 ## Open questions
 
-1. **Catalog scope:** one relay-wide catalog (proposed), or per-lab catalog
-   lists? Per-lab lists fit shortlist item 6.
-2. **Lock authority for lab assets:** should relay-enforced locks (Part B)
-   apply to lab assets as well, not just spawned instances? It would fix
-   grab conflicts generally but changes existing behaviour.
-3. **Relay client id:** should it stay the portal `user_id`, or should the
-   relay use an opaque per-connection id? The latter is ARENA's approach and
-   avoids exposing user ids to other clients.
+1. **What goes in the core set?** It reaches every lab, so it should be
+   small and general: for example measuring tools, basic lab furniture and
+   safety equipment. The first health and life sciences set is a starting
+   point to draw from.
+2. **Hiding user ids from other clients.** Other clients see each user's id
+   in relayed messages. Once ids are portal user ids, the relay could swap
+   them for per-session aliases, as ARENA does. Worth revisiting when the
+   portal launches.
