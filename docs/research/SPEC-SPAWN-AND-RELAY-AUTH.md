@@ -1,7 +1,8 @@
 # Spec: runtime asset spawning and per-user relay auth
 
 **Status:** draft for review, October 2026.
-**Covers:** shortlist items 1–3 from [OSS-COMPONENTS.md](OSS-COMPONENTS.md).
+**Covers:** shortlist items 1–3 from [OSS-COMPONENTS.md](OSS-COMPONENTS.md),
+plus a capture format revision that the id change makes timely.
 **Touches:** immersity-core (relay, portal), immersity-unity, immersityxr-godot,
 immersityxr-asset-catalog.
 
@@ -21,6 +22,9 @@ identity for every connection. It has three parts:
   the user, session and role. The relay verifies it on connect and stops
   trusting the ids inside messages. It depends on a prerequisite, **C0**,
   putting authentication on the portal's own API.
+- **D. Capture format, version 2.** Recordings start with a full state
+  snapshot, include every kind of state change, and use the relay's clock.
+  This makes them replayable.
 
 ## Background: how it works today
 
@@ -80,40 +84,52 @@ The login cookie is also weak:
 - The relay knows each connection's user, session and role from a credential
   it can verify, and enforces that a client only acts as itself in its own
   session.
-- Existing builds keep working during a transition period.
+- Existing builds keep working during the auth transition. The id change
+  needs each lab moved to the new build in one step (Part A).
+- Recordings capture enough to be replayed later.
 
 **Non-goals for this spec**
 
 - Instructor permission switches (shortlist item 4). Part C provides the
   role they will need.
 - Voice, lab templates, and multiple catalogs (items 5 and 6).
-- Moving lab-asset sub-objects to the new id rule (see open questions).
 - Replacing Socket.IO or changing the position packet format.
+- Building capture playback (Part D defines the format it will read).
+- Supporting recordings made before this change.
 
 ## Part A: deterministic sub-object ids
 
+Rule A applies to every networked model: lab assets loaded at startup and
+instances spawned at runtime. Lab assets moving to it was decided in October
+2026 (see Decisions).
+
 ### Id ranges
 
-Entity ids stay 32-bit signed integers, as in the Unity client.
+Entity ids stay 32-bit signed integers, as in the Unity client. All roots sit
+below 1,000,000 and all parts sit at or above 1,000,000,000, so the two can
+never collide. Any id of 1,000,000,000 or more is a part, and its root is
+`(id - 1,000,000,000) / 1000`, rounded down.
 
 | Range | Used for | Assigned by |
 |---|---|---|
 | 1 – 699,999 | Lab asset roots (portal `asset_id`) | Portal database |
 | 700,000 – 799,999 | Catalog `entity_id`, used only by the static sandbox lab | Catalog `sources.json` |
-| 999,300 + n | Lab asset sub-objects (legacy counter, unchanged) | Each client, in import order |
-| 1,100,000 – 1,999,999 | Spawned instance roots | Relay, per session |
-| 1,100,000,001 – 1,999,999,999 | Spawned instance parts: `root * 1000 + k`, where `k` is 1–999 | Each client, by rule A |
+| 800,000 – 999,999 | Spawned instance roots | Relay, per session |
+| 1,000,000,001 – 1,999,999,999 | Parts of any root: `1,000,000,000 + root * 1000 + k`, where `k` is 1–999 | Each client, by rule A |
 
-The legacy counter would need more than 100,000 sub-objects in one lab to
-reach the spawned range.
+The largest part id, 1,999,999,999, is below the 32-bit limit of
+2,147,483,647. If a portal `asset_id` ever reaches 700,000, the lab range has
+to move; the portal should refuse to create assets past 699,999 rather than
+overlap the catalog range. Draw strokes have their own `strokeId` space and
+are unaffected.
 
 ### Rule A
 
-For a model instance with root id `R`, list the glTF nodes that have a
-`mesh`, in ascending glTF node index. The k-th of them (k starting at 1)
-gets id `R * 1000 + k`. A model with more than 999 mesh nodes cannot be
-spawned with per-part networking. It must be marked `is_whole_object`, in
-which case only the root is networked.
+For a model with root id `R`, list the glTF nodes that have a `mesh`, in
+ascending glTF node index. The k-th of them (k starting at 1) gets id
+`1,000,000,000 + R * 1000 + k`. A model with more than 999 mesh nodes cannot
+use per-part networking. It must be marked `is_whole_object`, in which case
+only the root is networked.
 
 The rule is defined on the **glTF file, not the engine's scene tree**,
 because the two clients build different trees:
@@ -135,21 +151,45 @@ which works because Hubs has a single client.
     equivalent mapping.
   - Then call `NetworkedObjectsManager.CreateNetworkedGameObject` with an
     explicit `uniqueEntityID`. `NetworkedGameObject.Instantiate` already
-    accepts one, so the change is confined to the import path.
+    accepts one.
+  - Remove `GenerateUniqueEntityID` and its shared counter, so nothing can
+    fall back to order-dependent ids. Any networked object that is not part
+    of a glTF model needs an explicit id instead.
 - **Godot:** after `GLTFDocument.append_from_file`, map node index to scene
   node with `GLTFState.get_scene_node(i)` and assign ids by the same rule.
+  The Godot template has not shipped lab asset support yet, so it starts on
+  rule A.
 - **Catalog:** `validate_catalog.py` checks that every model has 999 or fewer
   mesh nodes, and `catalog.json` gains a `networked_parts` count that clients
   can compare against what they derived. The current maximum is 53
   (ultrasound).
+- **Portal:** reject uploads that are not `is_whole_object` and have more
+  than 999 mesh nodes, so a lab cannot contain a model the clients cannot
+  number.
+
+### Compatibility
+
+- **Mixed builds.** An old build (legacy counter) and a new build (rule A)
+  disagree on lab asset part ids, so they must not share a session. Switch a
+  lab's build folder to the new build in one step; old build folders can
+  stay on the server for other labs until they are moved too.
+- **Saved session state.** Relay snapshots (`session-persistence.js`) from
+  before the change hold part positions under legacy ids. The relay bumps
+  its snapshot version, and when it restores an older snapshot it keeps only
+  lab asset roots (ids below 700,000) and draw strokes, so stale part
+  transforms are never replayed.
+- **Recordings.** Captures made before the change are not supported (decided
+  October 2026). Part D replaces the capture format.
 
 ### Tests
 
 - A shared fixture GLB with nested and mesh-less nodes, plus its expected
   `(node index → id)` table, checked into both client repos. Each client has
   a test that imports it and compares against the table.
-- A relay-level integration test is not needed for this part, since the relay
-  never computes part ids.
+- A Unity test that loads a lab with several multi-part assets in different
+  orders and gets identical ids each time.
+- A relay test that restoring an old-version snapshot keeps only lab asset
+  roots and strokes.
 
 ## Part B: spawn and despawn
 
@@ -184,7 +224,7 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
     so nobody can make every headset download an arbitrary file.
   - If the catalog cannot be loaded, the relay rejects spawns with
     `catalogUnavailable`.
-- **Instance ids.** A per-session counter starting at 1,100,000, stored with
+- **Instance ids.** A per-session counter starting at 800,000, stored with
   the session so ids are never reused within a session, even after a relay
   restart.
 - **State.**
@@ -192,7 +232,8 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
   - It is saved in snapshots next to `entities` and `strokes`
     (`session-persistence.js`).
   - Despawning removes the instance and every entry in `session.entities`
-    whose id is the root or within `root * 1000 + 1 … + 999`.
+    whose id is the root or one of its parts (`1,000,000,000 + root * 1000 + 1`
+    to `+ 999`).
 - **Late joiners.**
   - State catch-up becomes version 3, which adds `instances`, sent before
     `entities`.
@@ -212,8 +253,8 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
     grace period covers reconnects and the socket repair path.
   - `persist: true` instances stay with the session and survive restarts.
     An optional `ttlSeconds` expires them.
-- **Captures.** `spawned` and `despawned` are written to the capture stream,
-  so playback recreates instances at the right moment.
+- **Captures.** `spawned` and `despawned` are recorded like every other
+  state change (Part D), so playback recreates instances at the right moment.
 
 ### Client behaviour
 
@@ -363,13 +404,95 @@ POST /labs/:labId/relay-token   (cookie auth)
   - the token route returns 403 for a user not in the course;
   - the token's claims match the user's role.
 
+## Part D: capture format, version 2
+
+### Why now
+
+Rule A changes every part id, so recordings made after it are incompatible
+with those made before. Old recordings are not needed (decided October
+2026), which makes this the cheapest moment to fix the format. Today a
+capture (`capture-writer.js`, `record_message_data` in `sync.js`):
+
+- records only events that arrive on the `message` channel: not `update`,
+  `interact` or `draw` events, and not joins or leaves;
+- has no starting state, so a recording begun mid-session cannot show
+  objects that were already moved or strokes already drawn;
+- orders events by the sending client's own clock (`data.ts`), as the code's
+  own comment notes, so clients with skewed clocks interleave wrongly;
+- can be started or stopped by any socket for any session.
+
+### Format
+
+A capture stays a directory with a manifest and an NDJSON event stream.
+
+**Manifest** (`format_version: 2`):
+
+| Field | Meaning |
+|---|---|
+| `capture_id`, `session_id` | As today |
+| `start`, `end` | Relay clock, ms since epoch |
+| `entityIds` | `"gltf-node"`, meaning rule A |
+| `startedBy` | Client id of the teacher who started it (from the token, Part C) |
+| `assets` | The lab's asset list at start: `asset_id`, `path`, `is_whole_object`, `scale`. The relay fetches it from the portal (`GET {config.portal.url}/labs/{session}`) when configured; otherwise the field is omitted and playback falls back to the portal's current list. |
+| `catalog` | URL and a hash of the `catalog.json` the relay had loaded, so spawned instances resolve to the same models |
+| `status` | `recording`, `complete` or `interrupted`, as today |
+
+**Events.** Every line is `{ t, seq, kind, client, data }`:
+
+- `t` is ms since `start` on the **relay's** clock when the event was
+  received.
+- `seq` is a per-capture counter, so ties in `t` replay in arrival order.
+- `client` is the sender's id from its socket identity (Part C), not from
+  the payload.
+- `kind` is one of:
+  - `snapshot`: always the first line. The full state catch-up payload
+    (version 3: clients, entities, instances, scene) plus all stored draw
+    strokes.
+  - `update`, `message`, `interact`, `draw`: the payload as relayed.
+  - `spawned`, `despawned`: as broadcast (Part B).
+  - `joined`, `left`.
+
+The relay writes events after it has validated them, so a capture only holds
+what the session actually saw.
+
+### Control
+
+- `start_recording` and `end_recording` need the teacher or admin role
+  (Part C), and act only on the sender's own session. The payload's session
+  id is ignored.
+- Until Part C ships, recording control keeps today's behaviour.
+
+### Not in this spec
+
+Playback itself. The relay's `handlePlayback` is mostly unimplemented. With
+this format, playback becomes:
+
+1. load the manifest's assets;
+2. apply the snapshot;
+3. replay events by `t`.
+
+That is a follow-up, as is research export of captures through the portal's
+`/data` routes.
+
+### Tests
+
+- The first line of a new capture is a `snapshot` matching the session state.
+- Each event kind is written with relay-side `t`, increasing `seq`, and the
+  socket's identity.
+- A message with a spoofed `client_id` is recorded under the real sender.
+- Without the portal configured, the manifest omits `assets` and recording
+  still works.
+- A student cannot start a recording once tokens are enabled.
+
 ## Rollout
 
 Each step is its own PR and can ship independently, in this order:
 
 1. **C0. Portal API auth.** Portal only. Do first and soon.
-2. **A. Id rule.** Unity and Godot import paths, catalog validator. No
-   protocol change; it takes effect once B sends spawned instances.
+2. **A. Id rule, with D. Capture format v2.** Unity and Godot import paths,
+   catalog validator, portal upload check, relay snapshot handling and
+   capture writer. Ship A and D together, since both change what recorded
+   ids mean. Switch each lab to the new client build when it deploys.
 3. **C1–C3. Tokens,** in `token-or-shared-secret` mode. Touches the portal,
    the relay, and both client templates (`relay.js`, `immersity.js`).
 4. **B. Spawn and despawn.** Relay, both clients, a relay config pointing at
@@ -381,6 +504,25 @@ Each step is its own PR and can ship independently, in this order:
 
 ## Decisions
 
+- **Lab assets use rule A** (decided October 2026). Every networked model
+  gets part ids from the glTF node list, not only spawned ones, and the
+  shared import-order counter is removed. Reasons:
+  - The legacy numbering depends on Unity's import path, including the pivot
+    objects it inserts. The Godot client cannot reproduce it, so without
+    this change the two clients could not share a lab with multi-part
+    models.
+  - The counter only advances when a model finishes loading. If one download
+    fails on one client, every later model's parts are numbered differently
+    there, and that client's grabs move the wrong parts for everyone. Under
+    rule A each model's ids depend only on its own file.
+  - One numbering scheme instead of two.
+
+  The cost is a one-time switch of each lab to the new build (Part A,
+  Compatibility).
+- **Old recordings are not supported** (decided October 2026). This frees
+  the capture format to change (Part D).
+- **Token delivery by URL fragment** (decided October 2026), as described in
+  C2. `postMessage` was the alternative.
 - **Who may spawn:** anyone in the session (decided October 2026). Teachers
   can remove any instance and are the only ones who can make an instance
   persist. The per-client cap and rate limit keep one person from filling
@@ -389,19 +531,11 @@ Each step is its own PR and can ship independently, in this order:
 
 ## Open questions
 
-1. **Lab asset parts:** should lab assets also move to rule A? It removes the
-   last order-dependent ids, but captures recorded before the change would
-   replay sub-object movement onto the wrong parts unless captures are
-   versioned.
-2. **Token delivery:** URL fragment (proposed) or `postMessage` from the
-   portal page to the iframe. `postMessage` keeps the token out of the URL
-   entirely, but needs a handshake, because the portal and build server are
-   on different origins.
-3. **Catalog scope:** one relay-wide catalog (proposed), or per-lab catalog
+1. **Catalog scope:** one relay-wide catalog (proposed), or per-lab catalog
    lists? Per-lab lists fit shortlist item 6.
-4. **Lock authority for lab assets:** should relay-enforced locks (Part B)
+2. **Lock authority for lab assets:** should relay-enforced locks (Part B)
    apply to lab assets as well, not just spawned instances? It would fix
    grab conflicts generally but changes existing behaviour.
-5. **Relay client id:** should it stay the portal `user_id`, or should the
+3. **Relay client id:** should it stay the portal `user_id`, or should the
    relay use an opaque per-connection id? The latter is ARENA's approach and
    avoids exposing user ids to other clients.
