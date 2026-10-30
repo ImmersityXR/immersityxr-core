@@ -164,10 +164,49 @@ collaborating rather than borrowing.
 research partnership on the same campus, for example offloaded rendering of
 detailed lab models or measuring XR quality in classroom sessions.
 
+### 8th Wall (8thwall/8thwall)
+
+- **What it is:** the web AR engine from Niantic Spatial, open-sourced when
+  its hosted platform shut down. It runs camera-based AR in an ordinary mobile
+  browser, including iPhone Safari, which has no WebXR. It also contains the
+  "Studio" game engine and helper libraries.
+- **License:** MIT for the repository (framework, engine modules, tools),
+  compatible with NCSA. **The exception is SLAM world tracking**, which is
+  only a separately distributed binary
+  ([8thwall/engine](https://github.com/8thwall/engine/blob/main/LICENSE)). That
+  licence is free unless the product is sold *and* gets its value mainly from
+  the engine, so free Immersity use looks permitted. But it is revocable,
+  requires attribution, forbids modification, and assigns any feedback we send
+  to Niantic Spatial. The university should review it before we rely on it.
+- **Stack:** C++ compiled to WebAssembly for tracking (`reality/`, `c8/`),
+  JS/TS camera pipeline with A-Frame, three.js and PlayCanvas bindings, Bazel
+  build. Studio's engine (`packages/ecs`) uses FLECS, three.js and Jolt
+  physics.
+- **Activity:** active as a community project, last commit October 2026.
+  The engine package is a pre-release (`0.1.0`).
+
+| Component | Immersity gap | Path | Effort | Notes |
+|---|---|---|---|---|
+| Image targets (`packages/engine`, MIT; `apps/image-target-cli`) | AR on phones, which Immersity has none of today; iPhones can't run WebXR at all | Adopt as a dependency | Medium | Points a phone camera at a printed image and anchors 3D content to it, with no SLAM binary needed. Flat, cylindrical and conical targets. Fits a classroom: print a target on the lab handout, and a phone shows the catalog model on the page. |
+| Unsupported-device fallback (`packages/landing-page`; `packages/xrextras/src/almosttheremodule`) | Students opening a lab on a device that can't run it get a broken page | Adopt or port | Small | A splash page with a QR code to reopen the link on a supported device. The same idea works for the headset build: a desktop browser could show a QR code that opens the session on a headset or phone. |
+| Session helpers (`packages/xrextras/src/`: `loadingmodule`, `runtimeerrormodule`, `pauseonhiddenmodule`, `mediarecorder`) | Client polish: load progress, error screens, recording | Port selectively | Small each | Self-contained modules. `mediarecorder` captures video of the XR view, which is useful for students' lab write-ups. |
+| WebXR controller and hand models for three.js (`reality/app/xr/js/src/webxrcontrollersthreejs/`) | A web-native client, if Immersity ever moves off a game engine | Reference | n/a | MIT three.js code for controller and hand rendering. |
+| World tracking (SLAM, binary only) | Placing models on a tabletop or floor from a phone | Defer | Medium | Needs the restricted binary; see licence above. |
+
+**Verdict:** worth adopting for one specific thing: an **AR catalog viewer for
+phones**. It would be a small static page that reads `catalog.json` from the
+asset catalog and shows a model on a printed image target, so students
+without headsets, including on iPhone, can still handle the lab's objects.
+That adds to Immersity rather than replacing anything, and uses only MIT
+parts. It does not plug into the Unity or Godot clients, which render
+through their own engines.
+
 ## Shortlist
 
 Ranked by value to Immersity against effort. Every item is a design to port,
-not code to copy, unless marked.
+not code to copy, unless marked. Items 1–4 change the client contract, so
+they need to land in both clients: immersity-unity and the Godot template
+(immersityxr-godot), which implements the same protocol.
 
 1. **Deterministic sub-object ids** (from Hubs). Derive child ids from the root
    id and traversal order. Small, and it unblocks runtime asset spawning.
@@ -192,6 +231,10 @@ not code to copy, unless marked.
    class size. Small, then large.
 6. **Lab templates and multiple catalogs** (ARENA templates, CollabXR
    repositories). Medium, after 2.
-7. **Conversations:** ARENA (CMU) on protocol and security; CollabXR (Purdue) on
+7. **Phone AR catalog viewer** (8th Wall image targets, MIT only). A static
+   page that shows catalog models on printed image targets, reaching students
+   without headsets, iPhones included. Medium, independent of the rest.
+   *Repo: immersityxr-asset-catalog or a new one.*
+8. **Conversations:** ARENA (CMU) on protocol and security; CollabXR (Purdue) on
    classroom features and licensing; ILLIXR (Illinois CS) on offloaded
    rendering research.
