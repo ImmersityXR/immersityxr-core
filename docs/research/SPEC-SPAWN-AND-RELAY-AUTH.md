@@ -7,8 +7,8 @@ immersityxr-asset-catalog.
 
 ## Summary
 
-This spec lets a teacher pull a model from the asset catalog into a live
-session, with every client seeing the same object, and gives the relay a real
+This spec lets anyone in a session pull a model from the asset catalog into
+it, with every client seeing the same object, and gives the relay a real
 identity for every connection. It has three parts:
 
 - **A. Deterministic sub-object ids.** Every client derives the ids of a
@@ -74,9 +74,9 @@ The login cookie is also weak:
 
 **Goals**
 
-- A teacher can spawn and remove catalog models during a session, and every
-  client, including late joiners and both the Unity and Godot clients, sees
-  the same objects with the same ids.
+- Anyone in a session can spawn catalog models and remove their own, and a
+  teacher can remove any. Every client, including late joiners and both the
+  Unity and Godot clients, sees the same objects with the same ids.
 - The relay knows each connection's user, session and role from a credential
   it can verify, and enforces that a client only acts as itself in its own
   session.
@@ -164,7 +164,7 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
 
 | Event | Payload | Rules |
 |---|---|---|
-| `spawn` | `{ requestId, catalogId, position: [x,y,z], rotation: [x,y,z,w], persist?: bool }` | The sender must have joined the session. Its role must be allowed by `config.spawn.policy` (default `teacher`). `catalogId` must exist in the relay's loaded catalog. The session must be under `config.spawn.maxInstances` (default 50) and the sender within the rate limit. `persist: true` requires the teacher role. |
+| `spawn` | `{ requestId, catalogId, position: [x,y,z], rotation: [x,y,z,w], persist?: bool }` | The sender must have joined the session. Any role may spawn (`config.spawn.policy`, default `any`; `teacher` restricts it). `catalogId` must exist in the relay's loaded catalog. Limits: at most `config.spawn.maxInstances` per session (default 50) and `config.spawn.maxPerClient` live instances per client (default 5), so one person cannot fill the session, plus a rate limit of `config.spawn.ratePerMinute` per client (default 10). `persist: true` requires the teacher role. |
 | `despawn` | `{ instanceId }` | Allowed for the instance's creator or a teacher. |
 
 **Relay → clients**
@@ -224,9 +224,10 @@ tie-breaking, which is what Hubs has to do. Spawning uses new events on
   approach as Hubs's `storedUpdates`, and the same gate the state catch-up fix
   uses (`isAssetImportFinished`).
 - On `despawned`, destroy the instance and drop any buffered updates for it.
-- **UI:** the first version only needs a teacher-facing list of catalog
-  entries with a spawn button. A thumbnail browser can follow, since
-  `catalog.json` already lists thumbnails.
+- **UI:** the first version only needs a list of catalog entries with a
+  spawn button, available to everyone, plus a remove action on instances the
+  user created (teachers: on all instances). A thumbnail browser can follow,
+  since `catalog.json` already lists thumbnails.
 
 ### Tests (relay, mocha)
 
@@ -331,7 +332,8 @@ POST /labs/:labId/relay-token   (cookie auth)
 - **Roles.**
   - `start_recording`, `end_recording` and `playback` require the `teacher`
     or `admin` role.
-  - Spawn policy (Part B) reads the same role.
+  - Part B uses the same role for persisting instances and for removing
+    other people's instances.
 - **Transition.** `config.auth.mode` is one of:
 
   | Mode | Behaviour |
@@ -371,27 +373,35 @@ Each step is its own PR and can ship independently, in this order:
 3. **C1–C3. Tokens,** in `token-or-shared-secret` mode. Touches the portal,
    the relay, and both client templates (`relay.js`, `immersity.js`).
 4. **B. Spawn and despawn.** Relay, both clients, a relay config pointing at
-   the catalog. It needs C for roles. Without C it can run only with
-   `config.spawn.policy = any` on a test relay.
+   the catalog. Spawning works without C, since anyone may spawn, but until
+   C ships the relay cannot tell teachers apart. Persisting and removing
+   other people's instances stay disabled until then, and creators are
+   identified by the ids in their messages, which can be spoofed.
 5. **Switch** production to `auth.mode = token` once old builds are retired.
+
+## Decisions
+
+- **Who may spawn:** anyone in the session (decided October 2026). Teachers
+  can remove any instance and are the only ones who can make an instance
+  persist. The per-client cap and rate limit keep one person from filling
+  the session. The instructor switches in shortlist item 4 can later let a
+  teacher turn spawning off for students.
 
 ## Open questions
 
-1. **Who may spawn by default:** teachers only (proposed), or students too,
-   subject to the instructor switches in item 4?
-2. **Lab asset parts:** should lab assets also move to rule A? It removes the
+1. **Lab asset parts:** should lab assets also move to rule A? It removes the
    last order-dependent ids, but captures recorded before the change would
    replay sub-object movement onto the wrong parts unless captures are
    versioned.
-3. **Token delivery:** URL fragment (proposed) or `postMessage` from the
+2. **Token delivery:** URL fragment (proposed) or `postMessage` from the
    portal page to the iframe. `postMessage` keeps the token out of the URL
    entirely, but needs a handshake, because the portal and build server are
    on different origins.
-4. **Catalog scope:** one relay-wide catalog (proposed), or per-lab catalog
+3. **Catalog scope:** one relay-wide catalog (proposed), or per-lab catalog
    lists? Per-lab lists fit shortlist item 6.
-5. **Lock authority for lab assets:** should relay-enforced locks (Part B)
+4. **Lock authority for lab assets:** should relay-enforced locks (Part B)
    apply to lab assets as well, not just spawned instances? It would fix
    grab conflicts generally but changes existing behaviour.
-6. **Relay client id:** should it stay the portal `user_id`, or should the
+5. **Relay client id:** should it stay the portal `user_id`, or should the
    relay use an opaque per-connection id? The latter is ARENA's approach and
    avoids exposing user ids to other clients.
