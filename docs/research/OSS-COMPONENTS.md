@@ -14,7 +14,7 @@ Immersity's known gaps and planned work, roughly in priority order:
 | Relay auth | One shared client secret (`auth` param) for everyone; user and session ids still come from the `client`/`session` URL params | A per-user token handshake between portal, client and relay |
 | Shared object state | Relay keeps per-session state and replays draw strokes to late joiners; entity ids partly per-client | Authoritative state, ownership/locking, spawn/despawn of networked objects |
 | On-demand assets | Static asset list per lab; asset catalog (`immersityxr-asset-catalog`, in progress) planned for runtime spawning | Runtime glTF loading, asset browser UI, catalog formats |
-| Voice and presence | `webrtc.js` in the Unity template | Spatial voice, SFU, avatar presence that scales past a handful of users |
+| Voice and presence | `webrtc.js` in the Unity template: a peer-to-peer mesh. The relay can hand out TURN servers (`config.rtc.iceServers`) but defaults to Google STUN only | Spatial voice, SFU, avatar presence that scales past a handful of users |
 | Unity client | Unity 2020.3 LTS (EOL), de-panther WebXR 0.5.1-preview | Maintained WebXR path for Unity 6, or a web-native client |
 | Portal | Vue 2 / Vuetify 2 (EOL) + Express 4 + MariaDB | Course/lab/session management patterns, LMS (LTI) integration |
 | Capture and playback | Relay records session events for replay | Recording formats, scrubbing, analytics |
@@ -73,7 +73,7 @@ Paths below are relative to each project's repository.
 | Pinning (`src/utils/bit-pinning-helper.ts`) | Persistent vs. temporary spawned objects | Port the idea | Small | Pinning (gated by a `pin_objects` permission) saves the object with the room and hands its creator to the server, so it outlives the person who spawned it. This maps to a relay-owned flag on Immersity spawns. |
 | Spawn permissions per object type (`src/utils/permissions.ts`) | Teacher control over what students can add | Port the idea | Small | Every prefab names the permission needed to spawn it, and receivers check it too, not just senders. |
 | Media loading by URL type (`src/utils/load-model.tsx`, `load-image.tsx`, `load-pdf.tsx`, `load-video.tsx`, `src/utils/media-url-utils.js`) | Assets beyond glTF: slides, images, video in a lab | Learn from | Medium | Shows the set of loaders and the URL sniffing in front of them. The Unity side would need its own loaders. |
-| Dialog SFU ([Hubs-Foundation/dialog](https://github.com/Hubs-Foundation/dialog), client in `src/naf-dialog-adapter.js`) | Voice: Immersity's `webrtc.js` is a peer-to-peer mesh with Google STUN and no TURN server | Run as a service | Large | An SFU sends each speaker's audio once and fans it out on the server, instead of every pair of users connecting directly. Needs a public UDP port range, and a TURN server for restrictive networks. |
+| Dialog SFU ([Hubs-Foundation/dialog](https://github.com/Hubs-Foundation/dialog), client in `src/naf-dialog-adapter.js`) | Voice: Immersity's `webrtc.js` is a peer-to-peer mesh, and the relay's default ICE config is Google STUN only | Run as a service | Large | An SFU sends each speaker's audio once and fans it out on the server, instead of every pair of users connecting directly. Needs a public UDP port range, and a TURN server for restrictive networks. |
 
 **Verdict:** the most directly useful project for the planned on-demand asset
 work. Its networking model has already solved the problems Immersity's Phase 2
@@ -203,6 +203,8 @@ through their own engines.
 
 ## Shortlist
 
+Items 1–3 are specified in [SPEC-SPAWN-AND-RELAY-AUTH.md](SPEC-SPAWN-AND-RELAY-AUTH.md).
+
 Ranked by value to Immersity against effort. Every item is a design to port,
 not code to copy, unless marked. Items 1–4 change the client contract, so
 they need to land in both clients: immersity-unity and the Godot template
@@ -226,8 +228,10 @@ they need to land in both clients: immersity-unity and the Godot template
    from Hubs). Relay-held switches for student interact/draw/place/delete,
    checked by the relay on every message. Small–medium once 3 lands.
 5. **Voice through a TURN server now, an SFU later** (Hubs Dialog or Jitsi as
-   used by ARENA). Adding coturn fixes users who can't connect behind strict
-   NATs today. Moving to an SFU removes the peer-to-peer mesh limit on
+   used by ARENA). The relay already accepts TURN servers in
+   `config.rtc.iceServers`, and the portal has a Twilio TURN endpoint for its
+   own media chat. Configuring one for the VR clients fixes users who can't
+   connect behind strict NATs today. Moving to an SFU removes the peer-to-peer mesh limit on
    class size. Small, then large.
 6. **Lab templates and multiple catalogs** (ARENA templates, CollabXR
    repositories). Medium, after 2.
