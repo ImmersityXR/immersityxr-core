@@ -148,7 +148,26 @@ services:
   immersity-portal-backend:
     build:
       context: ../portal/backend
-    image: immersityxr/immersity-portal-backend:local
+    command: npm run debug
+    develop:
+      watch:
+        - action: sync
+          path: ../portal/backend/server
+          target: /immersity/portal/backend
+          ignore:
+            - ../portal/backend/server/node_modules/
+        - action: rebuild
+          path: ../portal/backend/server/package.json
+        - action: sync+restart
+          path: ../portal/backend/db/my.cnf
+          target: /etc/mysql/my.cnf
+        - action: sync+restart
+          path: ../portal/backend/db/mariadb-server.cnf
+          target: /etc/my.cnf.d/mariadb-server.cnf
+        - action: sync+restart
+          path: ../portal/backend/db/mariadb
+          target: /etc/init.d/mariadb
+    #image: immersityxr/immersity-portal-backend:local
     container_name: immersity-portal-backend
     restart: always
     profiles: ["portal"]
