@@ -46,5 +46,4 @@ RUN chmod 744 ./entrypoint.sh \
 
 # === run node back end ===
 
-CMD [ "node", "index.js"]
 ENTRYPOINT ["./entrypoint.sh"]
