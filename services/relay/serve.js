@@ -45,7 +45,16 @@ var options = {
 monitorApp.use(express.static('public', options));
 
 const io = require('socket.io')(server, {
-    origins: config.cors.origins
+    cors: {
+        origin: config.cors.origins,
+        methods: ['GET', 'POST']
+    },
+    // Accept Engine.IO v3 connections so legacy Socket.IO 2.x clients
+    // (already-deployed Unity builds) keep working during the client
+    // rollout. Remove once all deployed builds ship the 4.x client.
+    allowEIO3: true,
+    upgradeTimeout: 1000,
+    pingTimeout: 30000
 });
 
 const mysql = require('mysql2');
@@ -104,10 +113,7 @@ if (config.db.host && config.db.host != "") {
 // relay server
 const PORT = 80;
 
-server.listen(PORT, {
-    upgradeTimeout: 1000,
-    pingTimeout: 30000
-});
+server.listen(PORT);
 
 if (logger) logger.info(`ImmersityXR relay is running on :${PORT}`);
 
