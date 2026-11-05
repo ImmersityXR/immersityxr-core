@@ -14,11 +14,18 @@ module.exports = {
         ssl: { rejectUnauthorized: false }
     },
 
-    // CORS configuration. Space-separated list of allowed origins in
-    // host:port form, e.g. "https://yourdomain.edu:443 https://portal.yourdomain.edu:443".
-    // Set RELAY_ORIGINS in .env; the fallback only allows localhost.
+    // CORS configuration. RELAY_ORIGINS in .env is a space-separated list,
+    // e.g. "https://yourdomain.edu:443 https://portal.yourdomain.edu:443";
+    // the fallback only allows localhost. Socket.IO 4 matches the browser's
+    // Origin header exactly, and browsers omit default ports, so those are
+    // stripped here (the old host:port form was for Socket.IO 2).
     cors: {
-        origins: process.env.RELAY_ORIGINS || "http://localhost:80 https://localhost:443"
+        origins: (process.env.RELAY_ORIGINS || "http://localhost:80 https://localhost:443")
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(function (origin) {
+                return origin.replace(/^(https:\/\/[^/]+):443$|^(http:\/\/[^/]+):80$/, "$1$2");
+            })
     },
 
     // Shared-secret authentication (requires a relay image built from a
