@@ -1892,6 +1892,27 @@ module.exports = {
     // record to the session; that record was then never removed, the session
     // could never empty out, and every later joiner received the stale
     // client in the state catch-up and spawned a ghost avatar for it.
+    //
+    // But the same client may already be back on a newer socket: the old
+    // socket's disconnect can arrive after the new one has joined, and a
+    // bumped duplicate connection disconnects the same way. In that case
+    // only this socket goes; the client stays in the session and nobody is
+    // told it left.
+    let session = this.sessions.get(session_id);
+
+    if (session && session.getSocketsFromClientId(client_id, socket.id).length > 0) {
+      session.removeSocket(socket);
+
+      this.logInfoSessionClientSocketAction(
+        session_id,
+        client_id,
+        socket.id,
+        `-    client is still connected on another socket; removed only this socket. Reason: ${reason}`
+      );
+
+      return false;
+    }
+
     this.logInfoSessionClientSocketAction(
       session_id,
       client_id,

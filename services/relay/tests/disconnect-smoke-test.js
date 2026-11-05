@@ -137,6 +137,49 @@ server.listen(3995, async () => {
     pass('late joiner: live clients present', clientsOf(stateC).includes(2) && clientsOf(stateC).includes(3));
 
     // ----------------------------------------------------------------
+    // 2b. A client reconnects on a new socket before its old socket's
+    //     close is processed: it must stay in the session, unannounced
+    // ----------------------------------------------------------------
+    const departuresSeenByC = [];
+
+    c.on('left', (clientId) => { departuresSeenByC.push(clientId); });
+    c.on('disconnected', (clientId) => { departuresSeenByC.push(clientId); });
+
+    const dOld = connect();
+
+    dOld.emit('join', [SESSION, 5]);
+
+    await wait(REPAIR_WAIT_MS);
+
+    // Reconnect the way the Unity client does: Socket.IO opens a fresh
+    // socket and the client carries on sending, without a new `join`. The
+    // relay's repair center puts the socket back into its session.
+    const dNew = connect();
+
+    await wait(REPAIR_WAIT_MS);
+
+    dNew.emit('message', { session_id: SESSION, client_id: 5, type: 'noop', message: '{}' });
+
+    await wait(500);
+
+    if (dOld.connected) dOld.io.engine.close();
+
+    await wait(1500);
+
+    const stateC3 = await requestState(c, 3);
+
+    pass('reconnect: client still in session after old socket closes', clientsOf(stateC3).includes(5));
+    pass('reconnect: others not told the client left', !departuresSeenByC.includes(5));
+
+    dNew.io.engine.close();
+
+    await wait(1500);
+
+    const stateC4 = await requestState(c, 3);
+
+    pass('reconnect: client removed once its last socket closes', stateC4 !== null && !clientsOf(stateC4).includes(5));
+
+    // ----------------------------------------------------------------
     // 3. Explicit leave still removes the client and acks the leaver
     // ----------------------------------------------------------------
     const bLeftAck = new Promise((resolve) => {
