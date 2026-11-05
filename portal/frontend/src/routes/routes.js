@@ -49,6 +49,15 @@ const routes = [
       title: "About — ImmersityXR"
     }
   },
+  {
+    path: "/demo",
+    name: "DemoPage",
+    component: LabDetail,
+    meta: {
+      requireLogin: false,
+      title: "Demo — ImmersityXR"
+    }
+  },
   // Go to dashboard page
   {
     path: "/",
