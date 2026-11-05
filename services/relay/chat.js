@@ -74,15 +74,12 @@ module.exports = {
                         chats.set(session_id, { sockets: {} });
                     }
 
-                    socket.join(session_id.toString(), function (err) {
-                        if (err) { console.log(err); }
-                        else {
-                            if (logger) logger.info(`Client joined chat: ${data}`);
-                            io.of('chat').to(session_id.toString()).emit('joined', data);
-                            let chat = chats.get(session_id);
-                            chat.sockets[socket.id] = client_id;
-                        }
-                    });
+                    socket.join(session_id.toString());
+
+                    if (logger) logger.info(`Client joined chat: ${data}`);
+                    io.of('chat').to(session_id.toString()).emit('joined', data);
+                    let chat = chats.get(session_id);
+                    chat.sockets[socket.id] = client_id;
                 }
             });
 
