@@ -127,8 +127,6 @@ services:
     container_name: immersity-portal-frontend
     restart: always
     profiles: ["portal"]
-    ports:
-      - "8080:80"
     networks:
       - proxy
     environment:
