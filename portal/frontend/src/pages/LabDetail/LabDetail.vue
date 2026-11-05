@@ -1,12 +1,20 @@
 <template>
   <div>
-    <v-row v-if="!clientPath">
+    <v-row v-if="!clientPath && isLoggedIn">
       <p class="mb-1">
         <v-btn color="secondary" depressed small @click="goToCourse">{{ `${courseNo}: ${courseName} > Labs > ` }}</v-btn>
       </p>
     </v-row>
+    <v-row v-if="!isLoggedIn" class="lab-basic-info mb-4 no-gutters">
+      <v-btn color="secondary" depressed small @click="goToHome">Home</v-btn>
+    </v-row>
     <v-row v-if="!clientPath" class="lab-basic-info mb-4 no-gutters">
       <p class="display-1 text-capitalize">{{ labName }}</p>
+    </v-row>
+    <v-row v-if="clientPath">
+      <v-btn color="primary" @click.stop="pauseSession">
+        <v-icon left x-small>mdi-stop</v-icon> Stop
+      </v-btn>
     </v-row>
     <!-- Start the lab view -->
     <!-- Embedded VR Client and Cha t -->
@@ -29,7 +37,7 @@
       <v-col>
         <!-- Lab details section -->
         <SectionCard title="Lab Details">
-          <template v-slot:actions>
+          <template v-slot:actions v-if="user && user.role == `admin` || user && user.role == `instructor`">
             <v-menu
               bottom
               left
@@ -50,11 +58,11 @@
                 <v-list-item-group>
                   <!-- Redirect to the lab edit page -->
                   <router-link :to="{ name: 'Lab Edit', params: { courseId, labId } }">
-                  <v-list-item v-if="user.role == `admin` || user.role == `instructor`">
+                  <v-list-item >
                       <v-icon left x-small >mdi-calendar</v-icon>Edit
                   </v-list-item>
                   </router-link>
-                  <v-list-item v-if="user.role == `admin` || user.role == `instructor`" @click="deleteLabClick">
+                  <v-list-item @click="deleteLabClick">
                     <v-icon left x-small >mdi-delete</v-icon>Delete
                   </v-list-item>
                 </v-list-item-group>
@@ -87,7 +95,7 @@
         </v-col>
       </v-row>
       <v-row v-if="!clientPath">
-        <v-col v-if="user.role == `admin`">
+        <v-col v-if="(user && user.role == `admin`)">
           <!-- Settings section -->
           <SectionCard title="Settings (Admin Only)">
             <v-row>
@@ -122,7 +130,7 @@
       <v-col>
         <!-- Asset section -->
         <SectionCard title="Assets">
-          <template v-slot:actions v-if="user.role == `admin` || user.role == `instructor`">
+          <template v-slot:actions v-if="user && user.role == `admin` || user && user.role == `instructor`">
             <router-link :to="{ name: 'Lab Edit', params: { courseId, labId } }">
               <v-btn text small color="grey">
                 <v-icon left x-small>mdi-pencil</v-icon>Edit
@@ -158,6 +166,7 @@ export default {
   },
   data() {
     return {
+      isLoggedIn: this.$store.getters.isLoggedIn,
       user: this.$store.getters.user,
       userId: 0, // TODO(rob): redundant
       sessionId: 0,
@@ -192,61 +201,6 @@ export default {
       tabs: []
     }
   },
-  mounted: function() {
-
-    const { courseId, labId, captureId } = this.$route.params;
-    this.courseId = courseId;
-    this.labId = labId;
-    this.captureId = captureId;
-    const { userId, role, firstName, lastName } = this.$store.getters.user;
-    this.teacher = role === "student" ? 0 : 1;
-    this.userId = userId;
-    this.sessionId = Number(this.$route.params.labId);
-    this.firstName = firstName;
-    this.lastName = lastName;
-    // Initialize the course details and lab details
-    Promise.all([
-      getCourseDetail({ courseId }),
-      getLabDetail({ labId })
-    ])
-    .then(values => {
-      const course = values[0].data;
-      const lab = values[1].data;
-      this.courseNo = course.courseNo;
-      this.courseName = course.courseName;
-      this.labName = lab.sessionName;
-      this.description = lab.description || "(No description added)";
-      const startTime = moment.utc(lab.startTime).local();
-      const endTime = moment.utc(lab.endTime).local();
-      this.schedule.startTime = startTime.format("L LT");
-      this.schedule.endTime = endTime.format("L LT");
-      this.schedule.duration = moment.duration(startTime.diff(endTime)).humanize();
-      this.schedule.timeLeft = startTime.fromNow();
-      this.assetList = lab.assetList;
-      if (lab.build) { // set build as configured or else leave as base/stable
-        this.buildScope = lab.build.split('/')[0];
-        this.build = lab.build.split('/')[1];
-
-        // get build scopes from buildserver
-        axios.get(`${process.env.VUE_APP_VR_CLIENT_BASE_URL}`).then( res => {
-
-          if (!res.data || res.data.length == 0 || !res.data.forEach) {
-            console.error("SETTINGS (ADMIN ONLY): Build server returned no apps (build scopes). Check connection to build server and check that builds have been uploaded correctly.");
-
-            this.buildScopes = [];
-
-            return;
-          }
-
-          res.data.forEach(scope => {
-            this.buildScopes.push(scope.name)
-          });
-
-          this.getBuilds();
-        });
-      }
-    });
-  },
   // Navigation handler
   beforeRouteLeave(to, from, next){
     if (this.captureId) {
@@ -262,7 +216,7 @@ export default {
       this.builds = [];
       // get scopes and builds from buildserver
       axios.get(`${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/`).then( res => {
-
+        console.dir(res);
         if (!res.data || res.data.length == 0 || !res.data.forEach) {
           console.error("SETTINGS (ADMIN ONLY): Build server returned no apps (build scopes). Check connection to build server and check that builds have been uploaded correctly.");
 
@@ -274,6 +228,8 @@ export default {
         res.data.forEach(build => {
           this.builds.push(build.name)
         });
+      }).catch( err => {
+        console.error("Could not get builds: " + err);
       });
     },
     // Go to the selected course details page
@@ -283,8 +239,17 @@ export default {
         params: { courseId: this.$route.params.courseId }
       });
     },
+    goToHome() {
+      this.$router.push({ name: "Login" });
+    },
     // Start the session
     startSession() {
+      let clientId = this.userId;
+      if(!this.isLoggedIn) {
+        this.sessionId = 999;
+        clientId = moment.now() % 100000;
+        this.teacher = 0;
+      }
       // TODO(rob): construct client path on mounted, and trigger update if build is changed
       // TODO(rob): set global flag when session started
       // Shared secret the relay server may require from clients
@@ -292,11 +257,14 @@ export default {
       const relayAuth = process.env.VUE_APP_VR_AUTH_TOKEN ? `&auth=${encodeURIComponent(process.env.VUE_APP_VR_AUTH_TOKEN)}` : '';
       if(this.captureId) {
         this.sessionId = 9999+this.sessionId;
-        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${this.userId}&session=${this.sessionId}&teacher=${this.teacher}&playback=${this.captureId}${relayAuth}`;
+        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${clientId}&session=${this.sessionId}&teacher=${this.teacher}&playback=${this.captureId}${relayAuth}`;
       } else {
-        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${this.userId}&session=${this.sessionId}&teacher=${this.teacher}${relayAuth}`;
+        this.clientPath = `${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/${this.build}/?client=${clientId}&session=${this.sessionId}&teacher=${this.teacher}${relayAuth}`;
       }
       console.log('Starting session with client:', this.clientPath);
+    },
+    pauseSession() {
+      this.clientPath = null;
     },
     // Redirect to the asset detail page
     onAssetClick({ assetId }) {
@@ -322,6 +290,77 @@ export default {
         })
       }
     }
+  },
+
+  mounted: function() {
+    const { courseId, labId, captureId } = this.$route.params;
+    this.courseId = courseId;
+    this.labId = labId;
+    this.captureId = captureId;
+    this.isLoggedIn = this.$store.getters.isLoggedIn;
+    if (!this.isLoggedIn)
+    {
+      this.labName = "Demo Lab";
+      this.description = "Load into a session with no persistence. You'll enter with a client ID based on the current timestamp.";
+      const startTime = moment.utc(moment.now()).local();
+      const endTime = moment.utc(moment.now()).local();
+      this.schedule.startTime = startTime.format("L LT");
+      this.schedule.endTime = endTime.format("L LT");
+      this.schedule.duration = moment.duration(startTime.diff(endTime)).humanize();
+      this.schedule.timeLeft = startTime.fromNow();
+      this.assetList = [];
+      this.buildScope = "demo"
+      this.build = "komodo-sandbox";
+      return;
+    }
+    const { userId, role, firstName, lastName } = this.$store.getters.user;
+    this.teacher = role === "student" ? 0 : 1;
+    this.userId = userId;
+    this.sessionId = Number(this.$route.params.labId);
+    this.firstName = firstName;
+    this.lastName = lastName;
+    // Initialize the course details and lab details
+    Promise.all([
+      getCourseDetail({ courseId }),
+      getLabDetail({ labId })
+    ])
+        .then(values => {
+          const course = values[0].data;
+          const lab = values[1].data;
+          this.courseNo = course.courseNo;
+          this.courseName = course.courseName;
+          this.labName = lab.sessionName;
+          this.description = lab.description || "(No description added)";
+          const startTime = moment.utc(lab.startTime).local();
+          const endTime = moment.utc(lab.endTime).local();
+          this.schedule.startTime = startTime.format("L LT");
+          this.schedule.endTime = endTime.format("L LT");
+          this.schedule.duration = moment.duration(startTime.diff(endTime)).humanize();
+          this.schedule.timeLeft = startTime.fromNow();
+          this.assetList = lab.assetList;
+          if (lab.build) { // set build as configured or else leave as base/stable
+            this.buildScope = lab.build.split('/')[0];
+            this.build = lab.build.split('/')[1];
+
+            // get build scopes from buildserver
+            axios.get(`${process.env.VUE_APP_VR_CLIENT_BASE_URL}`).then( res => {
+
+              if (!res.data || res.data.length == 0 || !res.data.forEach) {
+                console.error("SETTINGS (ADMIN ONLY): Build server returned no apps (build scopes). Check connection to build server and check that builds have been uploaded correctly.");
+
+                this.buildScopes = [];
+
+                return;
+              }
+
+              res.data.forEach(scope => {
+                this.buildScopes.push(scope.name)
+              });
+
+              this.getBuilds();
+            });
+          }
+        });
   }
 }
 </script>
