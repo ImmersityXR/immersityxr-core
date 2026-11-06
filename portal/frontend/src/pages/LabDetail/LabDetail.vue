@@ -252,7 +252,7 @@ export default {
         if (!res.data || res.data.length == 0 || !res.data.forEach) {
           console.error("SETTINGS (ADMIN ONLY): Build server returned no apps (build scopes). Check connection to build server and check that builds have been uploaded correctly.");
 
-          this.buildScopes = [];
+          this.builds = [];
 
           return;
         }
