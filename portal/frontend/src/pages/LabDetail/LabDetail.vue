@@ -69,6 +69,15 @@
               </v-list>
             </v-menu>
           </template>
+          <div v-if="!isLoggedIn">
+            <v-tabs v-model="scopeIndex" @change="getBuilds">
+              <v-tab v-for="(scope, index) in buildScopes" :key="index" :value="scope">{{scope}}</v-tab>
+            </v-tabs>
+            <v-sheet>
+              <p v-if="builds.length < 1">No builds found for scope {{buildScope}}</p>
+              <v-select v-if="builds.length >= 1" v-model="build" :items="builds"></v-select>
+            </v-sheet>
+          </div>
           <v-btn color="primary" @click.stop="startSession">
             <v-icon left x-small>mdi-play</v-icon> Start
           </v-btn>
@@ -192,10 +201,11 @@ export default {
         { text: "Description", value: "description", sortable: false }
       ],
       clientPath: null,
-      build: "stable",
-      builds: [""],
-      buildScope: "base",
+      build: "",
+      builds: [],
+      buildScope: "",
       buildScopes: [],
+      scopeIndex: 0,
       inCall: false,
       openChat: false, 
       tabs: []
@@ -212,8 +222,30 @@ export default {
     next();
   },
   methods: {
+    getBuildScopes() {
+      axios.get(`${process.env.VUE_APP_VR_CLIENT_BASE_URL}`).then(res => {
+
+        if (!res.data || res.data.length == 0 || !res.data.forEach) {
+          console.error("SETTINGS (ADMIN ONLY): Build server returned no apps (build scopes). Check connection to build server and check that builds have been uploaded correctly.");
+          console.dir(res);
+
+          this.buildScopes = [];
+
+          return;
+        }
+
+        res.data.forEach(scope => {
+          this.buildScopes.push(scope.name)
+        });
+
+        this.getBuilds();
+      });
+    },
     getBuilds() {
       this.builds = [];
+      if (!this.isLoggedIn) {
+        this.buildScope = this.buildScopes[this.scopeIndex];
+      }
       // get scopes and builds from buildserver
       axios.get(`${process.env.VUE_APP_VR_CLIENT_BASE_URL}/${this.buildScope}/`).then( res => {
         console.dir(res);
@@ -291,8 +323,7 @@ export default {
       }
     }
   },
-
-  mounted: function() {
+ mounted: function() {
     const { courseId, labId, captureId } = this.$route.params;
     this.courseId = courseId;
     this.labId = labId;
@@ -311,6 +342,7 @@ export default {
       this.assetList = [];
       this.buildScope = "demo"
       this.build = "komodo-sandbox";
+      this.getBuildScopes();
       return;
     }
     const { userId, role, firstName, lastName } = this.$store.getters.user;
@@ -320,6 +352,7 @@ export default {
     this.firstName = firstName;
     this.lastName = lastName;
     // Initialize the course details and lab details
+   // If the user is logged in, and the demo lab hardcoded values point to no existing course or lab, it will fail to get any details.
     Promise.all([
       getCourseDetail({ courseId }),
       getLabDetail({ labId })
@@ -343,22 +376,7 @@ export default {
             this.build = lab.build.split('/')[1];
 
             // get build scopes from buildserver
-            axios.get(`${process.env.VUE_APP_VR_CLIENT_BASE_URL}`).then( res => {
-
-              if (!res.data || res.data.length == 0 || !res.data.forEach) {
-                console.error("SETTINGS (ADMIN ONLY): Build server returned no apps (build scopes). Check connection to build server and check that builds have been uploaded correctly.");
-
-                this.buildScopes = [];
-
-                return;
-              }
-
-              res.data.forEach(scope => {
-                this.buildScopes.push(scope.name)
-              });
-
-              this.getBuilds();
-            });
+            this.getBuildScopes();
           }
         });
   }
