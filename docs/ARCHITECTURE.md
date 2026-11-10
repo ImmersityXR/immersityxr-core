@@ -163,6 +163,12 @@ Two related gaps share one mechanism (an append-only event journal):
   (`tools/export-capture.js` in immersity-relay) produces per-message-type
   CSVs. Previously the whole recording lived in memory and was written once
   at stop — a disruption lost everything.
+- **Capture format version 2 — done (November 2026).** Each recording starts
+  with a snapshot of the session state, records joins, leaves and every
+  relayed event with the relay's clock and the true sender, and can only be
+  started or stopped from inside the session. The converter now writes
+  `positions.csv`, `interactions.csv`, `drawing.csv` and `presence.csv`. See
+  `services/relay/README.md`.
 - **Late-join / rejoin state — done (June 2026).** Draw strokes are now
   stored in session state and replayed to any client requesting state
   catch-up through the normal message relay (zero Unity client changes —
