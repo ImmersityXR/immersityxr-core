@@ -505,10 +505,18 @@ docker compose up -d immersity-relay --build
 # List all capture sessions
 ls -la ~/immersity/deploy/immersity-relay/captures/
 
-# View specific capture data (one JSON message per line + a manifest)
+# View specific capture data (one JSON event per line + a manifest)
 jq -s . ~/immersity/deploy/immersity-relay/captures/test123/*/data.ndjson
 cat ~/immersity/deploy/immersity-relay/captures/test123/*/manifest.json
 
+# Convert a capture to CSV files (positions, interactions, drawing, presence)
+sudo docker exec immersity-relay node tools/export-capture.js captures/test123/<recording_start>
+ls ~/immersity/deploy/immersity-relay/captures/test123/<recording_start>/export/
+```
+
+The capture format is described in `services/relay/README.md`.
+
+```bash
 # Legacy captures (recorded before the streaming format) are a single JSON file:
 # cat ~/immersity/deploy/immersity-relay/captures/test123/*/data | jq .
 ```

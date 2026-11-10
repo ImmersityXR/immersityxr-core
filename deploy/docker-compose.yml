@@ -70,6 +70,8 @@ services:
       - RTC_TURN_CREDENTIAL=${RTC_TURN_CREDENTIAL}
       - SESSION_STATE_TTL_HOURS=${SESSION_STATE_TTL_HOURS}
       - DEBUG=${RELAY_DEBUG:-}
+      - RELAY_PORTAL_API_URL=${RELAY_PORTAL_API_URL:-}
+      - CAPTURE_ENTITY_IDS=${CAPTURE_ENTITY_IDS:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.immersity-relay.loadbalancer.server.port=80"
