@@ -315,11 +315,89 @@ module.exports = {
     );
   },
 
-  start_recording: function (pool, session_id) {
-    // TODO(rob): require client id and token
-    console.log(
-      `start_recording called with pool: ${pool}, session: ${session_id}`
+  // The id a socket joined its session with, or null if it is not in it.
+  getSocketClientId: function (session, socket) {
+    if (!session || !socket || !session.sockets[socket.id]) {
+      return null;
+    }
+
+    return session.sockets[socket.id].client_id;
+  },
+
+  // A client may only start or stop a recording of the session it is in.
+  // Calls without a socket come from the relay itself (session cleanup).
+  canControlRecording: function (session, session_id, socket, action) {
+    if (!socket || (session && session.hasSocket(socket))) {
+      return true;
+    }
+
+    this.logWarningSessionClientSocketAction(
+      session_id,
+      null,
+      socket.id,
+      `Ignored request to ${action} a recording of a session this socket has not joined.`
     );
+
+    return false;
+  },
+
+  // The session's full shared state, written as the first event of every
+  // capture so a recording that starts mid-session can be replayed.
+  getCaptureSnapshot: function (session) {
+    let strokes = Object.keys(session.strokes || {})
+      .map((stroke_id) => ({
+        stroke_id: stroke_id,
+        order: session.strokes[stroke_id].order,
+        packets: session.strokes[stroke_id].packets
+      }))
+      .sort((a, b) => a.order - b.order);
+
+    return {
+      clients: session.getClients(),
+      entities: session.entities,
+      scene: session.scene,
+      strokes: strokes
+    };
+  },
+
+  // Add the lab's asset list to the capture manifest, so a capture records
+  // which models were in the room. Needs config.portal.url; without it, or
+  // if the request fails, the manifest simply has no `assets`.
+  addLabAssetsToManifest: function (session_id, captureWriter) {
+    let portalUrl = config.portal && config.portal.url;
+
+    if (!portalUrl || typeof fetch !== "function") {
+      return;
+    }
+
+    let url = `${portalUrl.replace(/\/+$/, "")}/labs/${encodeURIComponent(session_id)}`;
+
+    fetch(url, { signal: AbortSignal.timeout(5000) })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.json();
+      })
+      .then((lab) => {
+        let assets = ((lab && lab.assetList) || []).map((asset) => ({
+          asset_id: asset.asset_id,
+          asset_name: asset.asset_name,
+          path: asset.path,
+          is_whole_object: asset.is_whole_object,
+          scale: asset.scale
+        }));
+
+        captureWriter.updateManifest({ assets: assets });
+      })
+      .catch((e) => {
+        if (this.logger)
+          this.logger.warn(`Capture ${captureWriter.captureId}: could not fetch lab assets from ${url}: ${e}`);
+      });
+  },
+
+  start_recording: function (pool, session_id, socket) {
     let session = this.sessions.get(session_id);
     if (!session) {
       this.logErrorSessionClientSocketAction(
@@ -331,22 +409,33 @@ module.exports = {
       return;
     }
 
+    if (!this.canControlRecording(session, session_id, socket, "start")) {
+      return;
+    }
+
     if (session && !session.isRecording) {
       session.isRecording = true;
       session.recordingStart = Date.now();
       let capture_id = session_id + "_" + session.recordingStart;
       session.capture_id = capture_id;
 
-      // Stream messages to disk as they arrive (instead of holding the whole
+      // Stream events to disk as they arrive (instead of holding the whole
       // recording in memory and writing once at stop, which lost everything
-      // on a crash or disruption). See capture-writer.js.
+      // on a crash or disruption). See capture-writer.js for the format.
       try {
         session.captureWriter = new CaptureWriter(
           this.getCapturePath(session_id, session.recordingStart, ""),
           capture_id,
           session_id,
           session.recordingStart,
-          this.logger
+          this.logger,
+          {
+            manifest: {
+              // how clients number a model's parts; see config.template.js
+              entity_ids: (config.capture && config.capture.entityIds) || "import-order",
+              started_by: this.getSocketClientId(session, socket)
+            }
+          }
         );
       } catch (e) {
         if (this.logger)
@@ -355,6 +444,15 @@ module.exports = {
         session.capture_id = null;
         return;
       }
+
+      session.captureWriter.recordEvent(
+        "snapshot",
+        null,
+        this.getCaptureSnapshot(session),
+        session.recordingStart
+      );
+
+      this.addLabAssetsToManifest(session_id, session.captureWriter);
 
       if (pool) {
         pool.query(
@@ -381,7 +479,7 @@ module.exports = {
   },
 
   // define end_recording event handler, use on socket event as well as on server cleanup for empty sessions
-  end_recording: function (pool, session_id) {
+  end_recording: function (pool, session_id, socket) {
     // The session-cleanup path doesn't have the pool in scope; fall back to
     // the one captured at init so the capture end event still reaches the
     // database.
@@ -389,11 +487,16 @@ module.exports = {
 
     if (session_id) {
       let session = this.sessions.get(session_id);
+
+      if (!this.canControlRecording(session, session_id, socket, "end")) {
+        return;
+      }
+
       if (session && session.isRecording) {
         session.isRecording = false;
         if (this.logger) this.logger.info(`Capture ended: ${session_id}`);
 
-        // Flush remaining messages, close the stream, and finalize the
+        // Flush remaining events, close the stream, and finalize the
         // manifest. Data has been streaming to disk throughout the
         // recording (see capture-writer.js).
         if (session.captureWriter) {
@@ -431,68 +534,14 @@ module.exports = {
     }
   },
 
-  record_message_data: function (data) {
-    if (data) {
-      let session = this.sessions.get(data.session_id);
-
-      if (!session) {
-        this.logErrorSessionClientSocketAction(
-          data.session_id,
-          null,
-          null,
-          `Tried to record message data, but session was null`
-        );
-
-        return;
-      }
-
-      // calculate a canonical session sequence number for this message from session start and message timestamp.
-      // NOTE(rob): investigate how we might timestamp incoming packets WHEN THEY ARE RECEIVED BY THE NETWORKING LAYER, ie. not
-      // when they are handled by the socket.io library. From a business logic perspective, the canonical order of events is based
-      // on when they arrive at the relay server, NOT when the client emits them. 8/3/2021
-      data.seq = data.ts - session.recordingStart;
-
-      data.capture_id = session.capture_id; // copy capture id session property and attach it to the message data.
-
-      let session_id = data.session_id;
-
-      let client_id = data.client_id;
-
-      if (typeof data.message != `object`) {
-        try {
-          data.message = JSON.parse(data.message);
-        } catch (e) {
-          // if (this.logger) this.logger.warn(`Failed to parse message payload: ${message} ${e}`);
-          console.log(`Failed to parse message payload: ${data.message}; ${e}`);
-
-          return;
-        }
-      }
-
-      if (!session_id || !client_id) {
-        this.logErrorSessionClientSocketAction(
-          session_id,
-          null,
-          null,
-          `Tried to record message data. One of these properties is missing. session_id: ${session_id}, client_id: ${client_id}, message: ${data}`
-        );
-
-        return;
-      }
-
-      // Stream to disk via the capture writer (bounded memory; survives
-      // crashes and disruptions). Replaces the unbounded message_buffer.
-      if (session.captureWriter) {
-        session.captureWriter.record(data);
-      }
-    } else {
-      this.logErrorSessionClientSocketAction(
-        null,
-        null,
-        null,
-        `message was null`
-      );
+  // Write one event to the session's capture, if it is recording.
+  // `client_id` is the sender as the relay knows it (see getSocketClientId).
+  recordCaptureEvent: function (session, kind, client_id, data) {
+    if (!session || !session.isRecording || !session.captureWriter) {
+      return;
     }
+
+    session.captureWriter.recordEvent(kind, client_id, data);
   },
 
   handlePlayback: function (io, data) {
@@ -787,6 +836,8 @@ module.exports = {
       if (!session.hasClient(client_id)) {
         return;
       }
+
+      this.recordCaptureEvent(session, "interact", this.getSocketClientId(session, socket), data);
 
       session.stateDirty = true;
 
@@ -1159,7 +1210,9 @@ module.exports = {
     );
 
     this.successfullyJoinedAction(session_id, client_id, socket);
-    
+
+    this.recordCaptureEvent(session, "joined", client_id, {});
+
     return true;
   },
 
@@ -1271,7 +1324,9 @@ module.exports = {
     }
 
     this.successfullyLeftAction(session_id, client_id, socket);
-    
+
+    this.recordCaptureEvent(session, "left", client_id, {});
+
     this.logInfoSessionClientSocketAction(
       session_id,
       client_id,
@@ -2575,7 +2630,16 @@ module.exports = {
 
     // data capture
     if (session.isRecording) {
-      this.record_message_data(data);
+      let sender_id = this.getSocketClientId(session, socket);
+
+      let captured = { type: data.type, message: data.message, ts: data.ts };
+
+      if (sender_id === null) {
+        // the socket has not joined this session; keep what it claimed to be
+        captured.claimed_client = client_id;
+      }
+
+      this.recordCaptureEvent(session, "message", sender_id, captured);
     }
   },
 
@@ -2984,12 +3048,16 @@ module.exports = {
       });
 
       socket.on(ImmersityXRReceiveEvents.draw, function (data) {
+        if (!Array.isArray(data)) {
+          return;
+        }
+
         let session_id = data[1];
 
         let client_id = data[2];
 
         if (!session_id) {
-          this.logErrorSessionClientSocketAction(
+          self.logErrorSessionClientSocketAction(
             null,
             client_id,
             socket.id,
@@ -3000,7 +3068,7 @@ module.exports = {
         }
 
         if (!client_id) {
-          this.logWarningSessionClientSocketAction(
+          self.logWarningSessionClientSocketAction(
             session_id,
             null,
             socket.id,
@@ -3011,6 +3079,10 @@ module.exports = {
         }
 
         socket.to(session_id.toString()).emit(ImmersityXRSendEvents.draw, data);
+
+        let session = self.sessions.get(session_id);
+
+        self.recordCaptureEvent(session, "draw", self.getSocketClientId(session, socket), data);
       });
 
       // general message relay
@@ -3045,7 +3117,9 @@ module.exports = {
           .to(session_id.toString())
           .emit(ImmersityXRSendEvents.relayUpdate, data);
 
-        // self.writeRecordedRelayData(data); NOTE(rob): DEPRECATED. 8/5/21.
+        let session = self.sessions.get(session_id);
+
+        self.recordCaptureEvent(session, "update", self.getSocketClientId(session, socket), data);
 
         self.updateSessionState(data);
       });
@@ -3058,11 +3132,11 @@ module.exports = {
 
       // session capture handler
       socket.on(ImmersityXRReceiveEvents.start_recording, function (session_id) {
-        self.start_recording(pool, session_id);
+        self.start_recording(pool, session_id, socket);
       });
 
       socket.on(ImmersityXRReceiveEvents.end_recording, function (session_id) {
-        self.end_recording(pool, session_id);
+        self.end_recording(pool, session_id, socket);
       });
 
       socket.on(ImmersityXRReceiveEvents.playback, function (data) {

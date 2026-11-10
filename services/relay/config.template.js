@@ -40,6 +40,17 @@ module.exports = {
     },
     capture: {
         path: './captures/',
+        // Written to each capture's manifest so analysis knows how clients
+        // numbered a model's parts: 'import-order' (a counter shared by every
+        // model in the lab) or 'gltf-node' (derived from each model's glTF
+        // file). Set this to match the client builds you deploy.
+        entityIds: 'import-order',
+    },
+    portal: {
+        // Base URL of the portal API (or of a static stand-in). When set,
+        // each capture's manifest lists the lab's assets, fetched from
+        // <url>/labs/<session id>. Empty = manifests have no asset list.
+        url: "",
     },
     persistence: {
         // Periodically snapshot each session's shared state (entities,

@@ -33,27 +33,46 @@
 
 /* jshint esversion: 8 */
 
-// Durable, streaming session-capture writer.
+// Durable, streaming session-capture writer (capture format version 2).
 //
-// Replaces the previous capture strategy, which accumulated every recorded
-// message in process memory for the whole recording and wrote a single JSON
-// file only when recording was stopped via the UI - so a crash, network
-// disruption, or server restart mid-recording lost the entire capture, and
-// memory grew without bound at 90 messages/second per client.
-//
-// This writer streams messages to disk as they arrive:
+// A capture is a directory:
 //
 //   captures/<session_id>/<recording_start>/
-//     data.ndjson     one JSON message per line, appended continuously
-//     manifest.json   { capture_id, session_id, start, status, ... }
+//     manifest.json   what was recorded, by whom, and its lifecycle status
+//     data.ndjson     one JSON event per line, appended continuously
 //
-// Messages are buffered briefly (default: flushed every 500 ms or every 200
-// messages, whichever comes first), so a hard crash costs at most the last
+// Every line of data.ndjson is one event:
+//
+//   { "t": 1234, "seq": 17, "kind": "message", "client": 2, "data": { ... } }
+//
+//   t       ms since the capture started, on the RELAY's clock, taken when
+//           the event was received. Clients' own clocks are not trusted for
+//           ordering: they differ between headsets.
+//   seq     per-capture counter, so events with the same t replay in the
+//           order they arrived.
+//   kind    "snapshot"            always the first line: the session's full
+//                                 shared state when recording started, so a
+//                                 recording begun mid-session is still
+//                                 complete.
+//           "message"             a client's `message` event; data holds
+//                                 { type, message, ts } (ts = client clock).
+//                                 Current clients send positions ("sync"),
+//                                 interactions and drawing this way.
+//           "update" "interact"   the older array-based events, as relayed.
+//           "draw"
+//           "joined" "left"       a client entered or left the session.
+//   client  the sender's client id as the relay knows it from the socket,
+//           not the id written inside the payload. null for snapshot.
+//
+// Events are buffered briefly (default: flushed every 500 ms or every 200
+// events, whichever comes first), so a hard crash costs at most the last
 // flush interval. NDJSON survives torn final lines (skip any line that fails
 // to parse) and loads directly into analysis tools:
 //
 //   pandas:  pd.read_json('data.ndjson', lines=True)
 //   jq:      jq -s '.' data.ndjson
+//
+// tools/export-capture.js turns a capture into CSV files.
 //
 // The manifest records lifecycle: 'recording' while in progress, 'complete'
 // on clean stop. On startup, finalizeOrphans() marks any capture left in
@@ -63,10 +82,13 @@
 const fs = require('fs');
 const path = require('path');
 
+const FORMAT_VERSION = 2;
 const DEFAULT_FLUSH_INTERVAL_MS = 500;
-const DEFAULT_MAX_BUFFERED_MESSAGES = 200;
+const DEFAULT_MAX_BUFFERED_EVENTS = 200;
 
 class CaptureWriter {
+    // options.manifest: extra manifest fields known at start, e.g.
+    //   { entity_ids: 'import-order', started_by: 7 }
     constructor (captureDir, captureId, sessionId, recordingStart, logger, options) {
         options = options || {};
 
@@ -75,10 +97,10 @@ class CaptureWriter {
         this.sessionId = sessionId;
         this.recordingStart = recordingStart;
         this.logger = logger;
-        this.messageCount = 0;
+        this.eventCount = 0;
         this.buffer = [];
         this.ended = false;
-        this.maxBufferedMessages = options.maxBufferedMessages || DEFAULT_MAX_BUFFERED_MESSAGES;
+        this.maxBufferedEvents = options.maxBufferedEvents || DEFAULT_MAX_BUFFERED_EVENTS;
 
         fs.mkdirSync(this.captureDir, { recursive: true });
 
@@ -91,14 +113,16 @@ class CaptureWriter {
             if (this.logger) this.logger.error(`Capture ${this.captureId}: write stream error: ${e}`);
         });
 
-        this.writeManifest({
+        this.manifest = Object.assign({
             capture_id: this.captureId,
             session_id: this.sessionId,
             start: this.recordingStart,
             status: 'recording',
             format: 'ndjson',
-            format_version: 1
-        });
+            format_version: FORMAT_VERSION
+        }, options.manifest || {});
+
+        this.writeManifest();
 
         this.flushTimer = setInterval(() => this.flush(), options.flushIntervalMs || DEFAULT_FLUSH_INTERVAL_MS);
 
@@ -106,34 +130,52 @@ class CaptureWriter {
         if (this.flushTimer.unref) this.flushTimer.unref();
     }
 
-    writeManifest (manifest) {
+    writeManifest () {
         try {
-            fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2));
+            fs.writeFileSync(this.manifestPath, JSON.stringify(this.manifest, null, 2));
         } catch (e) {
             if (this.logger) this.logger.error(`Capture ${this.captureId}: error writing manifest: ${e}`);
         }
     }
 
-    record (message) {
+    // Merge fields that only become known after recording starts (for
+    // example the lab's asset list, fetched from the portal).
+    updateManifest (fields) {
+        Object.assign(this.manifest, fields);
+
+        this.writeManifest();
+    }
+
+    // Record one event. `client` is the sender's id as the relay knows it;
+    // `receivedAt` defaults to now on the relay's clock.
+    recordEvent (kind, client, data, receivedAt) {
         if (this.ended) {
             return;
         }
 
+        const event = {
+            t: (receivedAt === undefined ? Date.now() : receivedAt) - this.recordingStart,
+            seq: this.eventCount,
+            kind: kind,
+            client: client === undefined ? null : client,
+            data: data
+        };
+
         let line;
 
         try {
-            line = JSON.stringify(message);
+            line = JSON.stringify(event);
         } catch (e) {
-            if (this.logger) this.logger.warn(`Capture ${this.captureId}: dropping unserializable message: ${e}`);
+            if (this.logger) this.logger.warn(`Capture ${this.captureId}: dropping unserializable ${kind} event: ${e}`);
 
             return;
         }
 
         this.buffer.push(line);
 
-        this.messageCount += 1;
+        this.eventCount += 1;
 
-        if (this.buffer.length >= this.maxBufferedMessages) {
+        if (this.buffer.length >= this.maxBufferedEvents) {
             this.flush();
         }
     }
@@ -150,7 +192,7 @@ class CaptureWriter {
         this.stream.write(chunk);
     }
 
-    // Flush remaining messages, close the stream, and mark the capture complete.
+    // Flush remaining events, close the stream, and mark the capture complete.
     end (callback) {
         if (this.ended) {
             if (callback) callback();
@@ -165,23 +207,22 @@ class CaptureWriter {
         this.flush();
 
         this.stream.end(() => {
-            this.writeManifest({
-                capture_id: this.captureId,
-                session_id: this.sessionId,
-                start: this.recordingStart,
+            Object.assign(this.manifest, {
                 end: Date.now(),
                 status: 'complete',
-                format: 'ndjson',
-                format_version: 1,
-                message_count: this.messageCount
+                event_count: this.eventCount
             });
 
-            if (this.logger) this.logger.info(`Capture ${this.captureId}: completed with ${this.messageCount} messages`);
+            this.writeManifest();
+
+            if (this.logger) this.logger.info(`Capture ${this.captureId}: completed with ${this.eventCount} events`);
 
             if (callback) callback();
         });
     }
 }
+
+CaptureWriter.FORMAT_VERSION = FORMAT_VERSION;
 
 // Scan the captures directory for recordings that were never cleanly ended
 // (server crash, power loss, redeploy mid-recording) and finalize their
@@ -236,7 +277,7 @@ CaptureWriter.finalizeOrphans = function (capturesRoot, logger) {
 
             const dataPath = path.join(captureDir, 'data.ndjson');
 
-            let messageCount = 0;
+            let eventCount = 0;
 
             let endTime = Date.now();
 
@@ -247,23 +288,23 @@ CaptureWriter.finalizeOrphans = function (capturesRoot, logger) {
 
                 const contents = fs.readFileSync(dataPath, 'utf8');
 
-                messageCount = contents.split('\n').filter(line => line.length > 0).length;
+                eventCount = contents.split('\n').filter(line => line.length > 0).length;
             } catch (e) {
-                // no data file; finalize with zero messages
+                // no data file; finalize with zero events
             }
 
             manifest.status = 'interrupted';
 
             manifest.end = endTime;
 
-            manifest.message_count = messageCount;
+            manifest.event_count = eventCount;
 
             try {
                 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
                 finalized += 1;
 
-                if (logger) logger.warn(`Capture ${manifest.capture_id}: finalized interrupted recording with ${messageCount} recovered messages`);
+                if (logger) logger.warn(`Capture ${manifest.capture_id}: finalized interrupted recording with ${eventCount} recovered events`);
             } catch (e) {
                 if (logger) logger.error(`Capture ${manifest.capture_id}: error finalizing interrupted recording: ${e}`);
             }

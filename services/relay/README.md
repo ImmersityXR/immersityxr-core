@@ -72,7 +72,7 @@ node tests/rtc-smoke-test.js
 
 ## Session capture (research data logging)
 
-While a session is recording, every message is **streamed to disk as it
+While a session is recording, every event is **streamed to disk as it
 arrives** (`capture-writer.js`), instead of being held in memory and written
 only when recording stops. A crash, network disruption, or redeploy
 mid-recording costs at most the last flush interval (500 ms) — everything
@@ -82,26 +82,75 @@ Each recording produces:
 
 ```
 captures/<session_id>/<recording_start>/
-  data.ndjson     one JSON message per line, appended continuously
-  manifest.json   capture_id, start/end, status, message_count
+  manifest.json   what was recorded, by whom, and its status
+  data.ndjson     one JSON event per line, appended continuously
 ```
 
-- `manifest.json` `status` is `recording` while in progress, `complete` on a
-  clean stop, or `interrupted` if the server went down mid-recording — on
-  startup the relay finds orphaned recordings and finalizes them
-  automatically. Interrupted captures remain fully usable.
+### Format (version 2)
+
+Every line of `data.ndjson` is one event:
+
+```json
+{ "t": 1234, "seq": 17, "kind": "message", "client": 2, "data": { "type": "sync", "message": { }, "ts": 1718040001234 } }
+```
+
+| Field | Meaning |
+|---|---|
+| `t` | Milliseconds since the capture started, on the **relay's** clock, taken when the event arrived. Clients' own clocks differ between headsets, so they are not used for ordering. |
+| `seq` | Per-capture counter. Events with the same `t` replay in arrival order. |
+| `kind` | See below. |
+| `client` | The sender's client id as the relay knows it from the socket, not the id written inside the payload. |
+| `data` | The payload. |
+
+| `kind` | When | `data` |
+|---|---|---|
+| `snapshot` | Always the first line | The session's shared state when recording started: `clients`, `entities`, `scene`, `strokes`. A recording begun mid-session is still complete. |
+| `message` | A client's `message` event. Current clients send positions (`sync`), interactions and drawing this way | `{ type, message, ts }`, with `message` parsed and `ts` the client's own clock |
+| `update`, `interact`, `draw` | The older array-based events | The array as relayed |
+| `joined`, `left` | A client entered or left the session | `{}` |
+
+`manifest.json`:
+
+| Field | Meaning |
+|---|---|
+| `capture_id`, `session_id` | Which recording, of which session |
+| `start`, `end` | Relay clock, ms since epoch |
+| `status` | `recording` while in progress, `complete` on a clean stop, or `interrupted` if the server went down mid-recording. On startup the relay finds orphaned recordings and finalizes them. Interrupted captures remain fully usable. |
+| `format_version` | `2` |
+| `event_count` | Lines in `data.ndjson` |
+| `started_by` | Client id of whoever started the recording, or `null` |
+| `entity_ids` | How clients numbered a model's parts: `import-order` or `gltf-node` (`config.capture.entityIds`) |
+| `assets` | The lab's asset list at the start, when `config.portal.url` is set and the portal answered |
+
+Only a client that has joined a session can start or stop its recording.
+
+### Reading a capture
+
 - NDJSON loads directly into analysis tools:
   - pandas: `pd.read_json('data.ndjson', lines=True)`
   - jq: `jq -s '.' data.ndjson`
-- For spreadsheet-friendly output, split a capture into per-message-type CSV
-  files (also reads the legacy single-JSON `data` format):
+- For spreadsheets and statistics packages, convert a capture to CSV:
 
   ```
   node tools/export-capture.js captures/<session_id>/<recording_start>
   ```
 
-Smoke test (covers the interrupted-recording recovery path and a
-9,000-message burst):
+  This writes an `export/` folder next to the capture:
+
+  | File | Rows |
+  |---|---|
+  | `positions.csv` | Head, hand and object position updates: position, rotation (quaternion), scale |
+  | `interactions.csv` | Grab, drop, show, hide, lock, menu use |
+  | `drawing.csv` | Draw stroke segments and stroke actions |
+  | `presence.csv` | Who joined and left |
+  | `<type>.csv` | Any other message type |
+  | `snapshot.json` | The state when recording started |
+
+  Every row starts with `t_ms`, `seq` and `client`. Captures recorded before
+  format version 2 are split into one CSV per message type.
+
+Smoke test (covers real clients, a spoofed sender, the interrupted-recording
+recovery path, the export, and a 9,000-event burst):
 
 ```
 node tests/capture-smoke-test.js

@@ -55,9 +55,18 @@ module.exports = {
         serviceRegion: ""
     },
 
-    // Capture storage path (relative to container /immersity directory)
+    // Capture storage path (relative to container /immersity directory).
+    // entityIds is written to each capture's manifest so analysis knows how
+    // clients numbered a model's parts: 'import-order' or 'gltf-node'.
     capture: {
-        path: './captures/'
+        path: './captures/',
+        entityIds: process.env.CAPTURE_ENTITY_IDS || 'import-order'
+    },
+
+    // Base URL of the portal API (or a static stand-in). When set, each
+    // capture's manifest lists the lab's assets from <url>/labs/<session id>.
+    portal: {
+        url: process.env.RELAY_PORTAL_API_URL || ""
     },
 
     // Session state persistence: shared state (entities, scene, draw
