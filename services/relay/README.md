@@ -107,6 +107,37 @@ Smoke test (covers the interrupted-recording recovery path and a
 node tests/capture-smoke-test.js
 ```
 
+## Load testing with simulated users
+
+`tests/session-bots.js` puts N bots in one session. Each bot joins like the
+Unity client and sends head and hand positions; every bot also listens. The
+summary says whether everyone got in, how long relayed updates took to
+arrive, and whether any were lost:
+
+```
+npm --prefix tests install
+node tests/session-bots.js --url https://relay.example.edu --bots 20 --seconds 60 --auth <client secret>
+```
+
+For example, 30 bots for 10 seconds against a relay on the same machine:
+
+```
+Joined:      30 of 30 (slowest join 37 ms)
+Dropped:     0
+Sent:        26886 messages (2689/s)
+Delivered:   779694 of 779694 expected (0% lost)
+Latency:     p50 4 ms, p95 18 ms, p99 77 ms, max 139 ms
+Bot process lag: up to 56 ms
+
+PASS
+```
+
+It exits 0 when every bot joined, none dropped, and loss stayed under
+`--max-loss` (default 1%). Options are listed at the top of the file. Use a
+session id no real class is using, because bots show up as avatars. When
+"bot process lag" is high, the machine running the bots is the bottleneck,
+not the relay.
+
 ## Session persistence (late join / rejoin / restart)
 
 Shared session state — entity positions, lock/visibility, scene, and **draw
