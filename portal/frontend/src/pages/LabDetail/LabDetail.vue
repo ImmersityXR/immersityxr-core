@@ -340,8 +340,8 @@ export default {
       this.schedule.duration = moment.duration(startTime.diff(endTime)).humanize();
       this.schedule.timeLeft = startTime.fromNow();
       this.assetList = [];
-      this.buildScope = "demo"
-      this.build = "komodo-sandbox";
+      this.buildScope = ""
+      this.build = "";
       this.getBuildScopes();
       return;
     }
