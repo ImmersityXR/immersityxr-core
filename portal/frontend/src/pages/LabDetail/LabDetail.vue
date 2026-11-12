@@ -235,7 +235,9 @@ export default {
         }
 
         res.data.forEach(scope => {
-          this.buildScopes.push(scope.name)
+          if (scope.type === "directory") {
+            this.buildScopes.push(scope.name)
+          }
         });
 
         this.getBuilds();
@@ -258,7 +260,9 @@ export default {
         }
         
         res.data.forEach(build => {
-          this.builds.push(build.name)
+          if (build.type === "directory") {
+            this.builds.push(build.name)
+          }
         });
       }).catch( err => {
         console.error("Could not get builds: " + err);
