@@ -60,6 +60,14 @@
                     Learn More →
                   </v-btn>
                 </router-link>
+                <router-link :to="{ path: '/demo' }">
+                  <v-btn
+                      small
+                      color="primary"
+                      class="ma-1">
+                    Demo →
+                  </v-btn>
+                </router-link>
               </div>
             </div>
           </v-col>

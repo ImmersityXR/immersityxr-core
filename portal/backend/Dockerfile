@@ -1,4 +1,4 @@
-FROM node:lts-alpine
+FROM node:24-alpine
 
 # === install node back end ===
 
@@ -46,5 +46,4 @@ RUN chmod 744 ./entrypoint.sh \
 
 # === run node back end ===
 
-CMD [ "node", "index.js"]
 ENTRYPOINT ["./entrypoint.sh"]

@@ -59,8 +59,7 @@ else
     admin_email_sql=$(printf %s "$ADMIN_EMAIL" | sed "s/'/''/g")
     admin_password_sql=$(printf %s "$ADMIN_PASSWORD" | sed "s/'/''/g")
     echo "INSERT INTO KP_User (email, password, role_id, first_name, last_name) \
-          VALUES ('$admin_email_sql', SHA('$admin_password_sql'), 1, 'Admin', 'ImmersityXR');" \
-        | mariadb --database="$MYSQL_DATABASE"
+          VALUES ('$admin_email_sql', SHA('$admin_password_sql'), 1, 'Admin', 'ImmersityXR');" | mariadb --database="$MYSQL_DATABASE"
     echo "Created initial admin account for $ADMIN_EMAIL."
 fi
 echo "CREATE USER IF NOT EXISTS $MYSQL_USER@localhost IDENTIFIED BY '$MYSQL_PASSWORD';" | mariadb
